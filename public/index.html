@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="vi" x-data="app()" x-init="init()">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock Analysis Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .tab-active { @apply border-b-2 border-indigo-500 text-indigo-600 font-semibold; }
+    .card { @apply bg-white rounded-xl shadow-sm border border-gray-100 p-5; }
+    .btn { @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all; }
+    .btn-primary { @apply btn bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95; }
+    .btn-secondary { @apply btn bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95; }
+    .btn-danger { @apply btn bg-red-100 text-red-700 hover:bg-red-200 active:scale-95; }
+    .badge { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium; }
+    .badge-green { @apply badge bg-emerald-100 text-emerald-700; }
+    .badge-red { @apply badge bg-red-100 text-red-700; }
+    .badge-blue { @apply badge bg-blue-100 text-blue-700; }
+    .badge-yellow { @apply badge bg-yellow-100 text-yellow-700; }
+    .badge-gray { @apply badge bg-gray-100 text-gray-600; }
+    .pnl-positive { @apply text-emerald-600 font-semibold; }
+    .pnl-negative { @apply text-red-600 font-semibold; }
+    .skeleton { @apply animate-pulse bg-gray-200 rounded; }
+    body { background: #f8fafc; font-family: 'Inter', system-ui, sans-serif; }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ticker-dropdown { max-height: 260px; overflow-y: auto; scrollbar-width: thin; }
+    .ticker-dropdown::-webkit-scrollbar { width: 4px; }
+    .ticker-dropdown::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
+        </svg>
+      </div>
+      <span class="font-bold text-gray-900 text-lg">Stock Analysis</span>
+      <span class="badge badge-gray hidden sm:inline-flex">VNIndex</span>
+    </div>
+    <nav class="flex gap-1">
+      <template x-for="t in tabs" :key="t.id">
+        <button @click="tab = t.id"
+          :class="tab === t.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'"
+          class="px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5">
+          <span x-html="t.icon" class="w-4 h-4"></span>
+          <span class="hidden sm:inline" x-text="t.label"></span>
+        </button>
+      </template>
+    </nav>
+    <button @click="refreshAll()" :disabled="loading"
+      class="btn-secondary text-xs" title="Refresh">
+      <svg :class="loading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
+  <!-- ═══ DASHBOARD TAB ═══ -->
+  <div x-show="tab === 'dashboard'" x-cloak>
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="card">
+        <p class="text-xs text-gray-500 mb-1">Vị thế đang mở</p>
+        <p class="text-2xl font-bold text-gray-900" x-text="openPositions.length"></p>
+        <p class="text-xs text-gray-400 mt-1">cổ phiếu</p>
+      </div>
+      <div class="card">
+        <p class="text-xs text-gray-500 mb-1">P&L trung bình</p>
+        <p class="text-2xl font-bold"
+          :class="avgPnl >= 0 ? 'text-emerald-600' : 'text-red-600'"
+          x-text="(avgPnl >= 0 ? '+' : '') + avgPnl.toFixed(2) + '%'"></p>
+        <p class="text-xs text-gray-400 mt-1">tất cả vị thế</p>
+      </div>
+      <div class="card">
+        <p class="text-xs text-gray-500 mb-1">Tốt nhất</p>
+        <template x-if="bestPos">
+          <div>
+            <p class="text-2xl font-bold text-emerald-600" x-text="'+' + Number(bestPos.pnlPercent).toFixed(2) + '%'"></p>
+            <p class="text-xs text-gray-500 mt-1" x-text="bestPos.ticker"></p>
+          </div>
+        </template>
+        <template x-if="!bestPos"><p class="text-2xl font-bold text-gray-300">—</p></template>
+      </div>
+      <div class="card">
+        <p class="text-xs text-gray-500 mb-1">Tổng đã đóng</p>
+        <p class="text-2xl font-bold text-gray-900" x-text="closedPositions.length"></p>
+        <p class="text-xs text-gray-400 mt-1">lệnh hoàn thành</p>
+      </div>
+    </div>
+
+    <!-- Open Positions Table -->
+    <div class="card mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-semibold text-gray-900 flex items-center gap-2">
+          <span>📋 Vị thế đang mở</span>
+          <span class="badge badge-blue" x-text="openPositions.length"></span>
+        </h2>
+        <button @click="trackPositions()" :disabled="scanning" class="btn-secondary text-xs">
+          <svg :class="scanning ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Cập nhật giá
+        </button>
+      </div>
+      <template x-if="openPositions.length === 0">
+        <div class="text-center py-10 text-gray-400">
+          <p class="text-4xl mb-2">📭</p>
+          <p>Chưa có vị thế nào đang mở</p>
+        </div>
+      </template>
+      <template x-if="openPositions.length > 0">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-gray-500 border-b border-gray-100">
+                <th class="pb-2 font-medium">Mã</th>
+                <th class="pb-2 font-medium">Ngày mua</th>
+                <th class="pb-2 font-medium text-right">Giá vào</th>
+                <th class="pb-2 font-medium text-right">Giá hiện tại</th>
+                <th class="pb-2 font-medium text-right">P&L</th>
+                <th class="pb-2 font-medium text-right">Target</th>
+                <th class="pb-2 font-medium text-right">Cắt lỗ</th>
+                <th class="pb-2 font-medium text-right">R:R</th>
+                <th class="pb-2 font-medium text-right">Ngày</th>
+                <th class="pb-2 font-medium text-center">Tiến độ</th>
+                <th class="pb-2"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <template x-for="pos in openPositions" :key="pos.id">
+                <tr class="hover:bg-gray-50 transition-colors">
+                  <td class="py-3">
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-gray-900" x-text="pos.ticker"></span>
+                      <span :class="pos.recommendation === 'STRONG_BUY' ? 'badge-green' : 'badge-blue'" class="badge" x-text="pos.recommendation === 'STRONG_BUY' ? '⭐ Mạnh' : 'Mua'"></span>
+                    </div>
+                  </td>
+                  <td class="py-3 text-gray-500 text-xs" x-text="pos.entryDate"></td>
+                  <td class="py-3 text-right font-mono text-gray-700" x-text="fmt(pos.entryPrice)"></td>
+                  <td class="py-3 text-right font-mono font-medium" x-text="fmt(pos.lastPrice || pos.entryPrice)"></td>
+                  <td class="py-3 text-right">
+                    <span :class="Number(pos.pnlPercent) >= 0 ? 'pnl-positive' : 'pnl-negative'"
+                      x-text="(Number(pos.pnlPercent) >= 0 ? '+' : '') + Number(pos.pnlPercent).toFixed(2) + '%'"></span>
+                  </td>
+                  <td class="py-3 text-right font-mono text-emerald-600" x-text="fmt(pos.targetPrice)"></td>
+                  <td class="py-3 text-right font-mono text-red-500" x-text="fmt(pos.stopLoss)"></td>
+                  <td class="py-3 text-right text-gray-500 text-xs" x-text="'1:' + Number(pos.riskReward).toFixed(1)"></td>
+                  <td class="py-3 text-right text-gray-400 text-xs" x-text="pos.daysHeld + 'N'"></td>
+                  <td class="py-3 px-2">
+                    <div class="w-24">
+                      <div class="flex justify-between text-xs text-gray-400 mb-1">
+                        <span x-text="progressPct(pos) + '%'"></span>
+                        <span>100%</span>
+                      </div>
+                      <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all"
+                          :class="Number(pos.pnlPercent) >= 0 ? 'bg-emerald-400' : 'bg-red-400'"
+                          :style="`width: ${Math.min(Math.abs(progressPct(pos)), 100)}%`"></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-3 text-right">
+                    <button @click="closePosition(pos)" class="btn-danger text-xs px-2 py-1">Đóng</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
+    </div>
+
+    <!-- Recent Closed -->
+    <div class="card">
+      <h2 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <span>✅ Lịch sử đóng lệnh</span>
+        <span class="badge badge-gray" x-text="closedPositions.length"></span>
+      </h2>
+      <template x-if="closedPositions.length === 0">
+        <p class="text-center py-6 text-gray-400">Chưa có lệnh nào được đóng</p>
+      </template>
+      <template x-if="closedPositions.length > 0">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-gray-500 border-b border-gray-100">
+                <th class="pb-2 font-medium">Mã</th>
+                <th class="pb-2 font-medium">Ngày mua</th>
+                <th class="pb-2 font-medium">Ngày đóng</th>
+                <th class="pb-2 font-medium text-right">Giá vào</th>
+                <th class="pb-2 font-medium text-right">Giá đóng</th>
+                <th class="pb-2 font-medium text-right">Kết quả</th>
+                <th class="pb-2 font-medium">Lý do</th>
+                <th class="pb-2 font-medium text-right">Ngày nắm</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <template x-for="pos in closedPositions.slice(0,10)" :key="pos.id">
+                <tr class="hover:bg-gray-50">
+                  <td class="py-2.5 font-bold text-gray-900" x-text="pos.ticker"></td>
+                  <td class="py-2.5 text-gray-400 text-xs" x-text="pos.entryDate"></td>
+                  <td class="py-2.5 text-gray-400 text-xs" x-text="pos.closeDate"></td>
+                  <td class="py-2.5 text-right font-mono text-gray-600" x-text="fmt(pos.entryPrice)"></td>
+                  <td class="py-2.5 text-right font-mono text-gray-700" x-text="fmt(pos.closePrice)"></td>
+                  <td class="py-2.5 text-right">
+                    <span :class="Number(pos.closePnlPercent) >= 0 ? 'pnl-positive' : 'pnl-negative'"
+                      x-text="(Number(pos.closePnlPercent) >= 0 ? '+' : '') + Number(pos.closePnlPercent).toFixed(2) + '%'"></span>
+                  </td>
+                  <td class="py-2.5">
+                    <span :class="closeReasonClass(pos.closeReason)" class="badge text-xs" x-text="closeReasonLabel(pos.closeReason)"></span>
+                  </td>
+                  <td class="py-2.5 text-right text-gray-400 text-xs" x-text="pos.daysHeld + ' ngày'"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ═══ SCANNER TAB ═══ -->
+  <div x-show="tab === 'scanner'" x-cloak>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Actions -->
+      <div class="space-y-4">
+        <div class="card">
+          <h3 class="font-semibold text-gray-900 mb-4">⚡ Thao tác thủ công</h3>
+          <div class="space-y-3">
+            <button @click="runAction('sync')" :disabled="actionLoading.sync" class="btn-secondary w-full justify-center">
+              <svg :class="actionLoading.sync ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              Sync giá từ DNSE
+            </button>
+            <button @click="runAction('scan')" :disabled="actionLoading.scan" class="btn-secondary w-full justify-center">
+              <svg :class="actionLoading.scan ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
+              Quét tín hiệu
+            </button>
+            <button @click="runAction('recommend')" :disabled="actionLoading.recommend" class="btn-primary w-full justify-center">
+              <svg :class="actionLoading.recommend ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              Khuyến nghị + Telegram
+            </button>
+            <button @click="trackPositions()" :disabled="scanning" class="btn-secondary w-full justify-center">
+              <svg :class="scanning ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+              Theo dõi vị thế
+            </button>
+          </div>
+        </div>
+
+        <!-- Cron Schedule -->
+        <div class="card">
+          <h3 class="font-semibold text-gray-900 mb-3">🕐 Lịch tự động (T2–T6)</h3>
+          <div class="space-y-2 text-sm">
+            <div class="flex items-center gap-2 text-gray-600">
+              <span class="w-12 font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">15:30</span>
+              <span>Sync giá từ DNSE</span>
+            </div>
+            <div class="flex items-center gap-2 text-gray-600">
+              <span class="w-12 font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">15:35</span>
+              <span>Theo dõi vị thế</span>
+            </div>
+            <div class="flex items-center gap-2 text-gray-600">
+              <span class="w-12 font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">15:45</span>
+              <span>Quét tín hiệu</span>
+            </div>
+            <div class="flex items-center gap-2 text-indigo-600 font-medium">
+              <span class="w-12 font-mono text-xs bg-indigo-100 px-2 py-0.5 rounded">16:00</span>
+              <span>Gửi Telegram</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Watchlist -->
+      <div class="lg:col-span-2 card">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-gray-900 flex items-center gap-2">
+            <span>📋 Watchlist (<span x-text="watchlist.length"></span> mã)</span>
+            <template x-if="Object.keys(signalSummary).length > 0">
+              <div class="flex gap-1.5 flex-wrap">
+                <template x-if="Object.values(signalSummary).filter(s => s.direction === 'BULLISH').length > 0">
+                  <span class="badge badge-green text-xs">
+                    📈 <span x-text="Object.values(signalSummary).filter(s => s.direction === 'BULLISH').length"></span> MUA
+                    <template x-if="Object.values(signalSummary).filter(s => s.direction === 'BULLISH' && s.confidence === 'HIGH').length > 0">
+                      <span class="ml-0.5 opacity-80">(<span x-text="Object.values(signalSummary).filter(s => s.direction === 'BULLISH' && s.confidence === 'HIGH').length"></span>★★★)</span>
+                    </template>
+                  </span>
+                </template>
+                <template x-if="Object.values(signalSummary).filter(s => s.direction === 'BEARISH').length > 0">
+                  <span class="badge badge-red text-xs">
+                    🔴 <span x-text="Object.values(signalSummary).filter(s => s.direction === 'BEARISH').length"></span> BÁN
+                    <template x-if="Object.values(signalSummary).filter(s => s.direction === 'BEARISH' && s.confidence === 'HIGH').length > 0">
+                      <span class="ml-0.5 opacity-80">(<span x-text="Object.values(signalSummary).filter(s => s.direction === 'BEARISH' && s.confidence === 'HIGH').length"></span>★★★)</span>
+                    </template>
+                  </span>
+                </template>
+              </div>
+            </template>
+          </h3>
+          <div class="flex items-center gap-2">
+            <button @click="loadSignalSummary()" title="Refresh tín hiệu" class="p-1 text-gray-400 hover:text-indigo-600 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+            </button>
+            <input x-model="searchTicker" placeholder="Tìm mã..." class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 w-32"/>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto pr-1">
+          <template x-for="stock in filteredWatchlist" :key="stock.ticker">
+            <button @click="viewSignals(stock.ticker)"
+              class="text-left p-2.5 rounded-lg border transition-all group relative"
+              :class="{
+                'border-emerald-200 bg-emerald-50 hover:border-emerald-400': signalSummary[stock.ticker]?.direction === 'BULLISH',
+                'border-red-200 bg-red-50 hover:border-red-400':             signalSummary[stock.ticker]?.direction === 'BEARISH',
+                'border-gray-100 hover:border-indigo-300 hover:bg-indigo-50': !signalSummary[stock.ticker] || signalSummary[stock.ticker]?.direction === 'NEUTRAL',
+              }">
+
+              <!-- Row 1: Ticker + score badge -->
+              <div class="flex items-center justify-between gap-1 mb-0.5">
+                <span class="font-bold text-sm"
+                  :class="{
+                    'text-emerald-700': signalSummary[stock.ticker]?.direction === 'BULLISH',
+                    'text-red-700':     signalSummary[stock.ticker]?.direction === 'BEARISH',
+                    'text-gray-900':    !signalSummary[stock.ticker] || signalSummary[stock.ticker]?.direction === 'NEUTRAL',
+                  }"
+                  x-text="stock.ticker"></span>
+
+                <!-- Score + confidence khi có tín hiệu -->
+                <template x-if="signalSummary[stock.ticker]?.stars > 0">
+                  <div class="flex items-center gap-1">
+                    <span class="text-xs font-bold tabular-nums"
+                      :class="{
+                        'text-emerald-600': signalSummary[stock.ticker].direction === 'BULLISH',
+                        'text-red-600':     signalSummary[stock.ticker].direction === 'BEARISH',
+                      }"
+                      x-text="(signalSummary[stock.ticker].score > 0 ? '+' : '') + signalSummary[stock.ticker].score"></span>
+                    <span class="text-xs leading-none"
+                      x-text="'★'.repeat(signalSummary[stock.ticker].stars) + '☆'.repeat(3 - signalSummary[stock.ticker].stars)"
+                      :class="{
+                        'text-emerald-500': signalSummary[stock.ticker].direction === 'BULLISH',
+                        'text-red-500':     signalSummary[stock.ticker].direction === 'BEARISH',
+                      }"></span>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Row 2: Company name -->
+              <div class="text-xs text-gray-400 truncate" x-text="stock.name"></div>
+
+              <!-- Row 3: Top signal hoặc sector -->
+              <template x-if="signalSummary[stock.ticker]?.topSignal">
+                <div class="flex items-center gap-1 mt-1">
+                  <!-- HIGH confidence badge -->
+                  <template x-if="signalSummary[stock.ticker].confidence === 'HIGH'">
+                    <span class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      :class="signalSummary[stock.ticker].direction === 'BULLISH' ? 'bg-emerald-500' : 'bg-red-500'"></span>
+                  </template>
+                  <span class="text-xs font-medium truncate"
+                    :class="{
+                      'text-emerald-600': signalSummary[stock.ticker].direction === 'BULLISH',
+                      'text-red-600':     signalSummary[stock.ticker].direction === 'BEARISH',
+                    }"
+                    x-text="signalSummary[stock.ticker].topSignal.replace(/_/g,' ')"></span>
+                </div>
+              </template>
+              <template x-if="!signalSummary[stock.ticker]?.topSignal">
+                <div class="text-xs text-gray-300 mt-0.5" x-text="stock.sector"></div>
+              </template>
+            </button>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Log -->
+    <div x-show="actionLog.length > 0" class="card mt-6">
+      <h3 class="font-semibold text-gray-900 mb-3">📜 Log</h3>
+      <div class="space-y-1 max-h-48 overflow-y-auto font-mono text-xs">
+        <template x-for="(log, i) in actionLog" :key="i">
+          <div class="flex gap-2 py-1 border-b border-gray-50 last:border-0">
+            <span class="text-gray-400" x-text="log.time"></span>
+            <span :class="log.type === 'error' ? 'text-red-600' : log.type === 'success' ? 'text-emerald-600' : 'text-gray-700'" x-text="log.msg"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SIGNALS TAB ═══ -->
+  <div x-show="tab === 'signals'" x-cloak>
+    <div class="card">
+      <div class="flex flex-wrap items-center gap-3 mb-5">
+        <h2 class="font-semibold text-gray-900">🔍 Tín hiệu kỹ thuật</h2>
+
+        <!-- Ticker autocomplete -->
+        <div class="relative" x-data="tickerPicker('signalTicker', () => loadSignals())">
+          <div class="flex items-center border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-300"
+            :class="open ? 'border-indigo-400' : 'border-gray-200'">
+            <input
+              x-ref="input"
+              x-model="query"
+              @input="onInput()"
+              @keydown.arrow-down.prevent="moveDown()"
+              @keydown.arrow-up.prevent="moveUp()"
+              @keydown.enter.prevent="selectHighlighted()"
+              @keydown.escape="open = false"
+              @focus="onInput()"
+              @blur="onBlur()"
+              placeholder="Tìm mã..."
+              class="px-3 py-1.5 text-sm uppercase outline-none w-36 bg-white"
+              autocomplete="off" spellcheck="false"
+            />
+            <button x-show="query" @mousedown.prevent="clear()" class="px-2 text-gray-400 hover:text-gray-600 bg-white">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div x-show="open && suggestions.length > 0" x-cloak
+            class="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl ticker-dropdown">
+            <template x-for="(s, i) in suggestions" :key="s.ticker">
+              <div @mousedown.prevent="selectItem(s)"
+                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-indigo-50 transition-colors"
+                :class="i === highlighted ? 'bg-indigo-50' : ''">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-sm text-gray-900" x-text="s.ticker"></span>
+                    <template x-if="signalSummary[s.ticker]?.direction === 'BULLISH'">
+                      <span class="badge badge-green text-xs" x-text="signalSummary[s.ticker].topSignal?.replace(/_/g,' ')?.split(' ')[0]"></span>
+                    </template>
+                    <template x-if="signalSummary[s.ticker]?.direction === 'BEARISH'">
+                      <span class="badge badge-red text-xs">⚠ phân phối</span>
+                    </template>
+                  </div>
+                  <div class="text-xs text-gray-400" x-text="s.name"></div>
+                </div>
+                <span class="text-xs text-gray-300" x-text="s.sector"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <button @click="loadSignals()" :disabled="!signalTicker" class="btn-primary text-xs">Xem tín hiệu</button>
+        <button @click="runAnalyze()" :disabled="actionLoading.analyze || !signalTicker" class="btn-secondary text-xs">
+          <svg :class="actionLoading.analyze ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+          Phân tích ngay
+        </button>
+      </div>
+
+      <!-- Chart -->
+      <div x-show="barData.length > 0" class="mb-5">
+        <div class="flex items-center gap-3 mb-2 flex-wrap">
+          <span class="text-sm font-semibold text-gray-700" x-text="signalTicker + ' — Biểu đồ nến'"></span>
+          <div class="flex items-center gap-3 text-xs">
+            <span class="flex items-center gap-1"><span class="inline-block w-4 h-0.5 bg-blue-500"></span> EMA20</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-4 h-0.5 bg-orange-400"></span> EMA50</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="background:#26a69a"></span> Tăng</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="background:#ef5350"></span> Giảm</span>
+          </div>
+        </div>
+        <div x-ref="chartContainer" class="w-full rounded-xl overflow-hidden border border-gray-100" style="height:500px"></div>
+      </div>
+
+      <!-- Recommendation Card -->
+      <template x-if="currentRec">
+        <div class="mb-5 p-4 rounded-xl border-2"
+          :class="{
+            'border-emerald-300 bg-emerald-50': ['BUY','STRONG_BUY'].includes(currentRec.recommendation),
+            'border-red-300 bg-red-50': ['SELL','STRONG_SELL'].includes(currentRec.recommendation),
+            'border-gray-200 bg-gray-50': currentRec.recommendation === 'HOLD'
+          }">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-2xl font-bold" x-text="recEmoji(currentRec.recommendation)"></span>
+                <span class="text-xl font-bold text-gray-900" x-text="currentRec.ticker + ' — ' + recLabel(currentRec.recommendation)"></span>
+                <span :class="confidenceClass(currentRec.confidence)" class="badge" x-text="currentRec.confidence"></span>
+              </div>
+              <p class="text-sm text-gray-600 mt-1" x-text="currentRec.reasoning"></p>
+            </div>
+            <div class="text-right text-sm">
+              <div class="font-semibold text-gray-500">Điểm: <span class="text-gray-900 text-lg" x-text="(currentRec.score > 0 ? '+' : '') + currentRec.score + '/10'"></span></div>
+              <div class="text-gray-400 text-xs" x-text="currentRec.tradingDate"></div>
+            </div>
+          </div>
+          <template x-if="currentRec.priceTarget">
+            <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <div class="bg-white rounded-lg p-2 text-center">
+                <div class="text-xs text-gray-400">Giá hiện tại</div>
+                <div class="font-bold text-gray-900" x-text="fmtK(currentRec.priceTarget.currentPrice)"></div>
+              </div>
+              <div class="bg-white rounded-lg p-2 text-center">
+                <div class="text-xs text-emerald-600">Chốt lời</div>
+                <div class="font-bold text-emerald-600" x-text="fmtK(currentRec.priceTarget.targetPrice) + ' (+' + currentRec.priceTarget.upside.toFixed(1) + '%)'"></div>
+              </div>
+              <div class="bg-white rounded-lg p-2 text-center">
+                <div class="text-xs text-red-500">Cắt lỗ</div>
+                <div class="font-bold text-red-500" x-text="fmtK(currentRec.priceTarget.stopLoss) + ' (-' + currentRec.priceTarget.downside.toFixed(1) + '%)'"></div>
+              </div>
+              <div class="bg-white rounded-lg p-2 text-center">
+                <div class="text-xs text-gray-400">R:R</div>
+                <div class="font-bold text-indigo-600" x-text="'1:' + currentRec.priceTarget.riskReward"></div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <!-- Signals List -->
+      <template x-if="signals.length > 0">
+        <div>
+          <div class="flex flex-wrap gap-2 mb-4">
+            <template x-for="s in signals.slice(0, 15)" :key="s.id">
+              <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+                :class="{
+                  'bg-emerald-100 text-emerald-700': s.direction === 'BULLISH',
+                  'bg-red-100 text-red-700': s.direction === 'BEARISH',
+                  'bg-yellow-100 text-yellow-700': s.direction === 'NEUTRAL'
+                }">
+                <span x-text="s.direction === 'BULLISH' ? '🟢' : s.direction === 'BEARISH' ? '🔴' : '🟡'"></span>
+                <span x-text="s.type.replace(/_/g,' ')"></span>
+              </div>
+            </template>
+          </div>
+          <div class="space-y-2">
+            <template x-for="s in signals.slice(0,15)" :key="s.id">
+              <div class="flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
+                <span x-text="s.direction === 'BULLISH' ? '🟢' : s.direction === 'BEARISH' ? '🔴' : '🟡'" class="text-lg mt-0.5"></span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-medium text-gray-900 text-sm" x-text="s.type.replace(/_/g,' ')"></span>
+                    <span class="badge badge-gray text-xs" x-text="s.tradingDate"></span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-0.5" x-text="s.description"></p>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+      <template x-if="signals.length === 0 && signalTicker">
+        <p class="text-center py-8 text-gray-400">Nhập mã cổ phiếu và nhấn "Xem tín hiệu"</p>
+      </template>
+    </div>
+  </div>
+
+  <!-- ═══ STOCKS TAB ═══ -->
+  <div x-show="tab === 'stocks'" x-cloak>
+    <div class="card">
+      <div class="flex flex-wrap items-center gap-3 mb-5">
+        <h2 class="font-semibold text-gray-900">📈 Dữ liệu giá</h2>
+
+        <!-- Ticker autocomplete -->
+        <div class="relative" x-data="tickerPicker('priceTicker', () => loadStockData())">
+          <div class="flex items-center border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-300"
+            :class="open ? 'border-indigo-400' : 'border-gray-200'">
+            <input
+              x-ref="input"
+              x-model="query"
+              @input="onInput()"
+              @keydown.arrow-down.prevent="moveDown()"
+              @keydown.arrow-up.prevent="moveUp()"
+              @keydown.enter.prevent="selectHighlighted()"
+              @keydown.escape="open = false"
+              @focus="onInput()"
+              @blur="onBlur()"
+              placeholder="Tìm mã..."
+              class="px-3 py-1.5 text-sm uppercase outline-none w-36 bg-white"
+              autocomplete="off" spellcheck="false"
+            />
+            <button x-show="query" @mousedown.prevent="clear()" class="px-2 text-gray-400 hover:text-gray-600 bg-white">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div x-show="open && suggestions.length > 0" x-cloak
+            class="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl ticker-dropdown">
+            <template x-for="(s, i) in suggestions" :key="s.ticker">
+              <div @mousedown.prevent="selectItem(s)"
+                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-indigo-50 transition-colors"
+                :class="i === highlighted ? 'bg-indigo-50' : ''">
+                <div>
+                  <span class="font-bold text-sm text-gray-900" x-text="s.ticker"></span>
+                  <div class="text-xs text-gray-400" x-text="s.name"></div>
+                </div>
+                <span class="text-xs text-gray-300" x-text="s.sector"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <button @click="loadStockData()" :disabled="!priceTicker" class="btn-primary text-xs">Xem lịch sử</button>
+        <button @click="syncTicker()" :disabled="actionLoading.syncOne || !priceTicker" class="btn-secondary text-xs">
+          <svg :class="actionLoading.syncOne ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Sync từ DNSE
+        </button>
+      </div>
+
+      <!-- Latest price card -->
+      <template x-if="latestBar">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+          <div class="col-span-2 sm:col-span-1 p-3 bg-gray-50 rounded-lg">
+            <div class="text-xs text-gray-400">Giá đóng cửa</div>
+            <div class="text-xl font-bold text-gray-900" x-text="fmtK(latestBar.close)"></div>
+            <div class="text-xs text-gray-400" x-text="latestBar.tradingDate"></div>
+          </div>
+          <div class="p-3 bg-gray-50 rounded-lg">
+            <div class="text-xs text-gray-400">Mở cửa</div>
+            <div class="font-semibold text-gray-700" x-text="fmtK(latestBar.open)"></div>
+          </div>
+          <div class="p-3 bg-gray-50 rounded-lg">
+            <div class="text-xs text-emerald-600">Cao</div>
+            <div class="font-semibold text-emerald-700" x-text="fmtK(latestBar.high)"></div>
+          </div>
+          <div class="p-3 bg-gray-50 rounded-lg">
+            <div class="text-xs text-red-500">Thấp</div>
+            <div class="font-semibold text-red-600" x-text="fmtK(latestBar.low)"></div>
+          </div>
+          <div class="p-3 bg-gray-50 rounded-lg">
+            <div class="text-xs text-gray-400">Khối lượng</div>
+            <div class="font-semibold text-gray-700" x-text="(latestBar.volume/1e6).toFixed(2) + 'M'"></div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Price history table -->
+      <template x-if="priceHistory.length > 0">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-gray-500 border-b">
+                <th class="pb-2 font-medium">Ngày</th>
+                <th class="pb-2 font-medium text-right">Mở</th>
+                <th class="pb-2 font-medium text-right">Cao</th>
+                <th class="pb-2 font-medium text-right">Thấp</th>
+                <th class="pb-2 font-medium text-right">Đóng</th>
+                <th class="pb-2 font-medium text-right">KL (K)</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <template x-for="bar in priceHistory.slice(0, 30)" :key="bar.tradingDate">
+                <tr class="hover:bg-gray-50">
+                  <td class="py-2 text-gray-600" x-text="bar.tradingDate"></td>
+                  <td class="py-2 text-right font-mono text-gray-600" x-text="fmtK(bar.open)"></td>
+                  <td class="py-2 text-right font-mono text-emerald-600" x-text="fmtK(bar.high)"></td>
+                  <td class="py-2 text-right font-mono text-red-500" x-text="fmtK(bar.low)"></td>
+                  <td class="py-2 text-right font-mono font-medium"
+                    :class="bar.close >= bar.open ? 'text-emerald-700' : 'text-red-600'"
+                    x-text="fmtK(bar.close)"></td>
+                  <td class="py-2 text-right text-gray-500" x-text="(bar.volume/1000).toFixed(0)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
+    </div>
+  </div>
+
+</main>
+
+<!-- Close Position Modal -->
+<div x-show="closeModal.show" x-cloak
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6" @click.stop>
+    <h3 class="font-bold text-gray-900 mb-1">Đóng vị thế</h3>
+    <p class="text-sm text-gray-500 mb-4">
+      Đóng <strong x-text="closeModal.pos?.ticker"></strong> —
+      vào @ <span x-text="closeModal.pos ? fmt(closeModal.pos.entryPrice) : ''"></span>
+    </p>
+    <label class="block text-sm text-gray-600 mb-1">Giá đóng (để trống = giá mới nhất)</label>
+    <input x-model="closeModal.price" type="number" placeholder="Để trống = giá DNSE"
+      class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+    <div class="flex gap-3">
+      <button @click="confirmClose()" class="btn-danger flex-1 justify-center">✓ Xác nhận đóng</button>
+      <button @click="closeModal.show = false" class="btn-secondary flex-1 justify-center">Huỷ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div x-show="toast.show" x-cloak x-transition
+  class="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2"
+  :class="toast.type === 'success' ? 'bg-emerald-600 text-white' : toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-gray-800 text-white'">
+  <span x-text="toast.type === 'success' ? '✓' : toast.type === 'error' ? '✗' : 'ℹ'"></span>
+  <span x-text="toast.msg"></span>
+</div>
+
+<script>
+function app() {
+  return {
+    tab: 'dashboard',
+    tabs: [
+      { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+      { id: 'scanner',   label: 'Scanner',   icon: '🔍' },
+      { id: 'signals',   label: 'Tín hiệu',  icon: '⚡' },
+      { id: 'stocks',    label: 'Cổ phiếu',  icon: '📈' },
+    ],
+    loading: false,
+    scanning: false,
+    openPositions: [],
+    closedPositions: [],
+    watchlist: [],
+    signalSummary: {},
+    searchTicker: '',
+    signals: [],
+    signalTicker: '',
+    currentRec: null,
+    priceHistory: [],
+    latestBar: null,
+    priceTicker: '',
+    barData: [],
+    lwChart: null,
+    actionLoading: { sync: false, scan: false, recommend: false, analyze: false, syncOne: false },
+    actionLog: [],
+    toast: { show: false, msg: '', type: 'success' },
+    closeModal: { show: false, pos: null, price: '' },
+
+    async init() {
+      await this.refreshAll();
+      await this.loadWatchlist();
+    },
+
+    async refreshAll() {
+      this.loading = true;
+      await Promise.all([this.loadOpenPositions(), this.loadClosedPositions()]);
+      this.loading = false;
+    },
+
+    async loadOpenPositions() {
+      const r = await fetch('/positions/open').then(r => r.json()).catch(() => []);
+      this.openPositions = Array.isArray(r) ? r : [];
+    },
+
+    async loadClosedPositions() {
+      const r = await fetch('/positions/closed').then(r => r.json()).catch(() => []);
+      this.closedPositions = Array.isArray(r) ? r : [];
+    },
+
+    async loadWatchlist() {
+      const r = await fetch('/scanner/watchlist').then(r => r.json()).catch(() => []);
+      this.watchlist = Array.isArray(r) ? r : [];
+      window.__watchlist__ = this.watchlist;
+      // Load signal summary in background
+      this.loadSignalSummary();
+    },
+
+    async loadSignalSummary() {
+      const r = await fetch('/scanner/signals-summary').then(r => r.json()).catch(() => ({}));
+      this.signalSummary = r && typeof r === 'object' ? r : {};
+      window.__signalSummary__ = this.signalSummary;
+    },
+
+    async loadSignals() {
+      if (!this.signalTicker) return;
+      const t = this.signalTicker.toUpperCase();
+      const [sigs, rec, bars] = await Promise.all([
+        fetch(`/signals/${t}`).then(r => r.json()).catch(() => []),
+        fetch(`/signals/${t}/recommend`, { method: 'POST' }).then(r => r.json()).catch(() => null),
+        fetch(`/stocks/${t}/history`).then(r => r.json()).catch(() => []),
+      ]);
+      this.signals = Array.isArray(sigs) ? sigs.slice(0, 20) : [];
+      this.currentRec = rec;
+      this.barData = Array.isArray(bars) ? bars.slice(-180) : [];
+      this.$nextTick(() => this.renderChart(t));
+    },
+
+    async runAnalyze() {
+      if (!this.signalTicker) return;
+      this.actionLoading.analyze = true;
+      const t = this.signalTicker.toUpperCase();
+      await fetch(`/signals/${t}/analyze`, { method: 'POST' });
+      await this.loadSignals();
+      this.actionLoading.analyze = false;
+      this.showToast('Phân tích xong ' + t, 'success');
+    },
+
+    renderChart(ticker) {
+      const container = this.$refs.chartContainer;
+      if (!container || !this.barData.length) return;
+
+      if (this.lwChart) { this.lwChart.remove(); this.lwChart = null; }
+
+      const isDark = false;
+      const chart = LightweightCharts.createChart(container, {
+        width: container.clientWidth,
+        height: 500,
+        layout: {
+          background: { color: '#ffffff' },
+          textColor: '#374151',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: 12,
+        },
+        grid: { vertLines: { color: '#f3f4f6' }, horzLines: { color: '#f3f4f6' } },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        rightPriceScale: {
+          borderColor: '#e5e7eb',
+          scaleMargins: { top: 0.08, bottom: 0.22 },
+          minimumWidth: 70,
+        },
+        timeScale: {
+          borderColor: '#e5e7eb',
+          timeVisible: true,
+          fixLeftEdge: true,
+          fixRightEdge: false,
+          rightOffset: 8,
+          barSpacing: 8,
+          minBarSpacing: 4,
+        },
+        localization: { priceFormatter: p => p.toFixed(1) + 'k' },
+      });
+      this.lwChart = chart;
+
+      // ── Candlestick ────────────────────────────────────────────────────
+      const candleSeries = chart.addCandlestickSeries({
+        upColor: '#26a69a', downColor: '#ef5350',
+        borderVisible: false,
+        wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+      });
+      const candleData = this.barData.map(b => ({
+        time: b.tradingDate,
+        open: +(b.open / 1000).toFixed(2),
+        high: +(b.high / 1000).toFixed(2),
+        low:  +(b.low  / 1000).toFixed(2),
+        close: +(b.close / 1000).toFixed(2),
+      }));
+      candleSeries.setData(candleData);
+
+      // ── Volume ────────────────────────────────────────────────────────
+      const volSeries = chart.addHistogramSeries({
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'vol',
+      });
+      volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      volSeries.setData(this.barData.map(b => ({
+        time: b.tradingDate,
+        value: b.volume,
+        color: b.close >= b.open ? '#26a69a33' : '#ef535033',
+      })));
+
+      // ── EMA helper ───────────────────────────────────────────────────
+      const closes = this.barData.map(b => b.close / 1000);
+      const ema = (vals, p) => {
+        const k = 2 / (p + 1); let e = null;
+        return vals.map(v => { e = e === null ? v : v * k + e * (1 - k); return +e.toFixed(3); });
+      };
+      const ema20 = ema(closes, 20);
+      const ema50 = ema(closes, 50);
+
+      const addEma = (values, warmup, color, title) => {
+        const s = chart.addLineSeries({ color, lineWidth: 1.5, title, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
+        s.setData(this.barData.slice(warmup).map((b, i) => ({ time: b.tradingDate, value: values[i + warmup] })));
+      };
+      addEma(ema20, 19, '#3b82f6', 'EMA20');
+      addEma(ema50, 49, '#f97316', 'EMA50');
+
+      // ── Signal markers ───────────────────────────────────────────────
+      const sigMap = {};
+      this.signals.forEach(s => {
+        if (!s.tradingDate || s.tradingDate === 'N/A') return;
+        if (!sigMap[s.tradingDate]) sigMap[s.tradingDate] = { bull: [], bear: [] };
+        if (s.direction === 'BULLISH') sigMap[s.tradingDate].bull.push(s.type.replace(/_/g,' '));
+        else if (s.direction === 'BEARISH') sigMap[s.tradingDate].bear.push(s.type.replace(/_/g,' '));
+      });
+      const markers = [];
+      for (const [date, { bull, bear }] of Object.entries(sigMap)) {
+        if (bull.length) markers.push({ time: date, position: 'belowBar', color: '#10b981', shape: 'arrowUp',   text: bull.join(' · '), size: 1.2 });
+        if (bear.length) markers.push({ time: date, position: 'aboveBar', color: '#ef4444', shape: 'arrowDown', text: bear.join(' · '), size: 1.2 });
+      }
+      if (markers.length) candleSeries.setMarkers(markers.sort((a,b) => a.time > b.time ? 1 : -1));
+
+      // Fit rồi scroll sang phải để nến mới nhất không bị sát mép
+      chart.timeScale().fitContent();
+      // Giữ rightOffset sau khi fitContent (fitContent reset về 0)
+      setTimeout(() => {
+        if (this.lwChart) this.lwChart.timeScale().applyOptions({ rightOffset: 8 });
+      }, 50);
+
+      // Responsive resize — giữ nguyên rightOffset khi resize
+      const ro = new ResizeObserver(() => {
+        if (this.lwChart) {
+          this.lwChart.applyOptions({ width: container.clientWidth });
+        }
+      });
+      ro.observe(container);
+    },
+
+    viewSignals(ticker) {
+      this.signalTicker = ticker;
+      this.tab = 'signals';
+      this.loadSignals();
+    },
+
+    async loadStockData() {
+      if (!this.priceTicker) return;
+      const t = this.priceTicker.toUpperCase();
+      const [history, latest] = await Promise.all([
+        fetch(`/stocks/${t}/stored`).then(r => r.json()).catch(() => []),
+        fetch(`/stocks/${t}/latest`).then(r => r.json()).catch(() => null),
+      ]);
+      this.priceHistory = Array.isArray(history) ? history : [];
+      this.latestBar = latest;
+    },
+
+    async syncTicker() {
+      if (!this.priceTicker) return;
+      this.actionLoading.syncOne = true;
+      const t = this.priceTicker.toUpperCase();
+      const r = await fetch(`/stocks/${t}/sync`, { method: 'POST' }).then(r => r.json()).catch(() => null);
+      await this.loadStockData();
+      this.actionLoading.syncOne = false;
+      this.showToast(`Sync ${t}: ${r} records mới`, 'success');
+    },
+
+    async trackPositions() {
+      this.scanning = true;
+      await fetch('/positions/track', { method: 'POST' });
+      await this.loadOpenPositions();
+      this.scanning = false;
+      this.showToast('Cập nhật vị thế xong', 'success');
+    },
+
+    async runAction(action) {
+      this.actionLoading[action] = true;
+      const endpointMap = { sync: '/scanner/sync', scan: '/scanner/scan', recommend: '/scanner/recommend' };
+      const labelMap = { sync: 'Sync giá', scan: 'Quét tín hiệu', recommend: 'Khuyến nghị + Telegram' };
+      try {
+        this.log('info', `▶ Bắt đầu: ${labelMap[action]}...`);
+        await fetch(endpointMap[action], { method: 'POST' });
+        this.log('success', `✓ Hoàn thành: ${labelMap[action]}`);
+        this.showToast(`${labelMap[action]} xong!`, 'success');
+        if (action === 'recommend') await this.refreshAll();
+        if (action === 'scan' || action === 'recommend') await this.loadSignalSummary();
+      } catch (e) {
+        this.log('error', `✗ Lỗi: ${e.message}`);
+        this.showToast('Có lỗi xảy ra', 'error');
+      }
+      this.actionLoading[action] = false;
+    },
+
+    closePosition(pos) {
+      this.closeModal = { show: true, pos, price: '' };
+    },
+
+    async confirmClose() {
+      const pos = this.closeModal.pos;
+      if (!pos) return;
+      const url = this.closeModal.price
+        ? `/positions/${pos.id}?price=${this.closeModal.price}`
+        : `/positions/${pos.id}`;
+      await fetch(url, { method: 'DELETE' });
+      this.closeModal.show = false;
+      await this.refreshAll();
+      this.showToast(`Đã đóng vị thế ${pos.ticker}`, 'success');
+    },
+
+    log(type, msg) {
+      const time = new Date().toLocaleTimeString('vi-VN');
+      this.actionLog.unshift({ time, type, msg });
+      if (this.actionLog.length > 30) this.actionLog.pop();
+    },
+
+    showToast(msg, type = 'success') {
+      this.toast = { show: true, msg, type };
+      setTimeout(() => { this.toast.show = false; }, 3000);
+    },
+
+    // ── Computed ─────────────────────────────────────────────────
+
+    get avgPnl() {
+      if (!this.openPositions.length) return 0;
+      const sum = this.openPositions.reduce((s, p) => s + Number(p.pnlPercent || 0), 0);
+      return sum / this.openPositions.length;
+    },
+
+    get bestPos() {
+      if (!this.openPositions.length) return null;
+      return this.openPositions.reduce((best, p) =>
+        Number(p.pnlPercent) > Number(best.pnlPercent) ? p : best
+      );
+    },
+
+    get filteredWatchlist() {
+      let list = this.watchlist;
+      if (this.searchTicker) {
+        const q = this.searchTicker.toUpperCase();
+        list = list.filter(s => s.ticker.includes(q) || s.name.toUpperCase().includes(q));
+      }
+      // Sort theo score tuyệt đối giảm dần: mã tín hiệu mạnh nhất lên đầu
+      return [...list].sort((a, b) => {
+        const sa = this.signalSummary[a.ticker];
+        const sb = this.signalSummary[b.ticker];
+        const absA = sa ? Math.abs(sa.score) : -1;
+        const absB = sb ? Math.abs(sb.score) : -1;
+        return absB - absA;
+      });
+    },
+
+    progressPct(pos) {
+      const entry = Number(pos.entryPrice);
+      const target = Number(pos.targetPrice);
+      const current = Number(pos.lastPrice || entry);
+      if (target <= entry) return 0;
+      return Math.max(0, Math.round(((current - entry) / (target - entry)) * 100));
+    },
+
+    // ── Formatters ────────────────────────────────────────────────
+
+    fmt(n) {
+      if (!n) return '—';
+      const v = Number(n);
+      return (v / 1000).toFixed(1) + 'k';
+    },
+
+    fmtK(n) {
+      if (!n) return '—';
+      return (Number(n) / 1000).toFixed(1) + 'k';
+    },
+
+    recEmoji(r) {
+      return { STRONG_BUY: '🚀', BUY: '📈', HOLD: '⏸️', SELL: '📉', STRONG_SELL: '🔥' }[r] || '—';
+    },
+
+    recLabel(r) {
+      return { STRONG_BUY: 'MUA MẠNH', BUY: 'MUA', HOLD: 'GIỮ', SELL: 'BÁN', STRONG_SELL: 'BÁN MẠNH' }[r] || r;
+    },
+
+    confidenceClass(c) {
+      return { HIGH: 'badge-green', MEDIUM: 'badge-yellow', LOW: 'badge-gray' }[c] || 'badge-gray';
+    },
+
+    closeReasonLabel(r) {
+      return { TARGET_HIT: '🎯 Đạt target', STOP_LOSS: '🛑 Cắt lỗ', DISTRIBUTION: '⚠️ Phân phối', MANUAL: '🤚 Thủ công' }[r] || r;
+    },
+
+    closeReasonClass(r) {
+      return { TARGET_HIT: 'badge-green', STOP_LOSS: 'badge-red', DISTRIBUTION: 'badge-yellow', MANUAL: 'badge-gray' }[r] || 'badge-gray';
+    },
+  };
+}
+
+// ── Ticker autocomplete component ─────────────────────────────────────────────
+// Usage: x-data="tickerPicker('fieldName', callback)"
+// Reads watchlist from the parent app() via Alpine.$root context
+function tickerPicker(fieldName, onSelect) {
+  return {
+    query: '',
+    open: false,
+    highlighted: -1,
+    suggestions: [],
+    // Reference to parent app state
+    get _app() { return Alpine.store ? null : document.querySelector('[x-data="app()"]')?._x_dataStack?.[0]; },
+    get _watchlist() {
+      // Walk up the Alpine component tree to find watchlist
+      try { return window.__watchlist__ || []; } catch { return []; }
+    },
+    get _signalSummary() {
+      try { return window.__signalSummary__ || {}; } catch { return {}; }
+    },
+    get signalSummary() { return this._signalSummary; },
+
+    onInput() {
+      this.open = true;
+      this.highlighted = -1;
+      const q = this.query.toUpperCase().trim();
+      const wl = this._watchlist;
+      if (!q) {
+        // Show all with signals first, then rest (limit 30)
+        const withSig = wl.filter(s => this._signalSummary[s.ticker]);
+        const without = wl.filter(s => !this._signalSummary[s.ticker]);
+        this.suggestions = [...withSig, ...without].slice(0, 30);
+      } else {
+        this.suggestions = wl.filter(s =>
+          s.ticker.startsWith(q) || s.name.toUpperCase().includes(q) || s.sector.toUpperCase().includes(q)
+        ).slice(0, 20);
+      }
+    },
+    onBlur() { setTimeout(() => { this.open = false; }, 150); },
+    moveDown() {
+      if (!this.open) { this.onInput(); return; }
+      this.highlighted = Math.min(this.highlighted + 1, this.suggestions.length - 1);
+      this.scrollToHighlighted();
+    },
+    moveUp() {
+      this.highlighted = Math.max(this.highlighted - 1, -1);
+      this.scrollToHighlighted();
+    },
+    scrollToHighlighted() {
+      this.$nextTick(() => {
+        const el = this.$el.querySelector(`.ticker-dropdown div:nth-child(${this.highlighted + 1})`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      });
+    },
+    selectHighlighted() {
+      if (this.highlighted >= 0 && this.suggestions[this.highlighted]) {
+        this.selectItem(this.suggestions[this.highlighted]);
+      } else if (this.suggestions.length === 1) {
+        this.selectItem(this.suggestions[0]);
+      } else {
+        // Free-type: try to match exactly
+        const match = this._watchlist.find(s => s.ticker === this.query.toUpperCase());
+        if (match) this.selectItem(match);
+      }
+    },
+    selectItem(stock) {
+      this.query = stock.ticker;
+      this.open = false;
+      this.highlighted = -1;
+      // Write back to parent app field
+      const appEl = this.$el.closest('[x-data]');
+      if (appEl && appEl._x_dataStack) {
+        const parentData = appEl._x_dataStack.find(d => fieldName in d);
+        if (parentData) parentData[fieldName] = stock.ticker;
+      }
+      if (onSelect) onSelect();
+    },
+    clear() {
+      this.query = '';
+      this.open = false;
+      const appEl = this.$el.closest('[x-data]');
+      if (appEl && appEl._x_dataStack) {
+        const parentData = appEl._x_dataStack.find(d => fieldName in d);
+        if (parentData) parentData[fieldName] = '';
+      }
+      this.$refs.input.focus();
+    },
+  };
+}
+</script>
+</body>
+</html>

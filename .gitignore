@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# PM2 logs
+/logs
+
 # Logs
 logs
 *.log

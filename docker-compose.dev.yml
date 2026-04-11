@@ -1,0 +1,42 @@
+services:
+  app:
+    image: node:22-alpine
+    container_name: stock-analysis-app-dev
+    working_dir: /app
+    command: yarn start:dev
+    ports:
+      - '${PORT:-3000}:3000'
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  mysql:
+    image: mysql:8.4
+    container_name: stock-analysis-mysql-dev
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-stock_analysis}
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: stock-analysis-redis-dev
+    volumes:
+      - redis_dev_data:/data
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+volumes:
+  mysql_dev_data:
+  redis_dev_data:
+
+networks:
+  stock-network:
+    driver: bridge

@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stock-analysis-app
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=mysql
+      - REDIS_HOST=redis
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  mysql:
+    image: mysql:8.4
+    container_name: stock-analysis-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-stock_analysis}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: stock-analysis-redis
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  stock-network:
+    driver: bridge
