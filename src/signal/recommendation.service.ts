@@ -625,13 +625,11 @@ function applyBullishBuyPriceStrategy(
       s.direction === SignalDirection.BULLISH,
   );
 
-  const ema20 = bars.length >= 20 ? lastEma20(bars as OhlcBar[]) : null;
-  const breakLevel =
-    bars.length >= 62 ? resistanceBeforeLastBar(bars as OhlcBar[]) : null;
+  const ema20 = bars.length >= 20 ? lastEma20(bars) : null;
+  const breakLevel = bars.length >= 62 ? resistanceBeforeLastBar(bars) : null;
 
-  const retestOk =
-    hasBreakResistance && detectBreakoutRetestBounce(bars as OhlcBar[]);
-  const ma20Ok = detectMa20WickBounce(bars as OhlcBar[]);
+  const retestOk = hasBreakResistance && detectBreakoutRetestBounce(bars);
+  const ma20Ok = detectMa20WickBounce(bars);
 
   const entry = pt.entryPrice;
 
