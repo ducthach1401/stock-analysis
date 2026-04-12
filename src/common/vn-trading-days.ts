@@ -17,7 +17,7 @@ export function tradingSessionsAfterEntryDate(
   const start = new Date(entryDate + 'T12:00:00');
   const end = new Date(exitDate + 'T12:00:00');
   if (end < start) return 0;
-  let d = new Date(start);
+  const d = new Date(start);
   d.setDate(d.getDate() + 1);
   let count = 0;
   while (d <= end) {
