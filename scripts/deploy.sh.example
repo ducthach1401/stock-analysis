@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Đặt trên **máy deploy** (tên `deploy.sh`, chmod +x).
+# GitHub Actions đã `git pull origin staging` trong thư mục STAGING_DEPLOY_PATH
+# trước khi gọi script này — chỉ cần build / restart dịch vụ.
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+# Ví dụ:
+# docker compose -f docker-compose.yml build --no-cache app
+# docker compose -f docker-compose.yml up -d
+# hoặc: yarn install --frozen-lockfile && yarn build && pm2 reload ecosystem.config.js --env production
+
+echo "deploy.sh — chỉnh theo môi trường thật của bạn."

@@ -7,14 +7,25 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import {
+  LIQUIDITY_MIN_AVG_VOLUME,
+  LIQUIDITY_MIN_BARS,
+  LIQUIDITY_MIN_TRADING_DAYS,
+  LIQUIDITY_WINDOW_DAYS,
+  SignalService,
+} from '../signal/signal.service';
 import { WatchlistService } from './watchlist.service';
 
 @Controller('watchlist')
 export class WatchlistController {
-  constructor(private readonly watchlistService: WatchlistService) {}
+  constructor(
+    private readonly watchlistService: WatchlistService,
+    private readonly signalService: SignalService,
+  ) {}
 
   // GET /watchlist — toàn bộ (kể cả inactive)
   @Get()
@@ -26,6 +37,37 @@ export class WatchlistController {
   @Get('active')
   findActive() {
     return this.watchlistService.findActive();
+  }
+
+  // GET /watchlist/ticker-picker — danh sách đầy đủ cho ô tìm mã (file WATCHLIST + DB)
+  @Get('ticker-picker')
+  tickerPickerUniverse() {
+    return this.watchlistService.getTickerPickerUniverse();
+  }
+
+  // GET /watchlist/liquidity-candidates?excludeDb=1 — mã trong DB đạt ngưỡng thanh khoản như checkLiquidity, chưa có trong list chuẩn (và tùy chọn loại cả mã đã có trong bảng watchlist)
+  @UseGuards(JwtAuthGuard)
+  @Get('liquidity-candidates')
+  async liquidityCandidates(@Query('excludeDb') excludeDb?: string) {
+    const extraExclude =
+      excludeDb === '1' || excludeDb === 'true'
+        ? (await this.watchlistService.findAll()).map((i) => i.ticker)
+        : [];
+    const tickers =
+      await this.signalService.findLiquidityOkOutsideCanonicalWatchlist({
+        extraExcludeTickers: extraExclude,
+      });
+    return {
+      criteria: {
+        windowDays: LIQUIDITY_WINDOW_DAYS,
+        minBars: LIQUIDITY_MIN_BARS,
+        minAvgVolume: LIQUIDITY_MIN_AVG_VOLUME,
+        minTradingDays: LIQUIDITY_MIN_TRADING_DAYS,
+      },
+      excludeDbWatchlist: extraExclude.length > 0,
+      count: tickers.length,
+      tickers,
+    };
   }
 
   // POST /watchlist — thêm mã mới

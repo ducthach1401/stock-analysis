@@ -14,6 +14,7 @@ import {
   allowsFirstPositionEntry,
   averageReasonLabel,
   firstLegPriceFromWeightedAverage,
+  isInReentryCooldown,
   MAX_AVERAGE_DOWN_LEGS,
   weightedEntryAfterAverageDown,
 } from './averaging-policy';
@@ -32,15 +33,12 @@ import {
   canSellAfterT2,
   MIN_TRADING_SESSIONS_AFTER_ENTRY,
   tradingSessionsAfterEntryDate,
+  vnCalendarTodayYmd,
 } from '../common/vn-trading-days';
 
 @Injectable()
 export class PositionService {
   private readonly logger = new Logger(PositionService.name);
-
-  // ── Bảo vệ chống tín hiệu nhiễu ──────────────────────────────────────────
-  /** Số ngày cooldown sau khi đóng lệnh, không được mở lại cùng mã */
-  private readonly COOLDOWN_DAYS_AFTER_CLOSE = 5;
 
   constructor(
     @InjectRepository(Position)
@@ -88,20 +86,14 @@ export class PositionService {
     const pt = result.priceTarget;
     if (!pt) return { outcome: 'NONE', detail: 'thiếu price target' };
 
-    const cooldownDate = new Date();
-    cooldownDate.setDate(
-      cooldownDate.getDate() - this.COOLDOWN_DAYS_AFTER_CLOSE,
-    );
-    const cooldownStr = cooldownDate.toLocaleDateString('sv-SE', {
-      timeZone: 'Asia/Ho_Chi_Minh',
-    });
     const recentlyClosed = await this.positionRepo.findOne({
       where: { ticker, status: PositionStatus.CLOSED },
       order: { closeDate: 'DESC' },
     });
-    if (recentlyClosed?.closeDate && recentlyClosed.closeDate >= cooldownStr) {
+    const todayVn = vnCalendarTodayYmd();
+    if (isInReentryCooldown(recentlyClosed?.closeDate, todayVn)) {
       this.logger.warn(
-        `${ticker}: cooldown — vừa đóng lệnh ngày ${recentlyClosed.closeDate}`,
+        `${ticker}: cooldown — vừa đóng lệnh ngày ${recentlyClosed?.closeDate}`,
       );
       return { outcome: 'NONE', detail: 'cooldown sau khi đóng lệnh' };
     }

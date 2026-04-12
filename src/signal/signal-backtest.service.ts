@@ -1,12 +1,17 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Not, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
+import { shouldRunAnalyzeAllHistoryAfterSync } from '../common/sync-analyze-policy';
 import { StockPrice } from '../stock/entities/stock-price.entity';
+import { StockService } from '../stock/stock.service';
+import { SignalService } from './signal.service';
 import { Recommendation } from './dto/recommendation.dto';
 import { BacktestRun } from './entities/backtest-run.entity';
 import { Signal } from './entities/signal.entity';
@@ -17,6 +22,8 @@ import {
   allowsFirstPositionEntryFromSignals,
   averageReasonLabelFromSignals,
   firstLegPriceFromWeightedAverage,
+  isInReentryCooldown,
+  POSITION_REENTRY_COOLDOWN_DAYS,
   weightedEntryAfterAverageDown,
 } from '../position/averaging-policy';
 import {
@@ -36,12 +43,6 @@ function canExitAfterT2(
   currentBarIndex: number,
 ): boolean {
   return currentBarIndex - entryBarIndex >= MIN_TRADING_SESSIONS_AFTER_ENTRY;
-}
-
-function addCalendarMonths(isoDate: string, deltaMonths: number): string {
-  const d = new Date(isoDate + 'T12:00:00');
-  d.setMonth(d.getMonth() + deltaMonths);
-  return d.toISOString().slice(0, 10);
 }
 
 function mapBars(history: StockPrice[]) {
@@ -75,12 +76,17 @@ function targetsForWeightedEntry(
 /** Một dòng cho bảng xếp hạng backtest trên Dashboard (run mới nhất / mã). */
 export interface BacktestRunSummaryRow {
   ticker: string;
+  /** Compound % chỉ từ các lệnh có ngày đóng trong `rankingFrom`…`rankingTo`. */
   compoundPnlPercent: number;
   sumPnlPercent: number;
   tradeCount: number;
   winCount: number;
-  periodFrom: string;
-  periodTo: string;
+  /** Kỳ giả lập đầy đủ đã lưu (IPO → phiên mới nhất). */
+  fullPeriodFrom: string;
+  fullPeriodTo: string;
+  /** Cửa sổ xếp hạng (đóng lệnh nằm trong đoạn này). */
+  rankingFrom: string;
+  rankingTo: string;
   createdAt: string;
 }
 
@@ -91,6 +97,89 @@ function sortSimulatedTradesNewestFirst(trades: SimulatedTrade[]): void {
     if (byExit !== 0) return byExit;
     return String(b.entryDate).localeCompare(String(a.entryDate));
   });
+}
+
+/** Số tháng lăn: chỉ lệnh **đóng** trong đoạn này mới vào compound xếp hạng trang chủ. */
+export const BACKTEST_LEADERBOARD_MONTHS = 12;
+
+function formatVnYmd(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+function lastDayOfCalendarMonth(y: number, month1to12: number): number {
+  return new Date(y, month1to12, 0).getDate();
+}
+
+/** Cận dưới / trên (YYYY-MM-DD, giờ VN) cho bảng xếp hạng. */
+export function leaderboardRollingWindowVn(): { from: string; to: string } {
+  const to = formatVnYmd(new Date());
+  const [y, m, day] = to.split('-').map((x) => parseInt(x, 10));
+  let tm = m - BACKTEST_LEADERBOARD_MONTHS;
+  let ty = y;
+  while (tm <= 0) {
+    tm += 12;
+    ty -= 1;
+  }
+  const maxD = lastDayOfCalendarMonth(ty, tm);
+  const td = Math.min(day, maxD);
+  const from = `${ty}-${String(tm).padStart(2, '0')}-${String(td).padStart(2, '0')}`;
+  return { from, to };
+}
+
+/**
+ * Số ngày lịch không mở lại sau khi đóng lệnh giả lập.
+ * - **0** (mặc định): thuật toán backtest **cũ** — khớp bản trước khi có cooldown (gần production cũ).
+ * - **5**: gần `PositionService` (`POSITION_REENTRY_COOLDOWN_DAYS`).
+ */
+function backtestReentryCooldownDaysFromEnv(): number {
+  const raw = process.env.BACKTEST_REENTRY_COOLDOWN_DAYS;
+  if (raw === undefined || raw === '') return 0;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+function metricsFromTradesInExitWindow(
+  trades: SimulatedTrade[],
+  from: string,
+  to: string,
+): {
+  compoundPnlPercent: number;
+  sumPnlPercent: number;
+  tradeCount: number;
+  winCount: number;
+} {
+  const filtered = trades.filter((t) => {
+    const ex = String(t.exitDate).slice(0, 10);
+    return ex >= from && ex <= to;
+  });
+  if (filtered.length === 0) {
+    return {
+      compoundPnlPercent: 0,
+      sumPnlPercent: 0,
+      tradeCount: 0,
+      winCount: 0,
+    };
+  }
+  const ordered = [...filtered].sort((a, b) =>
+    String(a.exitDate).localeCompare(String(b.exitDate)),
+  );
+  const sumPnl = ordered.reduce((s, x) => s + Number(x.pnlPercent), 0);
+  const compound =
+    (ordered.reduce((acc, x) => acc * (1 + Number(x.pnlPercent) / 100), 1) -
+      1) *
+    100;
+  const winCount = ordered.filter((x) => Number(x.pnlPercent) > 0).length;
+  return {
+    compoundPnlPercent: Number(compound.toFixed(4)),
+    sumPnlPercent: Number(sumPnl.toFixed(4)),
+    tradeCount: ordered.length,
+    winCount,
+  };
 }
 
 @Injectable()
@@ -107,41 +196,74 @@ export class SignalBacktestService {
     @InjectRepository(StockPrice)
     private readonly stockRepo: Repository<StockPrice>,
     private readonly recommendationService: RecommendationService,
+    @Inject(forwardRef(() => StockService))
+    private readonly stockService: StockService,
+    private readonly signalService: SignalService,
   ) {}
 
   /**
-   * Giống vị thế thật: vào khi **STRONG_BUY + nền/break**; **TB giá** khi lỗ + nền/hồi phục;
-   * TP ≥ **20%** từ giá TB (hoặc cao hơn nếu kháng cự/ATR). **Không SL.**
+   * Giống vị thế thật: vào khi **STRONG_BUY + (nền tích lũy: BASE / EMA stack / BB squeeze, hoặc break kháng cự)**;
+   * **TB giá** khi lỗ + nền/hồi phục; TP ≥ **20%** từ giá TB (hoặc cao hơn nếu kháng cự/ATR). **Không SL.**
+   * **Cooldown tái vào** sau khi đóng: mặc định **tắt** (`BACKTEST_REENTRY_COOLDOWN_DAYS=0`, thuật toán backtest cũ).
+   * Đặt `BACKTEST_REENTRY_COOLDOWN_DAYS=5` để gần `PositionService` (mở lại sau ~5 ngày lịch).
    * Thoát: chặn lãi (sàn tối thiểu ~20%, nâng theo đỉnh) khi quay đầu → target (lãi &lt;20%) sau T+2 → cuối kỳ (không đóng theo đảo chiều).
    */
-  async runBacktest(
-    ticker: string,
-    monthsBack = 12,
-  ): Promise<BacktestRun & { trades: SimulatedTrade[] }> {
+  /**
+   * Giả lập trên **toàn bộ nến giá** đã lưu (IPO → phiên mới nhất). Tín hiệu cùng kỳ.
+   * Xếp hạng trang chủ dùng thêm cửa sổ **12 tháng** (theo ngày đóng lệnh) — xem `getBacktestGoodBad`.
+   */
+  async runBacktest(ticker: string): Promise<BacktestRun & { trades: SimulatedTrade[] }> {
     const t = ticker.toUpperCase();
-    const latest = await this.stockRepo.findOne({
-      where: { ticker: t },
-      order: { tradingDate: 'DESC' },
-    });
-    if (!latest) {
-      throw new BadRequestException(`${t}: chưa có dữ liệu giá`);
+    const reentryCooldownDays = backtestReentryCooldownDaysFromEnv();
+    if (reentryCooldownDays > 0) {
+      this.logger.log(
+        `${t}: backtest cooldown tái vào = ${reentryCooldownDays} ngày (POSITION_REENTRY_COOLDOWN_DAYS=${POSITION_REENTRY_COOLDOWN_DAYS} khi so với live)`,
+      );
     }
 
-    const periodTo = latest.tradingDate;
-    const periodFrom = addCalendarMonths(periodTo, -monthsBack);
+    let syncSaved = 0;
+    let syncMode = 'incremental';
+    try {
+      const r = await this.stockService.syncHistorySmart(t);
+      syncSaved = r.saved;
+      syncMode = r.mode;
+    } catch (e) {
+      this.logger.warn(
+        `${t}: sync giá trước backtest — ${(e as Error).message} (dùng nến DB hiện có)`,
+      );
+    }
+
+    if (
+      shouldRunAnalyzeAllHistoryAfterSync({
+        isFullPriceSync: false,
+        smartMode: syncMode,
+        savedBarCount: syncSaved,
+      })
+    ) {
+      try {
+        await this.signalService.analyzeAllHistory(t);
+      } catch (e) {
+        this.logger.warn(
+          `${t}: analyzeAllHistory trước backtest — ${(e as Error).message}`,
+        );
+      }
+    }
 
     const bars = await this.stockRepo.find({
-      where: { ticker: t, tradingDate: Between(periodFrom, periodTo) },
+      where: { ticker: t },
       order: { tradingDate: 'ASC' },
     });
     if (bars.length < 20) {
       throw new BadRequestException(
-        `${t}: quá ít nến trong khoảng (${bars.length}), cần phân tích lịch sử tín hiệu trước`,
+        `${t}: quá ít nến để backtest (${bars.length}), cần ≥20 phiên giá`,
       );
     }
 
+    const periodFrom = bars[0].tradingDate;
+    const periodTo = bars[bars.length - 1].tradingDate;
+
     const signals = await this.signalRepo.find({
-      where: { ticker: t, tradingDate: Between(periodFrom, periodTo) },
+      where: { ticker: t },
       order: { tradingDate: 'ASC' },
     });
     const byDate = new Map<string, Signal[]>();
@@ -170,6 +292,8 @@ export class SignalBacktestService {
     };
 
     const closed: Draft[] = [];
+    /** Ngày đóng lệnh gần nhất — chỉ chặn mở lại khi `reentryCooldownDays` &gt; 0 */
+    let lastExitDate: string | null = null;
     let pos: {
       entryDate: string;
       entryBarIndex: number;
@@ -227,6 +351,7 @@ export class SignalBacktestService {
             exitReason: `Chặn lãi (sàn ~${floorPnlPct.toFixed(1)}%, đỉnh ~${peakPnlPct.toFixed(1)}%) — đóng ${close.toLocaleString('vi-VN')}`,
             pnlPercent: Number(pnlPercent.toFixed(4)),
           });
+          lastExitDate = bar.tradingDate;
           pos = null;
           continue;
         }
@@ -259,6 +384,7 @@ export class SignalBacktestService {
             exitReason: `Chốt mục tiêu ≥${tp.toLocaleString('vi-VN')}đ (sau T+2, đóng ${close.toLocaleString('vi-VN')})`,
             pnlPercent: Number(pnlPercent.toFixed(4)),
           });
+          lastExitDate = bar.tradingDate;
           pos = null;
           continue;
         }
@@ -293,7 +419,14 @@ export class SignalBacktestService {
           }
           continue;
         }
-      } else if (allowsFirstPositionEntryFromSignals(daySignals, rec)) {
+      } else if (
+        !isInReentryCooldown(
+          lastExitDate,
+          bar.tradingDate,
+          reentryCooldownDays,
+        ) &&
+        allowsFirstPositionEntryFromSignals(daySignals, rec)
+      ) {
         const { takeProfitTarget } = targetsForWeightedEntry(history, close);
         if (takeProfitTarget == null) continue;
         pos = {
@@ -316,6 +449,7 @@ export class SignalBacktestService {
       const last = bars[bars.length - 1];
       const close = Number(last.close);
       const pnlPercent = ((close - pos.entryPrice) / pos.entryPrice) * 100;
+      lastExitDate = last.tradingDate;
       closed.push({
         entryDate: pos.entryDate,
         entryPrice: pos.entryPrice,
@@ -456,34 +590,52 @@ export class SignalBacktestService {
     bad: BacktestRunSummaryRow[];
     total: number;
   }> {
-    const runs = await this.listLatestRunPerTicker();
-    const total = runs.length;
-    const map = (x: BacktestRun): BacktestRunSummaryRow => ({
-      ticker: x.ticker,
-      compoundPnlPercent: Number(x.compoundPnlPercent),
-      sumPnlPercent: Number(x.sumPnlPercent),
-      tradeCount: x.tradeCount,
-      winCount: x.winCount,
-      periodFrom: x.periodFrom,
-      periodTo: x.periodTo,
-      createdAt:
-        x.createdAt instanceof Date
-          ? x.createdAt.toISOString()
-          : String(x.createdAt),
-    });
+    const baseRuns = await this.listLatestRunPerTicker();
+    const total = baseRuns.length;
     if (total === 0) {
       return { good: [], bad: [], total: 0 };
     }
+    const ids = baseRuns.map((r) => r.id);
+    const withTrades = await this.runRepo.find({
+      where: { id: In(ids) },
+      relations: ['trades'],
+    });
+    const { from: rankingFrom, to: rankingTo } = leaderboardRollingWindowVn();
+
+    const rows: BacktestRunSummaryRow[] = withTrades.map((run) => {
+      const m = metricsFromTradesInExitWindow(
+        run.trades ?? [],
+        rankingFrom,
+        rankingTo,
+      );
+      return {
+        ticker: run.ticker,
+        compoundPnlPercent: m.compoundPnlPercent,
+        sumPnlPercent: m.sumPnlPercent,
+        tradeCount: m.tradeCount,
+        winCount: m.winCount,
+        fullPeriodFrom: run.periodFrom,
+        fullPeriodTo: run.periodTo,
+        rankingFrom,
+        rankingTo,
+        createdAt:
+          run.createdAt instanceof Date
+            ? run.createdAt.toISOString()
+            : String(run.createdAt),
+      };
+    });
+
+    const eligible = rows.filter((r) => r.tradeCount > 0);
     const lim = Math.min(Math.max(1, limit), 50);
-    const desc = [...runs].sort(
+    const desc = [...eligible].sort(
       (a, b) => Number(b.compoundPnlPercent) - Number(a.compoundPnlPercent),
     );
-    const asc = [...runs].sort(
+    const asc = [...eligible].sort(
       (a, b) => Number(a.compoundPnlPercent) - Number(b.compoundPnlPercent),
     );
     return {
-      good: desc.slice(0, lim).map(map),
-      bad: asc.slice(0, lim).map(map),
+      good: desc.slice(0, lim),
+      bad: asc.slice(0, lim),
       total,
     };
   }

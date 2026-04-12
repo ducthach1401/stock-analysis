@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
 import { StockPrice } from '../stock/entities/stock-price.entity';
@@ -10,12 +10,14 @@ import { RecommendationService } from './recommendation.service';
 import { SignalBacktestService } from './signal-backtest.service';
 import { SignalController } from './signal.controller';
 import { SignalService } from './signal.service';
+import { StockModule } from '../stock/stock.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Signal, StockPrice, BacktestRun, SimulatedTrade]),
     TelegramModule,
     AuthModule,
+    forwardRef(() => StockModule),
   ],
   controllers: [SignalController],
   providers: [SignalService, RecommendationService, SignalBacktestService],

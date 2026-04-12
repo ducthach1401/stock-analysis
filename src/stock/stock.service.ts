@@ -1,10 +1,21 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TelegramService } from '../telegram/telegram.service';
 import { StockPriceResponseDto } from './dto/stock-query.dto';
 import { DNSE_EARLIEST_FROM, DnseService } from './dnse.service';
 import { StockPrice } from './entities/stock-price.entity';
+
+/** Ngày lịch chồng lên nến cũ nhất khi sync tiếp (bắt gap + chỉnh nhẹ). */
+export const SYNC_OVERLAP_CALENDAR_DAYS = 7;
+
+/**
+ * |close_api - close_db| / close_db trên khoảng overlap vượt ngưỡng → coi như chỉnh tỉ lệ/cổ tức,
+ * xóa giá local và sync lại full IPO.
+ */
+export const SYNC_PRICE_REVISION_RELATIVE = 0.025;
+
+const ANALYZE_FROM_AFTER_FULL_RESYNC = '2010-01-01';
 
 @Injectable()
 export class StockService {
@@ -16,6 +27,153 @@ export class StockService {
     private readonly telegramService: TelegramService,
     private readonly dnseService: DnseService,
   ) {}
+
+  async deleteAllPricesForTicker(ticker: string): Promise<void> {
+    await this.stockPriceRepo.delete({ ticker: ticker.toUpperCase() });
+  }
+
+  /**
+   * MAX(tradingDate) từ MySQL/TypeORM có thể trả `Date` hoặc string — không được nối chuỗi trực tiếp
+   * (sẽ ra `Invalid time value` trong subtractCalendarDays).
+   */
+  private normalizeSqlDate(value: unknown): string | null {
+    if (value == null) return null;
+    if (typeof value === 'string') {
+      const m = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+      if (m) return m[1];
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      return this.ymdFromLocalDate(d);
+    }
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return null;
+      return this.ymdFromLocalDate(value);
+    }
+    return null;
+  }
+
+  private ymdFromLocalDate(d: Date): string {
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${day}`;
+  }
+
+  /** Ngày giao dịch mới nhất đang có trong DB (YYYY-MM-DD), hoặc null. */
+  async getLatestTradingDateInDb(ticker: string): Promise<string | null> {
+    const row = await this.stockPriceRepo
+      .createQueryBuilder('sp')
+      .select('MAX(sp.tradingDate)', 'mx')
+      .where('sp.ticker = :t', { t: ticker.toUpperCase() })
+      .getRawOne<{ mx: unknown }>();
+    return this.normalizeSqlDate(row?.mx);
+  }
+
+  subtractCalendarDays(isoDate: string | Date, days: number): string {
+    const s = this.normalizeSqlDate(isoDate);
+    if (!s) {
+      throw new BadRequestException(
+        `Ngày không hợp lệ khi lùi lịch sync: ${String(isoDate)}`,
+      );
+    }
+    const d = new Date(s + 'T12:00:00.000Z');
+    if (Number.isNaN(d.getTime())) {
+      throw new BadRequestException(`Không parse được ngày: ${s}`);
+    }
+    d.setUTCDate(d.getUTCDate() - days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  /**
+   * So khớp giá đóng API vs DB trong cùng các ngày có trong `apiBars`.
+   * Trả true nếu có ngày trùng mà lệch quá SYNC_PRICE_REVISION_RELATIVE.
+   */
+  private async pricesDivergedVersusDb(
+    ticker: string,
+    apiBars: StockPriceResponseDto[],
+  ): Promise<boolean> {
+    if (!apiBars.length) return false;
+    const t = ticker.toUpperCase();
+    const dates = [...new Set(apiBars.map((b) => b.tradingDate))].sort();
+    const rows = await this.stockPriceRepo
+      .createQueryBuilder('sp')
+      .where('sp.ticker = :t', { t })
+      .andWhere('sp.tradingDate IN (:...d)', { d: dates })
+      .getMany();
+    const dbCloseByDate = new Map(
+      rows.map((r) => [r.tradingDate, Number(r.close)]),
+    );
+    for (const bar of apiBars) {
+      const dbClose = dbCloseByDate.get(bar.tradingDate);
+      if (dbClose == null || !Number.isFinite(dbClose) || dbClose <= 0)
+        continue;
+      const apiClose = Number(bar.close);
+      if (!Number.isFinite(apiClose) || apiClose <= 0) continue;
+      const rel = Math.abs(apiClose - dbClose) / dbClose;
+      if (rel > SYNC_PRICE_REVISION_RELATIVE) {
+        this.logger.warn(
+          `${t} ${bar.tradingDate}: close DB=${dbClose} vs API=${apiClose} (lệch ${(rel * 100).toFixed(2)}%)`,
+        );
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Đồng bộ “thông minh”: DB trống → ~1 năm; đã có nến → overlap ~7 ngày.
+   * Lệch giá lớn trên overlap → xóa giá + `syncHistoryFull` (IPO → nay trên DNSE).
+   */
+  async syncHistorySmart(
+    ticker: string,
+    defaultFrom?: string,
+    to?: string,
+  ): Promise<{
+    saved: number;
+    mode: 'initial_window' | 'incremental' | 'full_resync_corporate_action';
+    /**
+     * Mốc giá vừa fetch lại (overlap / full resync) — chỉ để log / API.
+     * Không dùng để giới hạn `analyzeAllHistory` (sẽ bỏ sót tín hiệu năm cũ).
+     */
+    analyzeFrom?: string;
+  }> {
+    const t = ticker.toUpperCase();
+    const maxDb = await this.getLatestTradingDateInDb(t);
+
+    if (!maxDb) {
+      const saved = await this.syncHistory(t, defaultFrom, to);
+      return { saved, mode: 'initial_window', analyzeFrom: defaultFrom };
+    }
+
+    const overlapStart = this.subtractCalendarDays(
+      maxDb,
+      SYNC_OVERLAP_CALENDAR_DAYS,
+    );
+    const apiOverlapBars = await this.fetchHistory(t, overlapStart, maxDb);
+    const diverged = await this.pricesDivergedVersusDb(t, apiOverlapBars);
+    if (diverged) {
+      this.logger.warn(
+        `${t}: overlap ${overlapStart}→${maxDb} lệch lớn so với DNSE — xóa stock_prices & sync full IPO`,
+      );
+      await this.deleteAllPricesForTicker(t);
+      const saved = await this.syncHistoryFull(t, to);
+      return {
+        saved,
+        mode: 'full_resync_corporate_action',
+        analyzeFrom: ANALYZE_FROM_AFTER_FULL_RESYNC,
+      };
+    }
+
+    const incrementalFrom = this.subtractCalendarDays(
+      maxDb,
+      SYNC_OVERLAP_CALENDAR_DAYS,
+    );
+    this.logger.log(
+      `${t}: sync tăng dần từ ${incrementalFrom} (overlap ${SYNC_OVERLAP_CALENDAR_DAYS} ngày)`,
+    );
+    const saved = await this.syncHistory(t, incrementalFrom, to);
+    return { saved, mode: 'incremental', analyzeFrom: incrementalFrom };
+  }
 
   // Lấy dữ liệu giá lịch sử từ DNSE LightSpeed API
   async fetchHistory(
@@ -71,7 +229,8 @@ export class StockService {
       `Syncing FULL history for ${ticker} (từ ${DNSE_EARLIEST_FROM.toISOString().slice(0, 10)} → ${toLabel})...`,
     );
     const bars = await this.fetchFullHistory(ticker, to);
-    return this.persistPriceBars(ticker, bars);
+    const saved = await this.persistPriceBars(ticker, bars);
+    return saved;
   }
 
   private async persistPriceBars(

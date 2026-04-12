@@ -30,8 +30,10 @@ export enum SignalType {
   MACD_BULLISH_CROSS = 'MACD_BULLISH_CROSS',
   MACD_BEARISH_CROSS = 'MACD_BEARISH_CROSS',
 
-  // ── Volatility ───────────────────────────────────────────────────
+  // ── Volatility (Bollinger) — tên enum lịch sử: UP/DOWN theo giá vs dải, không phải hướng tín hiệu ──
+  /** Giá vượt BB upper (thường kèm BEARISH: overbought nếu không breakout mạnh) */
   BB_BREAKOUT_UP = 'BB_BREAKOUT_UP',
+  /** Giá chạm / xuyên BB lower (thường kèm BULLISH: oversold / cơ hội bật) */
   BB_BREAKOUT_DOWN = 'BB_BREAKOUT_DOWN',
   BB_SQUEEZE = 'BB_SQUEEZE',
 
@@ -50,9 +52,11 @@ export enum SignalType {
   MACD_BEARISH_DIVERGENCE = 'MACD_BEARISH_DIVERGENCE', // Giá đỉnh cao hơn nhưng MACD thấp hơn
   VOLUME_CLIMAX_TOP = 'VOLUME_CLIMAX_TOP', // KL đột biến ở đỉnh, đóng cửa yếu
   DISTRIBUTION_BAR = 'DISTRIBUTION_BAR', // Nến phân phối Wyckoff (wide range + close near low)
+  /** Washout / selling climax: KL cực đại ở vùng đáy, thân rộng, đóng lệch khỏi đáy nến → hấp thụ */
+  WASHOUT_BAR = 'WASHOUT_BAR',
   FAILED_BREAKOUT = 'FAILED_BREAKOUT', // Bull trap: vượt đỉnh rồi đóng dưới
 
-  // ── Legacy (giữ tương thích DB) ───────────────────────────────────
+  // ── Legacy (giữ tương thích DB; detector hiện tại dùng EMA_* — không emit MA_* mới) ──
   MA_GOLDEN_CROSS = 'MA_GOLDEN_CROSS',
   MA_DEATH_CROSS = 'MA_DEATH_CROSS',
 }

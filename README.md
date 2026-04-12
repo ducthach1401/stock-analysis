@@ -74,7 +74,7 @@ Tóm tắt quy tắc đang cài trong code (`src/position/`, `src/position/avera
 ### Giao diện web (`public/index.html`)
 - **Chiến lược**: mô tả quy tắc vị thế / TB / backtest (đồng bộ với README).
 - **Dashboard**: tóm tắt tín hiệu watchlist, lịch cron, log thao tác; admin có thể **phân tích lịch sử toàn watchlist** (job BullMQ).
-- **Tín hiệu**: biểu đồ nến (Lightweight Charts), RSI, MACD, khuyến nghị, thống kê tín hiệu lịch sử; admin: **Phân tích ngay** (phiên hiện tại), **Tín hiệu quá khứ** / **Cập nhật lịch sử** (backfill qua queue, mặc định từ `2025-01-01`).
+- **Tín hiệu**: biểu đồ nến (Lightweight Charts), RSI, MACD, khuyến nghị, thống kê tín hiệu lịch sử; admin: **Phân tích ngay** (phiên hiện tại), **Tín hiệu quá khứ** / **Cập nhật lịch sử** (backfill qua queue, mặc định từ đủ 130 nến → nay). **Backtest** chạy giả lập trên **toàn bộ nến đã lưu**; bảng xếp hạng trang chủ dùng compound từ các lệnh **đóng trong 12 tháng gần nhất** (theo ngày VN).
 - **Giá**: sync từng mã, lịch sử giá đã lưu.
 - **Watchlist**: CRUD, kiểm tra thanh khoản.
 - Đăng nhập **admin** (JWT) cho các thao tác ghi (sync, queue, watchlist).
@@ -143,6 +143,22 @@ yarn start:prod
 ```
 
 Hoặc dùng PM2: `yarn start:pm2` (xem `ecosystem.config.js`).
+
+### CI/CD (GitHub Actions)
+
+- **CI** (`.github/workflows/ci.yml`): PR / push `main` hoặc `master` — Prettier, ESLint, `yarn test:ci`, `yarn build`.
+- **Deploy staging** (`.github/workflows/deploy-staging.yml`): push nhánh **`staging`** (hoặc *workflow_dispatch*) → SSH → trong `STAGING_DEPLOY_PATH` chạy `git fetch` / `checkout staging` / `git pull --ff-only origin staging` rồi `bash deploy.sh`.
+
+**Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Ý nghĩa |
+|--------|---------|
+| `STAGING_HOST` | Hostname / IP máy deploy |
+| `STAGING_USER` | User SSH |
+| `STAGING_SSH_KEY` | Private key (toàn bộ PEM), public key đặt trong `~/.ssh/authorized_keys` trên server |
+| `STAGING_DEPLOY_PATH` | Root **clone git** trên server (có `.git`, có `deploy.sh`) — ví dụ `/opt/stock-analysis` |
+
+Trên server: tạo `deploy.sh` (tham khảo `scripts/deploy.sh.example`), `chmod +x deploy.sh`. SSH cổng khác 22: sửa workflow, thêm input `port` cho `appleboy/ssh-action`.
 
 ---
 

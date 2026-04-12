@@ -3,6 +3,8 @@ import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SignalService } from '../signal/signal.service';
+import { shouldRunAnalyzeAllHistoryAfterSync } from '../common/sync-analyze-policy';
+import { StockService } from '../stock/stock.service';
 import { tickerCapLiquidityRank, WATCHLIST } from '../scanner/watchlist';
 import { WatchlistItem } from './entities/watchlist-item.entity';
 
@@ -14,6 +16,7 @@ export class WatchlistService implements OnModuleInit {
     @InjectRepository(WatchlistItem)
     private readonly repo: Repository<WatchlistItem>,
     private readonly signalService: SignalService,
+    private readonly stockService: StockService,
   ) {}
 
   // ─── Seed dữ liệu ban đầu khi module khởi động ────────────────────────────
@@ -71,26 +74,118 @@ export class WatchlistService implements OnModuleInit {
     return items.map((i) => i.ticker);
   }
 
+  /**
+   * Gộp WATCHLIST (file) + mọi dòng watchlist DB — dùng autocomplete tìm mã.
+   * Thứ tự: ưu tiên như WATCHLIST (vốn hoá/thanh khoản), rồi theo mã.
+   */
+  async getTickerPickerUniverse(): Promise<
+    Array<{ ticker: string; name: string; sector: string; active?: boolean }>
+  > {
+    const map = new Map<
+      string,
+      { ticker: string; name: string; sector: string; active?: boolean }
+    >();
+
+    for (const s of WATCHLIST) {
+      const t = s.ticker.toUpperCase();
+      map.set(t, { ticker: t, name: s.name, sector: s.sector });
+    }
+
+    const rows = await this.repo.find();
+    for (const row of rows) {
+      const t = row.ticker.toUpperCase();
+      const cur = map.get(t);
+      if (cur) {
+        if (row.name) cur.name = row.name;
+        if (row.sector) cur.sector = row.sector;
+        cur.active = row.active;
+      } else {
+        map.set(t, {
+          ticker: t,
+          name: row.name ?? '',
+          sector: row.sector ?? '',
+          active: row.active,
+        });
+      }
+    }
+
+    return [...map.values()].sort((a, b) => {
+      const ra = tickerCapLiquidityRank(a.ticker);
+      const rb = tickerCapLiquidityRank(b.ticker);
+      if (ra !== rb) return ra - rb;
+      return a.ticker.localeCompare(b.ticker);
+    });
+  }
+
   // ─── Thêm / Sửa / Xoá ────────────────────────────────────────────────────
 
   async add(
     ticker: string,
     name: string,
     sector: string,
-  ): Promise<WatchlistItem> {
+  ): Promise<
+    WatchlistItem & {
+      _sync: {
+        barsInserted: number;
+        analyzed: boolean;
+        error?: string;
+      };
+    }
+  > {
     const t = ticker.toUpperCase().trim();
     const existing = await this.repo.findOne({ where: { ticker: t } });
+    let item: WatchlistItem;
     if (existing) {
       // Reactivate nếu đang inactive
       existing.active = true;
       existing.deactivateReason = null;
       existing.name = name || existing.name;
       existing.sector = sector || existing.sector;
-      return this.repo.save(existing);
+      item = await this.repo.save(existing);
+    } else {
+      item = await this.repo.save(
+        this.repo.create({ ticker: t, name, sector, active: true }),
+      );
     }
-    return this.repo.save(
-      this.repo.create({ ticker: t, name, sector, active: true }),
-    );
+    const _sync = await this.syncPricesAndAnalyze(t);
+    return { ...item, _sync };
+  }
+
+  /** Giống POST /stocks/:ticker/sync — sau khi thêm mã vào watchlist. */
+  private async syncPricesAndAnalyze(ticker: string): Promise<{
+    barsInserted: number;
+    analyzed: boolean;
+    error?: string;
+  }> {
+    try {
+      const sync = await this.stockService.syncHistorySmart(
+        ticker,
+        undefined,
+        undefined,
+      );
+      const barsInserted = sync.saved;
+      try {
+        await this.signalService.analyze(ticker);
+        if (
+          shouldRunAnalyzeAllHistoryAfterSync({
+            isFullPriceSync: false,
+            smartMode: sync.mode,
+            savedBarCount: sync.saved,
+          })
+        ) {
+          await this.signalService.analyzeAllHistory(ticker);
+        }
+      } catch {
+        /* analyze* đã log trong SignalService — giống StockController */
+      }
+      return { barsInserted, analyzed: true };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(
+        `Sau thêm watchlist ${ticker}: đồng bộ giá / phân tích lỗi — ${msg}`,
+      );
+      return { barsInserted: 0, analyzed: false, error: msg };
+    }
   }
 
   async remove(id: number): Promise<void> {

@@ -12,6 +12,40 @@ import {
 export const MAX_AVERAGE_DOWN_LEGS = 10;
 
 /**
+ * Sau khi đóng lệnh, không mở lại cùng mã trong N ngày lịch (giống PositionService).
+ * Backtest dùng cùng quy tắc với `asOfYmd` = ngày nến đang xét.
+ */
+export const POSITION_REENTRY_COOLDOWN_DAYS = 5;
+
+/** Cộng trừ ngày lịch trên chuỗi YYYY-MM-DD (UTC, không DST VN). */
+export function addCalendarDaysYmd(ymd: string, deltaDays: number): string {
+  const s = ymd.slice(0, 10);
+  const [y, m, d] = s.split('-').map((x) => parseInt(x, 10));
+  const t = Date.UTC(y, m - 1, d) + deltaDays * 86400000;
+  const u = new Date(t);
+  const yy = u.getUTCFullYear();
+  const mm = String(u.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(u.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+/**
+ * Còn trong cửa sổ cooldown: ngày đóng gần đây ≥ (asOf − cooldownDays).
+ * Trùng logic `PositionService.tryOpenFirst` (so sánh chuỗi YYYY-MM-DD).
+ */
+export function isInReentryCooldown(
+  lastCloseYmd: string | null | undefined,
+  asOfYmd: string,
+  cooldownDays: number = POSITION_REENTRY_COOLDOWN_DAYS,
+): boolean {
+  if (cooldownDays <= 0) return false;
+  if (!lastCloseYmd) return false;
+  const close = String(lastCloseYmd).slice(0, 10);
+  const threshold = addCalendarDaysYmd(asOfYmd.slice(0, 10), -cooldownDays);
+  return close >= threshold;
+}
+
+/**
  * Quy ước khối lượng TB: lệnh đầu = `BASE_POSITION_UNITS` đơn vị;
  * mỗi lần TBG chỉ mua thêm `UNITS_PER_AVERAGE_LEG` đơn (vd. lần 1–3 TB đều +1 đơn).
  * Giá TB = trung bình gia quyền; tỷ lệ khối đang nắm : lần mua mới tại TB thứ k là
@@ -77,6 +111,7 @@ const GOOD_BASE_TYPES = new Set<string>([
   SignalType.BASE_FORMING,
   SignalType.EMA_BULLISH_STACK,
   SignalType.BB_SQUEEZE,
+  SignalType.WASHOUT_BAR,
 ]);
 
 const RECOVERY_TYPES = new Set<string>([

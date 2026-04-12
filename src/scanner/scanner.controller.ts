@@ -105,13 +105,11 @@ export class ScannerController {
   @UseGuards(JwtAuthGuard)
   @Post('analyze-history')
   async analyzeHistoryAll(@Query('from') from?: string) {
-    const job = await this.queueService.enqueueAnalyzeHistoryAll(
-      from ?? '2025-01-01',
-    );
+    const job = await this.queueService.enqueueAnalyzeHistoryAll(from);
     return {
       jobId: job.id,
       status: 'queued',
-      message: `Phân tích lịch sử từ ${from ?? '2025-01-01'}`,
+      message: `Phân tích lịch sử ${from ?? 'toàn bộ (mặc định từ đủ 130 nến)'}`,
     };
   }
 }

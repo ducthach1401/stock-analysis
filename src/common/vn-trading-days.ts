@@ -1,3 +1,13 @@
+/** Ngày lịch VN (YYYY-MM-DD) theo múi giờ Asia/Ho_Chi_Minh — dùng cooldown mở lại vị thế. */
+export function vnCalendarTodayYmd(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 /**
  * Quy ước thanh toán cổ phiếu VN: mua xong phải qua đủ 2 phiên (T+2) mới được bán
  * (đếm phiên T2–T6, bỏ T7/CN; không trừ ngày lễ — có thể bổ sung sau).

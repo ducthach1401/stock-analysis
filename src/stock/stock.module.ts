@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
 import { SignalModule } from '../signal/signal.module';
@@ -13,7 +13,7 @@ import { StockService } from './stock.service';
     TypeOrmModule.forFeature([StockPrice]),
     TelegramModule,
     AuthModule,
-    SignalModule,
+    forwardRef(() => SignalModule),
   ],
   controllers: [StockController],
   providers: [StockService, DnseService],

@@ -124,6 +124,8 @@ export const WATCHLIST: WatchlistStock[] = [
   // ── Bảo hiểm ───────────────────────────────────────────────────────────
   { ticker: 'BVH', name: 'Bảo Việt', sector: 'Bảo hiểm' },
   { ticker: 'PVI', name: 'PVI Holdings', sector: 'Bảo hiểm' },
+  { ticker: 'BMI', name: 'Bảo Minh', sector: 'Bảo hiểm' },
+  { ticker: 'PGI', name: 'PJICO (Bảo hiểm Petrolimex)', sector: 'Bảo hiểm' },
 
   // ── Dược phẩm / Y tế ───────────────────────────────────────────────────
   { ticker: 'DHG', name: 'Dược Hậu Giang', sector: 'Dược phẩm' },
@@ -207,6 +209,8 @@ export const WATCHLIST: WatchlistStock[] = [
   { ticker: 'JVC', name: 'Thiết bị y tế JVC', sector: 'Y tế' },
 
   // ── Bảo hiểm mid/small ────────────────────────────────────────────────
+  { ticker: 'PRE', name: 'PVI Tái bảo hiểm', sector: 'Bảo hiểm' },
+  { ticker: 'VNR', name: 'Tái bảo hiểm Quốc gia Việt Nam', sector: 'Bảo hiểm' },
   { ticker: 'PTI', name: 'PTI Insurance', sector: 'Bảo hiểm' },
   { ticker: 'BIC', name: 'BIDV Insurance', sector: 'Bảo hiểm' },
   { ticker: 'MIG', name: 'Military Insurance', sector: 'Bảo hiểm' },

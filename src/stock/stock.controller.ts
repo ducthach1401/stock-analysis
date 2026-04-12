@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SignalService } from '../signal/signal.service';
+import { shouldRunAnalyzeAllHistoryAfterSync } from '../common/sync-analyze-policy';
 import { StockService } from './stock.service';
 
 @Controller('stocks')
@@ -66,17 +67,32 @@ export class StockController {
     @Query('to') to?: string,
     @Query('full') full?: string,
   ) {
-    const saved =
-      full === '1' || full === 'true'
-        ? await this.stockService.syncHistoryFull(ticker, to)
-        : await this.stockService.syncHistory(ticker, from, to);
+    const isFull = full === '1' || full === 'true';
+    let saved: number;
+    let mode: string;
+    if (isFull) {
+      saved = await this.stockService.syncHistoryFull(ticker, to);
+      mode = 'full';
+    } else {
+      const r = await this.stockService.syncHistorySmart(ticker, from, to);
+      saved = r.saved;
+      mode = r.mode;
+    }
     try {
       await this.signalService.analyze(ticker);
-      await this.signalService.analyzeAllHistory(ticker, from);
+      if (
+        shouldRunAnalyzeAllHistoryAfterSync({
+          isFullPriceSync: isFull,
+          smartMode: mode,
+          savedBarCount: saved,
+        })
+      ) {
+        await this.signalService.analyzeAllHistory(ticker, from);
+      }
     } catch {
       /* analyze* đã log trong SignalService */
     }
-    return saved;
+    return { saved, mode };
   }
 
   // POST /stocks/:ticker/seed?bars=120 — tạo dữ liệu mẫu để test

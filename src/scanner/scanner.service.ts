@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { Recommendation } from '../signal/dto/recommendation.dto';
 import { RecommendationService } from '../signal/recommendation.service';
@@ -8,6 +9,8 @@ import { StockService } from '../stock/stock.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { PositionService } from '../position/position.service';
 import { WatchlistService } from '../watchlist/watchlist.service';
+import { mapPool } from '../common/map-pool';
+import { shouldRunAnalyzeAllHistoryAfterSync } from '../common/sync-analyze-policy';
 import { tickerCapLiquidityRank } from './watchlist';
 
 const REC_CONF_ORDER: Record<'HIGH' | 'MEDIUM' | 'LOW', number> = {
@@ -28,7 +31,16 @@ export class ScannerService {
     private readonly recommendationService: RecommendationService,
     private readonly positionService: PositionService,
     private readonly watchlistService: WatchlistService,
+    private readonly config: ConfigService,
   ) {}
+
+  private syncPoolSize(): number {
+    const n = parseInt(
+      this.config.get<string>('SYNC_TICKERS_CONCURRENCY', '4') ?? '4',
+      10,
+    );
+    return Number.isFinite(n) && n >= 1 && n <= 32 ? n : 4;
+  }
 
   // ─── Cron jobs ────────────────────────────────────────────────────────
 
@@ -88,24 +100,35 @@ export class ScannerService {
     const fromLabel = from ?? 'mặc định (1 năm)';
 
     try {
-      this.logger.log(`Bắt đầu sync ${tickers.length} mã từ ${fromLabel}...`);
-      for (const ticker of tickers) {
+      const pool = this.syncPoolSize();
+      this.logger.log(
+        `Bắt đầu sync ${tickers.length} mã từ ${fromLabel} (song song ≤${pool})...`,
+      );
+      await mapPool(tickers, pool, async (ticker) => {
         try {
-          result[ticker] = await this.stockService.syncHistory(ticker, from);
+          const r = await this.stockService.syncHistorySmart(ticker, from);
+          result[ticker] = r.saved;
           try {
             await this.signalService.analyze(ticker);
-            await this.signalService.analyzeAllHistory(ticker, from);
+            if (
+              shouldRunAnalyzeAllHistoryAfterSync({
+                isFullPriceSync: false,
+                smartMode: r.mode,
+                savedBarCount: r.saved,
+              })
+            ) {
+              await this.signalService.analyzeAllHistory(ticker, from);
+            }
           } catch (e) {
             this.logger.warn(
               `Tín hiệu sau sync ${ticker}: ${(e as Error).message}`,
             );
           }
-          await delay(300);
         } catch (e) {
           this.logger.error(`Sync lỗi ${ticker}: ${(e as Error).message}`);
           result[ticker] = -1;
         }
-      }
+      });
 
       const total = Object.values(result)
         .filter((v) => v > 0)
@@ -336,21 +359,32 @@ export class ScannerService {
   ): Promise<{ ticker: string; analyzed: number; saved: number }[]> {
     const tickers = await this.watchlistService.getActiveTickers();
     const results: { ticker: string; analyzed: number; saved: number }[] = [];
-    const fromLabel = from ?? '2025-01-01';
+    const fromLabel = from ?? 'đầu lịch sử (đủ 130 nến)';
 
     this.logger.log(
-      `Bắt đầu analyzeHistory ${tickers.length} mã từ ${fromLabel}...`,
+      `Bắt đầu analyzeHistory ${tickers.length} mã — từ ${fromLabel}...`,
     );
-    for (const ticker of tickers) {
+    const pool = this.syncPoolSize();
+    const batch = await mapPool(tickers, pool, async (ticker) => {
       try {
         const r = await this.signalService.analyzeAllHistory(ticker, from);
-        results.push({ ticker, ...r });
-        await delay(50); // nhẹ để không block CPU
+        return { ticker, ok: true as const, ...r };
       } catch (e) {
         this.logger.error(
           `analyzeHistory lỗi ${ticker}: ${(e as Error).message}`,
         );
-        results.push({ ticker, analyzed: 0, saved: 0 });
+        return { ticker, ok: false as const, analyzed: 0, saved: 0 };
+      }
+    });
+    for (const row of batch) {
+      if (row.ok) {
+        results.push({
+          ticker: row.ticker,
+          analyzed: row.analyzed,
+          saved: row.saved,
+        });
+      } else {
+        results.push({ ticker: row.ticker, analyzed: 0, saved: 0 });
       }
     }
 

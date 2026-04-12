@@ -2,9 +2,18 @@
 <html lang="vi" x-data="app()" x-init="init()" :class="darkMode ? 'dark' : ''">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="theme-color" content="#18181b" media="(prefers-color-scheme: dark)" />
+  <meta name="description" content="Phân tích cổ phiếu VN — tín hiệu, chart, vị thế, watchlist" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Stock Analysis" />
   <title>Stock Analysis Dashboard</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cg stroke='white' stroke-width='2' stroke-linecap='round'%3E%3Cline x1='7' y1='22' x2='7' y2='14'/%3E%3Crect x='5' y='14' width='4' height='5' rx='0.5' fill='%2310b981' stroke='%2310b981'/%3E%3Cline x1='13' y1='24' x2='13' y2='10'/%3E%3Crect x='11' y='17' width='4' height='6' rx='0.5' fill='%23ef4444' stroke='%23ef4444'/%3E%3Cline x1='19' y1='20' x2='19' y2='8'/%3E%3Crect x='17' y='10' width='4' height='7' rx='0.5' fill='%2310b981' stroke='%2310b981'/%3E%3Cline x1='25' y1='18' x2='25' y2='6'/%3E%3Crect x='23' y='8' width='4' height='6' rx='0.5' fill='%2310b981' stroke='%2310b981'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <script>tailwind.config = { darkMode: 'class' }</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
@@ -275,47 +284,221 @@
     .dark .text-blue-500   { color: #60a5fa; }
     .dark .text-purple-500 { color: #c084fc; }
     .dark .text-emerald-500 { color: #34d399; }
+
+    /* ── PWA / mobile ───────────────────────────────────────── */
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .touch-manipulation { touch-action: manipulation; }
+    .safe-pb {
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    }
+    .safe-pt {
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+    /* PWA bắt buộc: chặn bấm/scroll xuyên ra app phía sau; chỉ tương tác trong .pwa-install-overlay */
+    html.pwa-gate-open body > *:not(.pwa-install-overlay) {
+      pointer-events: none !important;
+      user-select: none;
+    }
+    .pwa-install-overlay {
+      pointer-events: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    @media (max-width: 640px) {
+      .card { padding: 1rem; }
+      header nav button {
+        min-height: 2.75rem;
+        min-width: 2.75rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+      }
+      .mobile-tap-target { min-height: 2.75rem; min-width: 2.75rem; }
+
+      /* Bớt chữ đậm / gần đen trên mobile (đọc dễ hơn) */
+      html:not(.dark) h1,
+      html:not(.dark) h2,
+      html:not(.dark) h3,
+      html:not(.dark) h4 {
+        font-weight: 500 !important;
+        color: #475569 !important;
+      }
+      html:not(.dark) .text-gray-900 {
+        color: #3f3f46 !important;
+      }
+      html:not(.dark) .text-gray-900.font-bold,
+      html:not(.dark) .text-gray-900.font-semibold,
+      html:not(.dark) .font-bold.text-gray-900,
+      html:not(.dark) .font-semibold.text-gray-900 {
+        font-weight: 500 !important;
+      }
+      /* Dark mode: logo / tiêu đề trắng tinh → dịu hơn */
+      html.dark header span.dark\:text-zinc-100 {
+        font-weight: 500 !important;
+        color: #d4d4d8 !important;
+      }
+    }
   </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen safe-pb touch-manipulation">
+
+<!-- PWA: phủ toàn màn — Android: beforeinstallprompt; iOS: Web Share + hướng dẫn theo Safari/Chrome/Firefox/Edge/Opera -->
+<div x-show="pwaMandatoryGate" x-cloak x-transition
+  class="pwa-install-overlay fixed inset-0 z-[250] flex flex-col text-zinc-100 shadow-[inset_0_0_120px_rgba(0,0,0,0.4)] backdrop-blur-sm"
+  style="padding-top: max(0.5rem, env(safe-area-inset-top)); padding-bottom: max(0.25rem, env(safe-area-inset-bottom)); background-color: rgba(0,0,0,0.97);"
+  role="dialog" aria-modal="true" aria-labelledby="pwa-gate-title">
+  <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:py-6 w-full max-w-lg mx-auto flex flex-col gap-4">
+    <div class="flex flex-col items-center text-center gap-3 shrink-0">
+      <div class="w-[4.5rem] h-[4.5rem] rounded-[1.35rem] overflow-hidden shadow-xl ring-2 ring-indigo-400/50 shrink-0 bg-zinc-900">
+        <img src="/icons/icon-192.png" width="72" height="72" alt="" class="w-full h-full object-cover" decoding="async" fetchpriority="high"/>
+      </div>
+      <div>
+        <h1 id="pwa-gate-title" class="text-xl font-bold text-white tracking-tight px-1">Cài app để dùng trên điện thoại</h1>
+        <p class="text-sm text-zinc-400 mt-2 leading-relaxed px-1">
+          Cài PWA để giao diện gọn và mở nhanh hơn. Bạn có thể <strong class="text-zinc-200">bỏ qua</strong> và dùng trên trình duyệt. Sau khi cài, <strong class="text-zinc-200">mở từ icon</strong> màn hình chính để có trải nghiệm đầy đủ.
+        </p>
+      </div>
+    </div>
+
+    <div x-show="pwaAndroidUi" class="w-full space-y-2 shrink-0">
+      <button type="button" x-show="pwaDeferredInstall" @click="installPwa()"
+        class="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-bold text-base sm:text-lg shadow-lg shadow-emerald-900/40 touch-manipulation mobile-tap-target flex items-center justify-center gap-2 ring-2 ring-emerald-400/30">
+        <span class="text-2xl" aria-hidden="true">📲</span>
+        <span>Cài tự động — thêm vào màn hình chính</span>
+      </button>
+      <p x-show="pwaDeferredInstall" class="text-xs text-center text-emerald-200/80 leading-relaxed">
+        Chrome sẽ mở hộp thoại hệ thống — chọn <strong class="text-white">Cài đặt</strong> / <strong class="text-white">Thêm</strong>.
+      </p>
+      <div x-show="!pwaDeferredInstall" class="text-xs text-left rounded-xl border border-amber-500/40 bg-amber-950/40 px-3 py-2.5 text-amber-100 leading-relaxed">
+        <strong class="text-amber-50">Chưa có nút cài nhanh</strong> — dùng menu <strong>⋮</strong> Chrome → <strong>Cài đặt app</strong> hoặc làm theo bước trong khung dưới.
+      </div>
+    </div>
+
+    <div x-show="pwaIosUi && !pwaAndroidUi" class="w-full space-y-2 shrink-0">
+      <button type="button" x-show="pwaCanWebShare" @click="openPwaIosShareSheet()"
+        class="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-bold text-base sm:text-lg shadow-lg shadow-indigo-900/40 touch-manipulation mobile-tap-target flex items-center justify-center gap-2 ring-2 ring-indigo-400/30">
+        <span class="text-2xl" aria-hidden="true">📤</span>
+        <span>Mở Chia sẻ — Thêm vào Màn hình chính</span>
+      </button>
+      <p x-show="pwaCanWebShare" class="text-xs text-center text-indigo-200/90 leading-relaxed">
+        Apple không cho cài kiểu Android. Trong bảng Chia sẻ, chọn <strong class="text-white">Thêm vào Màn hình chính</strong> / <strong class="text-white">Add to Home Screen</strong> (tên có thể khác từng trình duyệt).
+      </p>
+      <div x-show="!pwaCanWebShare" class="text-xs text-left rounded-xl border border-amber-500/40 bg-amber-950/40 px-3 py-2.5 text-amber-100 leading-relaxed">
+        <strong class="text-amber-50">Không bật được Chia sẻ nhanh</strong> — làm theo đúng trình duyệt bạn đang dùng trong khung dưới (Safari, Chrome, Firefox…).
+      </div>
+    </div>
+
+    <div class="w-full rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-left text-sm text-zinc-200 space-y-3 shadow-inner">
+      <p class="font-semibold text-white border-b border-zinc-700 pb-2" x-text="pwaInstallInstructionHeading()"></p>
+      <p class="text-[11px] text-zinc-500 leading-relaxed -mt-1" x-show="pwaIosUi">Trên iOS mọi trình duyệt đều dùng engine Apple (WebKit); cách thêm icon giống nhau nhưng vị trí menu có thể khác.</p>
+
+      <ol class="list-decimal pl-5 space-y-2 text-xs sm:text-sm leading-relaxed text-zinc-300" x-show="pwaIosUi && pwaIosBrowser === 'safari'">
+        <li>Chạm <strong class="text-white">Chia sẻ</strong> <span class="whitespace-nowrap">(□↑)</span> trên thanh dưới (iPhone) hoặc thanh công cụ (iPad).</li>
+        <li>Cuộn trong bảng, chọn <strong class="text-white">Thêm vào Màn hình chính</strong> → <strong class="text-white">Thêm</strong>.</li>
+        <li>Thoát Safari, mở <strong class="text-white">Stock Analysis</strong> từ icon — màn chặn sẽ hết.</li>
+      </ol>
+      <ol class="list-decimal pl-5 space-y-2 text-xs sm:text-sm leading-relaxed text-zinc-300" x-show="pwaIosUi && pwaIosBrowser === 'chrome'">
+        <li>Chạm <strong class="text-white">⋯</strong> góc dưới/phải hoặc <strong class="text-white">Chia sẻ</strong> (nếu có).</li>
+        <li>Chọn <strong class="text-white">Thêm vào Màn hình chính</strong> / <strong class="text-white">Add to Home Screen</strong> hoặc <strong class="text-white">Thêm</strong>.</li>
+        <li>Nếu không thấy: mở cùng địa chỉ trong <strong class="text-white">Safari</strong> (Sao chép URL → Safari) rồi làm như bước Safari — trên iOS chỉ Safari có đầy đủ tùy chọn PWA.</li>
+        <li>Mở app từ icon màn hình chính, không dùng tab Chrome.</li>
+      </ol>
+      <ol class="list-decimal pl-5 space-y-2 text-xs sm:text-sm leading-relaxed text-zinc-300" x-show="pwaIosUi && pwaIosBrowser === 'firefox'">
+        <li>Chạm <strong class="text-white">⋯</strong> (menu) ở thanh dưới hoặc góc.</li>
+        <li>Chọn <strong class="text-white">Chia sẻ</strong> hoặc <strong class="text-white">Thêm vào màn hình chính</strong> tùy phiên bản.</li>
+        <li>Trong bảng Chia sẻ, chọn <strong class="text-white">Thêm vào Màn hình chính</strong> → xác nhận <strong class="text-white">Thêm</strong>.</li>
+        <li>Không được: thử mở trang trong <strong class="text-white">Safari</strong> và làm theo hướng dẫn Safari.</li>
+      </ol>
+      <ol class="list-decimal pl-5 space-y-2 text-xs sm:text-sm leading-relaxed text-zinc-300" x-show="pwaIosUi && pwaIosBrowser === 'edge'">
+        <li>Chạm <strong class="text-white">⋯</strong> dưới cùng hoặc <strong class="text-white">Chia sẻ</strong>.</li>
+        <li>Chọn <strong class="text-white">Thêm vào màn hình chính</strong> / <strong class="text-white">Add to Home Screen</strong>.</li>
+        <li>Nếu thiếu mục: mở URL trong <strong class="text-white">Safari</strong> và thêm từ đó (giống Chrome trên iOS).</li>
+      </ol>
+      <ol class="list-decimal pl-5 space-y-2 text-xs sm:text-sm leading-relaxed text-zinc-300" x-show="pwaIosUi && pwaIosBrowser === 'opera'">
+        <li>Chạm biểu tượng <strong class="text-white">O</strong> / <strong class="text-white">menu</strong> → tìm <strong class="text-white">Chia sẻ</strong> hoặc <strong class="text-white">Thêm vào…</strong>.</li>
+        <li>Chọn <strong class="text-white">Thêm vào Màn hình chính</strong> khi có.</li>
+        <li>Hoặc dùng <strong class="text-white">Safari</strong> mở cùng trang và làm như hướng dẫn Safari.</li>
+      </ol>
+
+      <ol class="list-decimal pl-5 space-y-2 text-xs sm:text-sm leading-relaxed text-zinc-300" x-show="!pwaIosUi && pwaAndroidUi">
+        <li>Mở menu <strong class="text-white">⋮</strong> (Chrome, Edge, Samsung Internet, Brave…).</li>
+        <li>Chọn <strong class="text-white">Cài đặt app</strong>, <strong class="text-white">Thêm vào màn hình chính</strong> hoặc <strong class="text-white">Cài đặt</strong> — tên tùy hãng.</li>
+        <li>Nếu có nút xanh <strong class="text-emerald-300">«Cài tự động»</strong> phía trên — bấm để nhanh hơn.</li>
+        <li>Đóng tab, mở từ <strong class="text-white">icon màn hình chính</strong>.</li>
+      </ol>
+      <ol class="list-decimal pl-5 space-y-2 text-xs sm:text-sm leading-relaxed text-zinc-300" x-show="!pwaIosUi && !pwaAndroidUi">
+        <li>Dùng menu trình duyệt để <strong class="text-white">thêm vào màn hình chính</strong> hoặc <strong class="text-white">cài PWA</strong> nếu có.</li>
+        <li>Sau đó mở lại từ <strong class="text-white">icon</strong> ngoài màn hình chính.</li>
+      </ol>
+    </div>
+
+    <div class="flex flex-col items-center gap-3 shrink-0 w-full max-w-lg mx-auto px-1">
+      <button type="button" @click="skipPwaMandatoryGate()"
+        class="inline-flex items-center justify-center gap-2 w-full py-3.5 px-4 rounded-xl border border-zinc-500/80 bg-zinc-800/90 text-zinc-100 text-sm font-semibold touch-manipulation mobile-tap-target hover:bg-zinc-700 active:scale-[0.99]">
+        Tiếp tục trên trình duyệt — không cài app
+      </button>
+      <p class="text-[11px] text-center text-zinc-500 leading-relaxed px-1">
+        Bỏ qua sẽ lưu trên thiết bị; bật lại màn cài trong <strong class="text-zinc-400">Cài đặt</strong> nếu đổi ý. Màn hình rộng &gt; 640px không hiện màn này.
+      </p>
+      <button type="button" @click="window.location.reload()"
+        class="inline-flex items-center justify-center gap-2 w-full sm:w-auto min-w-[12rem] py-3 px-5 rounded-xl border border-zinc-600 bg-zinc-900 text-zinc-100 text-sm font-semibold touch-manipulation mobile-tap-target hover:bg-zinc-800 active:scale-[0.99]">
+        <svg class="w-5 h-5 shrink-0 text-zinc-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Tải lại trang
+      </button>
+      <p class="text-[11px] text-center text-zinc-500 leading-relaxed">
+        Nếu giao diện lỗi, bấm <strong class="text-zinc-400">Tải lại trang</strong>.
+      </p>
+    </div>
+  </div>
+</div>
 
 <!-- Header -->
-<header class="bg-white border-b border-gray-200 sticky top-0 z-50">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
-        </svg>
+<header class="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700 sticky top-0 z-50 safe-pt">
+  <div class="max-w-7xl mx-auto px-3 sm:px-6 flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 min-h-[3.5rem] py-1.5 sm:py-0 sm:h-14">
+    <div class="flex items-center gap-2 sm:gap-3 shrink-0 order-1 sm:order-none">
+      <div class="w-8 h-8 rounded-lg overflow-hidden shrink-0 ring-1 ring-indigo-500/25 dark:ring-indigo-400/30 shadow-sm bg-zinc-900">
+        <img src="/icons/icon-192.png" width="32" height="32" alt="" class="w-full h-full object-cover" decoding="async"/>
       </div>
-      <span class="font-bold text-gray-900 text-lg">Stock Analysis</span>
-      <span class="badge badge-gray hidden sm:inline-flex">VNIndex</span>
+      <span class="font-bold text-gray-900 dark:text-zinc-100 text-base sm:text-lg truncate max-w-[40vw] sm:max-w-none">Stock Analysis</span>
+      <span class="badge badge-gray hidden md:inline-flex shrink-0">VNIndex</span>
     </div>
-    <nav class="flex gap-1">
+    <nav class="flex-1 min-w-0 order-2 sm:order-none w-full basis-full sm:basis-auto sm:w-auto flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide touch-pan-x pb-0.5 sm:pb-0 -mx-1 px-1 sm:mx-0 sm:px-0">
       <template x-for="t in tabs" :key="t.id">
-        <button @click="setTab(t.id)"
-          :class="tab === t.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'"
-          class="px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5">
-          <span x-html="t.icon" class="w-4 h-4"></span>
+        <button type="button" @click="setTab(t.id)"
+          :class="tab === t.id ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-semibold' : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800'"
+          class="px-2.5 sm:px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+          <span x-html="t.icon" class="w-4 h-4 shrink-0"></span>
           <span class="hidden sm:inline" x-text="t.label"></span>
         </button>
       </template>
     </nav>
-    <div class="flex items-center gap-2">
-      <button @click="refreshAll()" :disabled="loading"
-        class="btn-secondary text-xs" title="Refresh">
-        <svg :class="loading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-        </svg>
-      </button>
-      <button @click="toggleDark()" class="btn-secondary text-xs" :title="darkMode ? 'Chế độ sáng' : 'Chế độ tối'">
-        <svg x-show="!darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-        </svg>
-        <svg x-show="darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-        </svg>
-      </button>
+    <div class="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto order-3 sm:order-none">
+      <!-- Trên mobile các nút này nằm trong tab Cài đặt -->
+      <div class="hidden sm:flex items-center gap-1 sm:gap-2">
+        <button type="button" @click="toggleBrowserNotify()"
+          class="btn-secondary text-xs p-2 sm:px-3 mobile-tap-target"
+          :title="browserNotify && notificationPermission === 'granted' ? 'Thông báo: bật' : 'Bật thông báo (khi tab ẩn)'">
+          <span class="text-base" x-text="browserNotify && notificationPermission === 'granted' ? '🔔' : '🔕'"></span>
+        </button>
+        <button type="button" @click="refreshAll()" :disabled="loading"
+          class="btn-secondary text-xs p-2 sm:px-3 mobile-tap-target" title="Làm mới dữ liệu">
+          <svg :class="loading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+        <button type="button" @click="toggleDark()" class="btn-secondary text-xs p-2 sm:px-3 mobile-tap-target" :title="darkMode ? 'Chế độ sáng' : 'Chế độ tối'">
+          <svg x-show="!darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+          </svg>
+          <svg x-show="darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+        </button>
+      </div>
       <!-- Auth button -->
       <template x-if="isAdmin">
         <button @click="logout()" class="btn-secondary text-xs flex items-center gap-1.5" title="Đăng xuất">
@@ -381,7 +564,7 @@
   </div>
 </div>
 
-<main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+<main class="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
 
   <!-- ═══ DASHBOARD TAB ═══ -->
   <div x-show="tab === 'dashboard'" x-cloak>
@@ -591,7 +774,7 @@
     </div>
 
     <!-- Backtest xếp hạng (compound % — run mới nhất / mã) — cuối tab Trang chủ -->
-    <div class="mb-6">
+    <div class="mt-6 mb-6">
       <template x-if="backtestLeaderboard.total > 0">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div class="card border border-emerald-100 dark:border-emerald-900/40">
@@ -599,14 +782,15 @@
               <span>📈 Backtest tốt</span>
               <span class="text-xs font-normal text-gray-500 dark:text-gray-400">compound % cao nhất</span>
             </h2>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Theo giả lập đã lưu (cùng kỳ ~12 tháng tùy lúc chạy). Mỗi mã một dòng = run mới nhất.</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Compound % chỉ từ các lệnh <b>đóng trong 12 tháng gần nhất</b> (theo ngày VN). Backtest mỗi mã chạy <b>full lịch sử</b> — dòng phụ: kỳ giả lập đầy đủ. Chỉ liệt kê mã có ≥ 1 lệnh đóng trong cửa sổ đó.</p>
             <ul class="divide-y divide-gray-100 dark:divide-zinc-700">
               <template x-for="row in backtestLeaderboard.good" :key="'bt-good-' + row.ticker">
                 <li class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                   <div class="flex items-center gap-2 min-w-0">
                     <button type="button" @click="viewSignals(row.ticker)" class="font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0"
                       x-text="row.ticker"></button>
-                    <span class="text-[11px] text-gray-400 truncate" x-text="row.periodFrom + ' → ' + row.periodTo + ' · ' + row.tradeCount + ' lệnh'"></span>
+                    <span class="text-[11px] text-gray-400 truncate block" x-text="row.rankingFrom + ' → ' + row.rankingTo + ' · ' + row.tradeCount + ' lệnh đóng'"></span>
+                    <span class="text-[10px] text-gray-400/80 truncate block" x-text="'Full: ' + row.fullPeriodFrom + ' → ' + row.fullPeriodTo"></span>
                   </div>
                   <span class="font-mono font-semibold text-emerald-600 dark:text-emerald-400 shrink-0"
                     x-text="(Number(row.compoundPnlPercent) >= 0 ? '+' : '') + Number(row.compoundPnlPercent).toFixed(2) + '%'"></span>
@@ -619,14 +803,15 @@
               <span>📉 Backtest tệ</span>
               <span class="text-xs font-normal text-gray-500 dark:text-gray-400">compound % thấp nhất</span>
             </h2>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Cùng quy tắc giả lập — mã dưới đáy có thể kém phù hợp tín hiệu hoặc thị trường sidew/down trong kỳ.</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Cùng cửa sổ 12 tháng (đóng lệnh) — mã dưới đáy compound thấp trong giai đoạn đó.</p>
             <ul class="divide-y divide-gray-100 dark:divide-zinc-700">
               <template x-for="row in backtestLeaderboard.bad" :key="'bt-bad-' + row.ticker">
                 <li class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                   <div class="flex items-center gap-2 min-w-0">
                     <button type="button" @click="viewSignals(row.ticker)" class="font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0"
                       x-text="row.ticker"></button>
-                    <span class="text-[11px] text-gray-400 truncate" x-text="row.periodFrom + ' → ' + row.periodTo + ' · ' + row.tradeCount + ' lệnh'"></span>
+                    <span class="text-[11px] text-gray-400 truncate block" x-text="row.rankingFrom + ' → ' + row.rankingTo + ' · ' + row.tradeCount + ' lệnh đóng'"></span>
+                    <span class="text-[10px] text-gray-400/80 truncate block" x-text="'Full: ' + row.fullPeriodFrom + ' → ' + row.fullPeriodTo"></span>
                   </div>
                   <span class="font-mono font-semibold text-red-600 dark:text-red-400 shrink-0"
                     x-text="(Number(row.compoundPnlPercent) >= 0 ? '+' : '') + Number(row.compoundPnlPercent).toFixed(2) + '%'"></span>
@@ -639,7 +824,7 @@
       <template x-if="backtestLeaderboard.total === 0">
         <div class="card py-4 px-4 text-sm text-gray-500 dark:text-gray-400">
           <span class="text-gray-400 mr-1">ℹ️</span>
-          Chưa có dữ liệu backtest trên server. Chạy giả lập từ tab <b>Tín hiệu</b> (admin: &quot;Chạy backtest 12 tháng&quot;) hoặc job sau khi phân tích lịch sử — sau đó làm mới trang.
+          Chưa có dữ liệu backtest trên server. Chạy giả lập từ tab <b>Tín hiệu</b> (admin: &quot;Chạy backtest&quot;) hoặc sau khi phân tích lịch sử — sau đó làm mới trang.
         </div>
       </template>
     </div>
@@ -669,17 +854,19 @@
             <!-- Sync group -->
             <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Dữ liệu giá</p>
             <div class="grid grid-cols-2 gap-2 mb-4">
-              <button @click="runAction('sync')" :disabled="actionLoading.sync || actionLoading.syncFull" class="action-tile">
+              <button @click="runAction('sync')" :disabled="actionLoading.sync || actionLoading.syncFull" class="action-tile w-full"
+                title="Mỗi mã: DB trống → ~1 năm; đã có nến → overlap ~7 ngày. Không đánh dấu full IPO.">
                 <svg :class="actionLoading.sync ? 'spin tile-icon' : 'tile-icon'" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--accent)">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
-                <span class="tile-label">Sync<br>1 năm</span>
+                <span class="tile-label text-[11px] leading-tight">~1 năm /<br>tăng dần</span>
               </button>
-              <button @click="runAction('syncFull')" :disabled="actionLoading.sync || actionLoading.syncFull" class="action-tile">
-                <svg :class="actionLoading.syncFull ? 'spin tile-icon' : 'tile-icon'" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--accent)">
+              <button @click="runAction('syncFull')" :disabled="actionLoading.syncFull || actionLoading.sync" class="action-tile w-full"
+                title="Kéo toàn bộ lịch sử từ mốc sớm (IPO trên DNSE) → nay; đánh dấu đã full IPO.">
+                <svg :class="actionLoading.syncFull ? 'spin tile-icon' : 'tile-icon'" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#059669">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
-                <span class="tile-label">Sync full<br>IPO → nay</span>
+                <span class="tile-label text-[11px] leading-tight">Full IPO<br>(toàn bộ)</span>
               </button>
             </div>
 
@@ -712,7 +899,7 @@
               <svg :class="actionLoading.analyzeHistoryAll ? 'spin tile-icon' : 'tile-icon'" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#f59e0b;flex-shrink:0">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
-              <span class="tile-label text-left" x-text="actionLoading.analyzeHistoryAll ? 'Đang phân tích lịch sử...' : 'Phân tích lịch sử toàn watchlist (2025→)'"></span>
+              <span class="tile-label text-left" x-text="actionLoading.analyzeHistoryAll ? 'Đang phân tích lịch sử...' : 'Phân tích lịch sử toàn watchlist (toàn thời gian)'"></span>
             </button>
 
             <!-- Primary CTA -->
@@ -823,7 +1010,7 @@
                         @click.stop="viewSignals(sig.ticker)" x-text="sig.ticker"></button>
                     </td>
                     <td class="py-2 px-1 hidden sm:table-cell max-w-[10rem] truncate" style="color:var(--text-2)"
-                      x-text="(sig.type || '').replace(/_/g, ' ')"></td>
+                      x-text="signalTypeLabelVi(sig.type)"></td>
                     <td class="py-2 px-1 text-center">
                       <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium"
                         :class="{
@@ -899,7 +1086,7 @@
                       'text-emerald-600': signalSummary[stock.ticker].direction === 'BULLISH',
                       'text-red-600':     signalSummary[stock.ticker].direction === 'BEARISH',
                     }"
-                    x-text="signalSummary[stock.ticker].topSignal.replace(/_/g,' ')"></span>
+                    x-text="signalTypeLabelVi(signalSummary[stock.ticker].topSignal)"></span>
                 </div>
               </template>
               <template x-if="!signalSummary[stock.ticker]?.topSignal">
@@ -988,24 +1175,27 @@
             </button>
           </div>
           <div x-show="open && suggestions.length > 0" x-cloak
-            class="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl ticker-dropdown">
+            class="absolute z-50 mt-1 w-72 max-h-80 overflow-y-auto bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-600 rounded-xl shadow-xl ticker-dropdown">
             <template x-for="(s, i) in suggestions" :key="s.ticker">
               <div @mousedown.prevent="selectItem(s)"
-                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-indigo-50 transition-colors"
-                :class="i === highlighted ? 'bg-indigo-50' : ''">
-                <div>
-                  <div class="flex items-center gap-2">
-                    <span class="font-bold text-sm text-gray-900" x-text="s.ticker"></span>
+                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors"
+                :class="i === highlighted ? 'bg-indigo-50 dark:bg-indigo-950/50' : ''">
+                <div class="min-w-0 pr-2">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-sm text-gray-900 dark:text-gray-100" x-text="s.ticker"></span>
                     <template x-if="signalSummary[s.ticker]?.direction === 'BULLISH'">
-                      <span class="badge badge-green text-xs" x-text="signalSummary[s.ticker].topSignal?.replace(/_/g,' ')?.split(' ')[0]"></span>
+                      <span class="badge badge-green text-xs" x-text="signalTypeLabelVi(signalSummary[s.ticker].topSignal).split(' ')[0]"></span>
                     </template>
                     <template x-if="signalSummary[s.ticker]?.direction === 'BEARISH'">
                       <span class="badge badge-red text-xs" x-text="bearishSummaryLabel(signalSummary[s.ticker])"></span>
                     </template>
+                    <template x-if="s.active === false">
+                      <span class="text-[10px] text-amber-600 dark:text-amber-400">inactive</span>
+                    </template>
                   </div>
-                  <div class="text-xs text-gray-400" x-text="s.name"></div>
+                  <div class="text-xs text-gray-400 truncate" x-text="s.name || '—'"></div>
                 </div>
-                <span class="text-xs text-gray-300" x-text="s.sector"></span>
+                <span class="text-xs text-gray-300 dark:text-zinc-500 shrink-0 max-w-[5rem] truncate text-right" x-text="s.sector || ''"></span>
               </div>
             </template>
           </div>
@@ -1020,7 +1210,7 @@
               </svg>
               Phân tích ngay
             </button>
-            <button @click="runAnalyzeHistory()" :disabled="actionLoading.analyzeHistory || !signalTicker" class="btn-secondary text-xs" title="Backfill từ 2025-01-01, job nặng">
+            <button @click="runAnalyzeHistory()" :disabled="actionLoading.analyzeHistory || !signalTicker" class="btn-secondary text-xs" title="Backfill toàn bộ lịch sử (từ đủ 130 nến), job nặng">
               <svg :class="actionLoading.analyzeHistory ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
@@ -1130,23 +1320,40 @@
                 <span>🟢 Vùng mua phù hợp</span>
               </div>
               <p class="text-xs sm:text-sm text-emerald-900/90 dark:text-emerald-100/90 mt-1 leading-relaxed">
-                Giá đang gần mức vào lệnh gợi ý (không mua đuổi xa). Tham chiếu mua quanh
-                <span class="font-mono font-bold" x-text="fmtK(currentRec.priceTarget.entryPrice)"></span> đ,
-                hỗ trợ gần <span class="font-mono font-semibold" x-text="fmtK(currentRec.priceTarget.support)"></span> đ
+                Giá phiên (chuẩn mở lệnh hệ thống):
+                <span class="font-mono font-bold" x-text="fmtK(currentRec.priceTarget.entryPrice)"></span> đ.
+                <span x-show="currentRec.priceTarget.priceAtBase && currentRec.priceTarget.baseZoneLow != null && currentRec.priceTarget.baseZoneHigh != null">
+                  — <strong>Vùng nền (giá mua):</strong>
+                  <span class="font-mono font-bold" x-text="fmtK(currentRec.priceTarget.baseZoneLow) + ' – ' + fmtK(currentRec.priceTarget.baseZoneHigh)"></span> đ.
+                </span>
+                <span x-show="!currentRec.priceTarget.priceAtBase && priceTargetPullbackDiffers(currentRec.priceTarget)">
+                  <span x-text="suggestedBuyShortLabel(currentRec.priceTarget.suggestedPullbackMode)"></span> ~
+                  <span class="font-mono font-bold" x-text="fmtK(currentRec.priceTarget.suggestedPullbackPrice ?? currentRec.priceTarget.entryPrice)"></span> đ.
+                </span>
+                <span x-show="currentRec.priceTarget.priceAtBase && priceTargetPullbackDiffers(currentRec.priceTarget)">
+                  Gợi ý thêm: <span x-text="suggestedBuyShortLabel(currentRec.priceTarget.suggestedPullbackMode)"></span> ~
+                  <span class="font-mono font-semibold" x-text="fmtK(currentRec.priceTarget.suggestedPullbackPrice ?? currentRec.priceTarget.entryPrice)"></span> đ.
+                </span>
+                Hỗ trợ gần <span class="font-mono font-semibold" x-text="fmtK(currentRec.priceTarget.support)"></span> đ
                 — kháng cự <span class="font-mono" x-text="fmtK(currentRec.priceTarget.resistance)"></span> đ.
               </p>
             </div>
           </template>
           <template x-if="currentRec.priceTarget">
+            <div>
             <div class="mt-3 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-              <div class="bg-white rounded-lg p-2 text-center dark:bg-zinc-900/80">
-                <div class="text-xs text-gray-400">Giá hiện tại</div>
-                <div class="font-bold text-gray-900 dark:text-gray-100" x-text="fmtK(currentRec.priceTarget.currentPrice)"></div>
+              <div class="bg-white rounded-lg p-2 text-center dark:bg-zinc-900/80"
+                :class="inBuyZone(currentRec) && !priceTargetPullbackDiffers(currentRec.priceTarget) ? 'ring-2 ring-emerald-400' : 'ring-1 ring-gray-100 dark:ring-zinc-800'">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Giá phiên (mở lệnh)</div>
+                <div class="font-bold text-gray-900 dark:text-gray-100" x-text="fmtK(currentRec.priceTarget.entryPrice)"></div>
               </div>
-              <div class="bg-white rounded-lg p-2 text-center ring-1 ring-emerald-200 dark:bg-zinc-900/80 dark:ring-emerald-800"
-                :class="inBuyZone(currentRec) ? 'ring-2 ring-emerald-400' : ''">
-                <div class="text-xs text-emerald-700 dark:text-emerald-400">Vùng mua (entry)</div>
-                <div class="font-bold text-emerald-700 dark:text-emerald-300" x-text="fmtK(currentRec.priceTarget.entryPrice)"></div>
+              <div class="bg-white rounded-lg p-2 text-center ring-1 ring-amber-100 dark:bg-zinc-900/80 dark:ring-amber-900/40"
+                :class="inBuyZone(currentRec) && (priceTargetPullbackDiffers(currentRec.priceTarget) || currentRec.priceTarget.priceAtBase) ? 'ring-2 ring-emerald-400' : ''">
+                <div class="text-xs text-amber-800 dark:text-amber-400"
+                  x-text="suggestedBuyCardTitle(currentRec.priceTarget)"></div>
+                <div class="font-bold text-amber-900 dark:text-amber-200 text-sm leading-tight" x-text="suggestedBuyCardMainValue(currentRec.priceTarget)"></div>
+                <div class="text-[10px] text-gray-500 dark:text-gray-400 mt-1" x-show="currentRec.priceTarget.priceAtBase">đáy 20 phiên quanh vùng này</div>
+                <div class="text-[10px] text-gray-400 mt-0.5" x-show="!currentRec.priceTarget.priceAtBase && !priceTargetPullbackDiffers(currentRec.priceTarget)">trùng giá phiên</div>
               </div>
               <div class="bg-white rounded-lg p-2 text-center dark:bg-zinc-900/80">
                 <div class="text-xs text-emerald-600">Chốt lời</div>
@@ -1156,6 +1363,13 @@
                 <div class="text-xs text-gray-400">R:R (tham chiếu)</div>
                 <div class="font-bold text-indigo-600 dark:text-indigo-400" x-text="'1:' + currentRec.priceTarget.riskReward"></div>
               </div>
+            </div>
+            <div class="mt-3 pt-3 border-t border-gray-200 dark:border-zinc-700 col-span-2 lg:col-span-4"
+              x-show="currentRec.priceTarget && currentRec.priceTarget.suggestedPullbackNote">
+              <div class="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1"
+                x-text="suggestedBuyNoteTitle(currentRec.priceTarget.suggestedPullbackMode)"></div>
+              <p class="text-xs text-gray-700 dark:text-gray-300 leading-relaxed" x-text="currentRec.priceTarget.suggestedPullbackNote"></p>
+            </div>
             </div>
           </template>
         </div>
@@ -1201,7 +1415,7 @@
             <template x-for="[type, count] in signalStats.topTypes" :key="type">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
                 style="background:var(--accent-dim);color:var(--accent-text)">
-                <span x-text="type.replace(/_/g,' ')"></span>
+                <span x-text="signalTypeLabelVi(type)"></span>
                 <span class="font-bold" x-text="'×' + count"></span>
               </span>
             </template>
@@ -1217,7 +1431,7 @@
               <span>📊 Lịch sử backtest (giả lập)</span>
             </h3>
             <p class="text-xs text-gray-500 mt-1 max-w-xl">
-              Giống vị thế thật: vào <b>nền/break</b>; <b>TB</b> khi lỗ ≥ ~10% + nền hoặc hồi phục + BUY/STRONG_BUY/HOLD (không giới hạn lỗ trên). TP ≥ <b>20%</b>. Thoát: <b>chặn lãi</b> (sàn động từ đỉnh), <b>chốt target</b> (T+2), <b>cuối kỳ</b> — <b>không</b> bán theo đảo chiều. Cột <b>Lần TB</b> = số lần +1 đơn.
+              Nút chạy sẽ <b>đồng bộ giá</b> trước (tới phiên mới nhất) rồi giả lập trên <b>toàn bộ nến trong DB</b> — tránh kỳ hiển thị kẹt ở năm cũ nếu chưa sync lâu. Giống mở vị thế thật: <b>STRONG_BUY</b> + (<b>nền tích</b>: BASE / EMA stack / BB squeeze, hoặc <b>break kháng cự</b>). <b>Cooldown</b> tái vào sau khi đóng: mặc định <b>tắt</b> (thuật toán cũ); server có thể bật bằng biến môi trường <code class="text-xs bg-gray-100 px-1 rounded">BACKTEST_REENTRY_COOLDOWN_DAYS=5</code>. <b>TB</b> khi lỗ ≥ ~10% + nền hoặc hồi phục + BUY/STRONG_BUY/HOLD. TP ≥ <b>20%</b>. Thoát: <b>chặn lãi</b>, <b>chốt target</b> (T+2), <b>cuối kỳ</b> — không bán theo đảo chiều. Cột <b>Lần TB</b> = số lần +1 đơn.
             </p>
           </div>
           <button x-show="isAdmin" type="button" @click="runBacktestSave()"
@@ -1226,7 +1440,7 @@
             <svg :class="actionLoading.backtest ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
             </svg>
-            <span x-text="actionLoading.backtest ? 'Đang chạy...' : 'Chạy backtest 12 tháng'"></span>
+            <span x-text="actionLoading.backtest ? 'Đang chạy...' : 'Chạy backtest (full lịch sử)'"></span>
           </button>
         </div>
         <template x-if="!backtestRuns || backtestRuns.length === 0">
@@ -1365,7 +1579,7 @@
                   'bg-yellow-100 text-yellow-700': s.direction === 'NEUTRAL'
                 }">
                 <span x-text="s.direction === 'BULLISH' ? '🟢' : s.direction === 'BEARISH' ? '🔴' : '🟡'"></span>
-                <span x-text="s.type.replace(/_/g,' ')"></span>
+                <span x-text="signalTypeLabelVi(s.type)"></span>
               </div>
             </template>
           </div>
@@ -1375,7 +1589,7 @@
                 <span x-text="s.direction === 'BULLISH' ? '🟢' : s.direction === 'BEARISH' ? '🔴' : '🟡'" class="text-lg mt-0.5"></span>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-medium text-gray-900 text-sm" x-text="s.type.replace(/_/g,' ')"></span>
+                    <span class="font-medium text-gray-900 text-sm" x-text="signalTypeLabelVi(s.type)"></span>
                     <span class="badge badge-gray text-xs" x-text="s.tradingDate"></span>
                   </div>
                   <p class="text-xs text-gray-500 mt-0.5" x-text="s.description"></p>
@@ -1421,16 +1635,21 @@
             </button>
           </div>
           <div x-show="open && suggestions.length > 0" x-cloak
-            class="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl ticker-dropdown">
+            class="absolute z-50 mt-1 w-72 max-h-80 overflow-y-auto bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-600 rounded-xl shadow-xl ticker-dropdown">
             <template x-for="(s, i) in suggestions" :key="s.ticker">
               <div @mousedown.prevent="selectItem(s)"
-                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-indigo-50 transition-colors"
-                :class="i === highlighted ? 'bg-indigo-50' : ''">
-                <div>
-                  <span class="font-bold text-sm text-gray-900" x-text="s.ticker"></span>
-                  <div class="text-xs text-gray-400" x-text="s.name"></div>
+                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors"
+                :class="i === highlighted ? 'bg-indigo-50 dark:bg-indigo-950/50' : ''">
+                <div class="min-w-0 pr-2">
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-sm text-gray-900 dark:text-gray-100" x-text="s.ticker"></span>
+                    <template x-if="s.active === false">
+                      <span class="text-[10px] text-amber-600 dark:text-amber-400">inactive</span>
+                    </template>
+                  </div>
+                  <div class="text-xs text-gray-400 truncate" x-text="s.name || '—'"></div>
                 </div>
-                <span class="text-xs text-gray-300" x-text="s.sector"></span>
+                <span class="text-xs text-gray-300 dark:text-zinc-500 shrink-0 max-w-[5rem] truncate text-right" x-text="s.sector || ''"></span>
               </div>
             </template>
           </div>
@@ -1438,17 +1657,19 @@
 
         <button @click="loadStockData()" :disabled="!priceTicker" class="btn-primary text-xs">Xem lịch sử</button>
         <div x-show="isAdmin" class="flex flex-wrap gap-2 items-center">
-          <button @click="syncTicker(false)" :disabled="actionLoading.syncOne || actionLoading.syncOneFull || !priceTicker" class="btn-secondary text-xs">
+          <button @click="syncTicker(false)" :disabled="(actionLoading.syncOne || actionLoading.syncOneFull) || !priceTicker" class="btn-secondary text-xs"
+            title="~1 năm nếu DB trống; sau đó overlap ~7 ngày. Không đánh dấu full IPO.">
             <svg :class="actionLoading.syncOne ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
-            Sync 1 năm
+            ~1 năm / tăng dần
           </button>
-          <button @click="syncTicker(true)" :disabled="actionLoading.syncOne || actionLoading.syncOneFull || !priceTicker" class="btn-secondary text-xs">
-            <svg :class="actionLoading.syncOneFull ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button @click="syncTicker(true)" :disabled="(actionLoading.syncOne || actionLoading.syncOneFull) || !priceTicker" class="btn-secondary text-xs border-emerald-200 dark:border-emerald-800"
+            title="Lịch sử đầy đủ từ IPO (DNSE) → nay; đánh dấu full IPO.">
+            <svg :class="actionLoading.syncOneFull ? 'spin' : ''" class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
-            Sync full IPO
+            Full IPO
           </button>
         </div>
       </div>
@@ -1465,6 +1686,9 @@
             <span x-text="priceTickerDisplayName()"></span>
           </button>
         </template>
+        <span class="text-[11px] text-gray-500 dark:text-zinc-400 w-full sm:w-auto" x-show="priceTicker">
+          <b>~1 năm / tăng dần</b>: overlap ~7 ngày. <b>Full IPO</b>: kéo toàn lịch sử DNSE. Lệch giá trên overlap → tự sync lại dài.
+        </span>
       </div>
 
       <!-- Latest price card -->
@@ -1559,6 +1783,12 @@
             </svg>
             Đồng bộ chuẩn + thanh khoản
           </button>
+          <button x-show="isAdmin" type="button" @click="wlLoadLiquidityCandidates()" :disabled="wlLiquidityLoading" class="btn-secondary text-xs" title="Trong DB giá, đạt avg vol + số ngày giao dịch như checkLiquidity">
+            <svg :class="wlLiquidityLoading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            Mã đạt thanh khoản ngoài list chuẩn
+          </button>
           <button x-show="isAdmin" @click="wlAddForm.show = true" class="btn-primary text-xs">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -1572,6 +1802,52 @@
             Đăng nhập để chỉnh sửa
           </button>
         </div>
+      </div>
+
+      <!-- Mã có dữ liệu giá trong DB, đạt ngưỡng thanh khoản (cùng checkLiquidity), chưa nằm trong WATCHLIST file -->
+      <div x-show="wlLiquidityPanel" x-cloak class="border border-indigo-100 rounded-xl p-4 mb-4 bg-indigo-50/60 dark:bg-indigo-950/20 dark:border-indigo-900/40">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+          <div>
+            <h3 class="font-semibold text-gray-900 dark:text-gray-100 text-sm">Ứng viên thanh khoản (chưa trong list chuẩn)</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mt-1" x-show="wlLiquidityMeta?.criteria">
+              <span x-text="wlLiquidityMeta.criteria.minBars"></span>+ nến gần nhất · avg KL
+              <span x-text="(wlLiquidityMeta.criteria.minAvgVolume/1000)+'k'"></span> · ≥
+              <span x-text="wlLiquidityMeta.criteria.minTradingDays"></span>/<span x-text="wlLiquidityMeta.criteria.windowDays"></span> phiên có giao dịch
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+              <span x-text="wlLiquidityMeta?.count ?? 0"></span> mã
+              <span x-show="wlLiquidityMeta?.excludeDbWatchlist" class="text-indigo-700 dark:text-indigo-300"> (đã loại mọi mã trong bảng watchlist DB)</span>
+            </p>
+          </div>
+          <label class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 shrink-0 cursor-pointer">
+            <input type="checkbox" x-model="wlLiquidityExcludeDb" @change="wlLoadLiquidityCandidates()" class="rounded border-gray-300"/>
+            Loại luôn mã đã có trong DB watchlist
+          </label>
+        </div>
+        <div class="overflow-x-auto max-h-64 overflow-y-auto rounded-lg border border-gray-200 dark:border-zinc-600 bg-white dark:bg-zinc-900">
+          <table class="w-full text-xs">
+            <thead class="sticky top-0 bg-gray-50 dark:bg-zinc-800 text-gray-500">
+              <tr>
+                <th class="text-left py-2 px-2 font-medium">Mã</th>
+                <th class="text-right py-2 px-2 font-medium">Avg vol 30d</th>
+                <th class="text-right py-2 px-2 font-medium">Phiên có KL</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-zinc-700">
+              <template x-for="row in wlLiquidityCandidates" :key="'liq-'+row.ticker">
+                <tr class="hover:bg-gray-50 dark:hover:bg-zinc-800/80">
+                  <td class="py-1.5 px-2">
+                    <button type="button" @click="viewSignals(row.ticker)" class="font-bold text-indigo-600 dark:text-indigo-400 hover:underline" x-text="row.ticker"></button>
+                  </td>
+                  <td class="py-1.5 px-2 text-right font-mono" x-text="(row.avgVolume/1000).toFixed(0)+'k'"></td>
+                  <td class="py-1.5 px-2 text-right font-mono" x-text="row.tradingDays + '/' + (wlLiquidityMeta?.criteria?.windowDays ?? 30)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <p x-show="wlLiquidityCandidates.length === 0 && wlLiquidityMeta" class="text-xs text-gray-500 mt-2">Không có mã nào (hoặc chưa sync giá đủ mã lên DB).</p>
+        <button type="button" @click="wlLiquidityPanel = false" class="mt-2 text-xs text-gray-500 hover:text-gray-700">Đóng</button>
       </div>
 
       <!-- Add form -->
@@ -1592,8 +1868,14 @@
           </div>
         </div>
         <div class="flex gap-2">
-          <button @click="wlAdd()" class="btn-primary text-xs">Thêm</button>
-          <button @click="wlAddForm.show = false" class="btn-secondary text-xs">Huỷ</button>
+          <button @click="wlAdd()" :disabled="wlAddSubmitting" class="btn-primary text-xs">
+            <span x-show="wlAddSubmitting" class="inline-flex items-center gap-1">
+              <svg class="w-3.5 h-3.5 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Đang đồng bộ & phân tích…
+            </span>
+            <span x-show="!wlAddSubmitting">Thêm</span>
+          </button>
+          <button type="button" @click="wlAddForm.show = false" :disabled="wlAddSubmitting" class="btn-secondary text-xs">Huỷ</button>
         </div>
       </div>
 
@@ -1723,20 +2005,119 @@
     </div>
   </div>
 
+  <!-- ═══ CÀI ĐẶT (mobile: thông báo / refresh / giao diện; từ sm trở lên cũng có trên header) ═══ -->
+  <div x-show="tab === 'settings'" x-cloak>
+    <div class="card mb-4">
+      <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
+        <span>⚙️</span> Cài đặt
+      </h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Trên màn hình nhỏ, các nút này nằm đây để thanh trên gọn hơn. Từ <span class="font-medium">640px</span> trở lên vẫn dùng nhanh trên header.
+      </p>
+      <div class="space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border" style="border-color:var(--border);background:var(--bg-raised)">
+          <div class="min-w-0">
+            <div class="font-medium text-gray-900 dark:text-gray-100">Thông báo trình duyệt</div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Khi tab ẩn, có thể hiện thông báo hệ thống (cần quyền).</p>
+          </div>
+          <button type="button" @click="toggleBrowserNotify()"
+            class="btn-secondary text-sm px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto mobile-tap-target"
+            :title="browserNotify && notificationPermission === 'granted' ? 'Đang bật' : 'Bật thông báo'">
+            <span class="text-lg" x-text="browserNotify && notificationPermission === 'granted' ? '🔔' : '🔕'"></span>
+            <span x-text="browserNotify && notificationPermission === 'granted' ? 'Đang bật' : 'Bật / tắt'"></span>
+          </button>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border" style="border-color:var(--border);background:var(--bg-raised)">
+          <div class="min-w-0">
+            <div class="font-medium text-gray-900 dark:text-gray-100">Làm mới dữ liệu</div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Vị thế, backtest leaderboard, watchlist…</p>
+          </div>
+          <button type="button" @click="refreshAll()" :disabled="loading"
+            class="btn-secondary text-sm px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto mobile-tap-target disabled:opacity-60" title="Làm mới">
+            <svg :class="loading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span x-text="loading ? 'Đang tải…' : 'Làm mới'"></span>
+          </button>
+        </div>
+        <div class="md:hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border" style="border-color:var(--border);background:var(--bg-raised)" x-show="pwaGateSkipped">
+          <div class="min-w-0">
+            <div class="font-medium text-gray-900 dark:text-gray-100">Màn cài app</div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Bạn đã chọn dùng trên trình duyệt. Hiện lại màn hướng dẫn cài nếu đổi ý.</p>
+          </div>
+          <button type="button" @click="clearPwaGateSkip()"
+            class="btn-secondary text-sm px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto mobile-tap-target">
+            Hiện lại màn cài app
+          </button>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border" style="border-color:var(--border);background:var(--bg-raised)">
+          <div class="min-w-0">
+            <div class="font-medium text-gray-900 dark:text-gray-100">Giao diện</div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Sáng / tối — lưu trên thiết bị.</p>
+          </div>
+          <button type="button" @click="toggleDark()"
+            class="btn-secondary text-sm px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto mobile-tap-target">
+            <svg x-show="!darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+            <svg x-show="darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+            <span x-text="darkMode ? 'Đang tối — bật sáng' : 'Đang sáng — bật tối'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </main>
+
+<!-- PWA: gợi ý cài (Chrome / Android / desktop) — ẩn khi đang bắt buộc full-screen trên mobile -->
+<div x-show="showPwaInstallBanner && !pwaMandatoryGate" x-cloak x-transition
+  class="fixed bottom-0 left-0 right-0 z-[60] px-3 pt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-between bg-indigo-600 text-white text-sm shadow-lg safe-pb"
+  style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px))">
+  <span class="text-center sm:text-left px-1">Cài <b>Stock Analysis</b> lên màn hình chính — xem nhanh hơn, gần giống app.</span>
+  <div class="flex gap-2 shrink-0">
+    <button type="button" @click="installPwa()" class="px-4 py-2 rounded-lg bg-white text-indigo-700 font-semibold text-sm touch-manipulation">Cài app</button>
+    <button type="button" @click="dismissPwaBanner()" class="px-3 py-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-500 text-sm touch-manipulation">Để sau</button>
+  </div>
+</div>
 
 <!-- Toast -->
 <div x-show="toast.show" x-cloak x-transition
-  class="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2"
+  class="fixed z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 max-w-[calc(100vw-2rem)] sm:max-w-md left-4 right-4 sm:left-auto sm:right-5 mx-auto sm:mx-0"
+  style="bottom: max(1rem, env(safe-area-inset-bottom, 0px))"
   :class="toast.type === 'success' ? 'bg-emerald-600 text-white' : toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-gray-800 text-white'">
   <span x-text="toast.type === 'success' ? '✓' : toast.type === 'error' ? '✗' : 'ℹ'"></span>
   <span x-text="toast.msg"></span>
 </div>
 
 <script>
-const STOCK_APP_TAB_IDS = ['dashboard', 'scanner', 'signals', 'stocks', 'guide', 'watchlist'];
+const STOCK_APP_TAB_IDS = ['dashboard', 'scanner', 'signals', 'stocks', 'guide', 'watchlist', 'settings'];
 const STOCK_SIGNAL_TICKER_KEY = 'stockAnalysisSignalTicker';
 const STOCK_PRICE_TICKER_KEY = 'stockAnalysisPriceTicker';
+
+/** Tab từ ?tab= — dùng link chia sẻ */
+function readTabFromUrl() {
+  try {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t && STOCK_APP_TAB_IDS.includes(t)) return t;
+  } catch {}
+  return null;
+}
+
+/** Mã từ ?ticker= — kết hợp tab Tín hiệu / Cổ phiếu */
+function readTickerFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('ticker');
+    if (!raw) return null;
+    const u = String(raw).trim().toUpperCase();
+    if (u.length < 1 || u.length > 20) return null;
+    if (!/^[A-Z0-9]+$/.test(u)) return null;
+    return u;
+  } catch {}
+  return null;
+}
 
 function readSavedTab() {
   try {
@@ -1758,9 +2139,105 @@ function readSavedTicker(key) {
   return '';
 }
 
+const PWA_GATE_SKIP_KEY = 'pwaMandatoryGateSkip';
+
+/** Điện thoại (viewport ≤640px) và chưa mở như PWA — màn hướng dẫn cài (trừ khi người dùng bỏ qua). */
+function computePwaMandatoryGate() {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (localStorage.getItem(PWA_GATE_SKIP_KEY) === '1') return false;
+  } catch {}
+  try {
+    if (!window.matchMedia('(max-width: 640px)').matches) return false;
+  } catch {
+    return false;
+  }
+  try {
+    if (window.matchMedia('(display-mode: standalone)').matches) return false;
+    if (window.matchMedia('(display-mode: fullscreen)').matches) return false;
+  } catch {}
+  try {
+    if (window.navigator.standalone === true) return false;
+  } catch {}
+  return true;
+}
+
+function isIosTouchDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+}
+
+function isAndroidUi() {
+  if (typeof navigator === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent || '');
+}
+
+/** iOS: shell trình duyệt (đều dùng WebKit). Dùng cho hướng dẫn «Thêm vào Màn hình chính». */
+function getIosBrowserKind() {
+  if (typeof navigator === 'undefined') return 'other';
+  if (!isIosTouchDevice()) return 'other';
+  const ua = navigator.userAgent || '';
+  if (/CriOS\//i.test(ua)) return 'chrome';
+  if (/FxiOS\//i.test(ua)) return 'firefox';
+  if (/EdgiOS\//i.test(ua)) return 'edge';
+  if (/OPiOS\//i.test(ua)) return 'opera';
+  return 'safari';
+}
+
+function iosBrowserTitleVi(kind) {
+  const m = {
+    safari: 'Safari',
+    chrome: 'Chrome (iOS)',
+    firefox: 'Firefox (iOS)',
+    edge: 'Edge (iOS)',
+    opera: 'Opera (iOS)',
+    other: 'Trình duyệt iOS',
+  };
+  return m[kind] || m.other;
+}
+
+/** Nhãn hiển thị tiếng Việt — BB: enum UP/DOWN theo giá vs dải, không phải hướng tín hiệu */
+const SIGNAL_LABELS_VI = {
+  RSI_OVERSOLD: 'RSI quá bán',
+  RSI_OVERBOUGHT: 'RSI quá mua',
+  RSI_MOMENTUM_UP: 'RSI momentum tăng',
+  RSI_MOMENTUM_DOWN: 'RSI momentum giảm',
+  EMA_GOLDEN_CROSS: 'EMA golden cross',
+  EMA_DEATH_CROSS: 'EMA death cross',
+  EMA_BULLISH_STACK: 'Nền tăng (EMA)',
+  EMA_BEARISH_STACK: 'Nền giảm (EMA)',
+  EMA_BOUNCE: 'Nảy EMA',
+  BASE_FORMING: 'Nền tích lũy',
+  RESISTANCE_BREAKOUT: 'Break kháng cự',
+  SUPPORT_BREAKDOWN: 'Thủng hỗ trợ',
+  MACD_BULLISH_CROSS: 'MACD cắt tăng',
+  MACD_BEARISH_CROSS: 'MACD cắt giảm',
+  BB_BREAKOUT_DOWN: 'Chạm BB dưới (oversold)',
+  BB_BREAKOUT_UP: 'Vượt BB trên (overbought)',
+  BB_SQUEEZE: 'BB squeeze',
+  HAMMER: 'Hammer',
+  SHOOTING_STAR: 'Shooting star',
+  BULLISH_ENGULFING: 'Nến xanh nuốt',
+  BEARISH_ENGULFING: 'Nến đỏ nuốt',
+  DOJI: 'Doji',
+  VOLUME_SURGE: 'KL đột biến',
+  RSI_BEARISH_DIVERGENCE: 'Phân kỳ RSI giảm',
+  MACD_BEARISH_DIVERGENCE: 'Phân kỳ MACD giảm',
+  VOLUME_CLIMAX_TOP: 'Climax đỉnh',
+  DISTRIBUTION_BAR: 'Phân phối',
+  WASHOUT_BAR: 'Washout (đáy)',
+  FAILED_BREAKOUT: 'Bull trap',
+  MA_GOLDEN_CROSS: 'MA golden (legacy)',
+  MA_DEATH_CROSS: 'MA death (legacy)',
+};
+
 function app() {
+  const urlTab = readTabFromUrl();
+  const urlTicker = readTickerFromUrl();
   return {
-    tab: readSavedTab(),
+    tab: urlTab || readSavedTab(),
     tabs: [
       { id: 'dashboard', label: 'Dashboard', icon: '📊' },
       { id: 'scanner',   label: 'Scanner',   icon: '🔍' },
@@ -1768,6 +2245,7 @@ function app() {
       { id: 'stocks',    label: 'Cổ phiếu',  icon: '📈' },
       { id: 'guide',     label: 'Chiến lược', icon: '📘' },
       { id: 'watchlist', label: 'Watchlist', icon: '⭐' },
+      { id: 'settings',  label: 'Cài đặt',   icon: '⚙️' },
     ],
     loading: false,
     scanning: false,
@@ -1777,10 +2255,10 @@ function app() {
     signalSummary: {},
     searchTicker: '',
     signals: [],
-    signalTicker: readSavedTicker(STOCK_SIGNAL_TICKER_KEY),
+    signalTicker: urlTicker || readSavedTicker(STOCK_SIGNAL_TICKER_KEY),
     allChartSignals: [],   // tất cả tín hiệu lịch sử (cho chart markers)
     signalStats: null,     // { total, bullish, bearish, topTypes }
-    /** GET /signals/backtest/summary — top/bottom compound % */
+    /** GET /signals/backtest/summary — compound 12 tháng (đóng lệnh), fullPeriod trên từng dòng */
     backtestLeaderboard: { good: [], bad: [], total: 0 },
     /** GET /signals/:ticker/backtest/runs */
     backtestRuns: [],
@@ -1804,7 +2282,7 @@ function app() {
     /** Mã tương ứng với barData hiện tại (để merge khi refresh) */
     _barDataTicker: '',
     latestBar: null,
-    priceTicker: readSavedTicker(STOCK_PRICE_TICKER_KEY),
+    priceTicker: urlTicker || readSavedTicker(STOCK_PRICE_TICKER_KEY),
     barData: [],
     lwChart: null,
     rsiChart: null,
@@ -1819,12 +2297,35 @@ function app() {
     wlSearch: '',
     wlAddForm: { show: false, ticker: '', name: '', sector: '' },
     wlCheckingLiquidity: false,
+    wlLiquidityLoading: false,
+    wlLiquidityPanel: false,
+    wlLiquidityCandidates: [],
+    wlLiquidityMeta: null,
+    wlLiquidityExcludeDb: false,
+    wlAddSubmitting: false,
     darkMode: localStorage.getItem('darkMode') === 'true',
     /** Bật: hiện chữ loại tín hiệu (VD RSI OVERSOLD). Tắt: chỉ mũi tên mua/bán. */
     chartSignalLabels: localStorage.getItem('chartSignalLabels') !== 'false',
     /** Bật/tắt lớp vẽ trên chart (localStorage, mặc định bật) */
     chartShowEma: localStorage.getItem('chartShowEma') !== 'false',
     chartShowSR: localStorage.getItem('chartShowSR') !== 'false',
+
+    /** PWA + thông báo trình duyệt */
+    pwaDeferredInstall: null,
+    showPwaInstallBanner: false,
+    /** Điện thoại + không standalone: màn cài (trừ khi đã bỏ qua trong localStorage) */
+    pwaMandatoryGate: computePwaMandatoryGate(),
+    /** Đồng bộ với localStorage — chỉ true sau khi người dùng bấm bỏ qua màn cài */
+    pwaGateSkipped: typeof localStorage !== 'undefined' && localStorage.getItem(PWA_GATE_SKIP_KEY) === '1',
+    /** Gợn UI hướng dẫn Safari vs Chrome / Android */
+    pwaIosUi: typeof navigator !== 'undefined' && isIosTouchDevice(),
+    pwaAndroidUi: typeof navigator !== 'undefined' && isAndroidUi(),
+    /** safari | chrome | firefox | edge | opera | other — chỉ meaningful khi pwaIosUi */
+    pwaIosBrowser: typeof navigator !== 'undefined' ? getIosBrowserKind() : 'other',
+    pwaCanWebShare: typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+    browserNotify: typeof localStorage !== 'undefined' && localStorage.getItem('browserNotify') === 'true',
+    notificationPermission:
+      typeof Notification !== 'undefined' ? Notification.permission : 'denied',
 
     // ── Auth ────────────────────────────────────────────────────────────
     isAdmin: false,
@@ -1885,7 +2386,28 @@ function app() {
       try {
         sessionStorage.setItem('stockAnalysisTab', id);
       } catch {}
+      this.updateShareUrl();
       this.$dispatch('tab-changed', id);
+    },
+
+    /** Đồng bộ ?tab= & ?ticker= trên thanh địa chỉ (deep link) */
+    updateShareUrl() {
+      try {
+        const p = new URLSearchParams();
+        p.set('tab', this.tab);
+        const t =
+          this.tab === 'signals'
+            ? this.signalTicker
+            : this.tab === 'stocks'
+              ? this.priceTicker
+              : '';
+        if (t && String(t).trim()) p.set('ticker', String(t).trim().toUpperCase());
+        const qs = p.toString();
+        const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+        if (window.location.pathname + window.location.search !== next) {
+          history.replaceState(null, '', next);
+        }
+      } catch {}
     },
 
     persistSignalTicker(v) {
@@ -1901,6 +2423,13 @@ function app() {
       } catch {}
     },
 
+    /** Nhãn loại tín hiệu (VN) — dùng chart, scanner, tab Tín hiệu */
+    signalTypeLabelVi(type) {
+      if (type == null || type === '') return '';
+      const t = String(type).trim();
+      return SIGNAL_LABELS_VI[t] || t.replace(/_/g, ' ');
+    },
+
     /**
      * BEARISH trong summary không phải lúc nào cũng là “phân phối đỉnh”
      * (có thể là EMA nền giảm, MACD cross, v.v.) — tránh nhãn gây hiểu nhầm.
@@ -1914,7 +2443,7 @@ function app() {
         RSI_BEARISH_DIVERGENCE: 'Phân kỳ RSI',
         MACD_BEARISH_DIVERGENCE: 'Phân kỳ MACD',
         EMA_DEATH_CROSS: 'Death cross',
-        MA_DEATH_CROSS: 'Death cross',
+        MA_DEATH_CROSS: 'Death cross (legacy)',
         SUPPORT_BREAKDOWN: 'Thủng hỗ trợ',
         EMA_BEARISH_STACK: 'Nền giảm',
         MACD_BEARISH_CROSS: 'MACD giảm',
@@ -1922,14 +2451,18 @@ function app() {
         RSI_OVERBOUGHT: 'Quá mua',
         BEARISH_ENGULFING: 'Nến đỏ',
         SHOOTING_STAR: 'Shooting star',
-        BB_BREAKOUT_DOWN: 'BB xuống',
+        BB_BREAKOUT_UP: 'BB trên (overbought)',
       };
-      return m[s.topSignal] ?? s.topSignal.replace(/_/g, ' ').split(' ').slice(0, 2).join(' ');
+      return m[s.topSignal] ?? this.signalTypeLabelVi(s.topSignal).split(' ').slice(0, 2).join(' ');
     },
 
     toggleDark() {
       this.darkMode = !this.darkMode;
       localStorage.setItem('darkMode', this.darkMode);
+      try {
+        const m = document.querySelector('meta[name="theme-color"]:not([media])');
+        if (m) m.setAttribute('content', this.darkMode ? '#18181b' : '#4f46e5');
+      } catch {}
       this.updateChartTheme();
     },
 
@@ -1973,6 +2506,16 @@ function app() {
     },
 
     async init() {
+      // Link ?tab=&ticker= đã áp vào state; lưu session cho lần sau
+      if (urlTab) {
+        try {
+          sessionStorage.setItem('stockAnalysisTab', urlTab);
+        } catch {}
+      }
+      if (urlTicker) {
+        this.persistSignalTicker(urlTicker);
+        this.persistPriceTicker(urlTicker);
+      }
       // Verify stored token
       const token = localStorage.getItem('adminToken');
       if (token) {
@@ -1982,8 +2525,14 @@ function app() {
           if (!res.ok) localStorage.removeItem('adminToken');
         } catch { this.isAdmin = false; }
       }
-      this.$watch('signalTicker', (v) => this.persistSignalTicker(v));
-      this.$watch('priceTicker', (v) => this.persistPriceTicker(v));
+      this.$watch('signalTicker', (v) => {
+        this.persistSignalTicker(v);
+        if (this.tab === 'signals') this.updateShareUrl();
+      });
+      this.$watch('priceTicker', (v) => {
+        this.persistPriceTicker(v);
+        if (this.tab === 'stocks') this.updateShareUrl();
+      });
       await this.refreshAll();
       await this.loadWatchlist();
       if (this.signalTicker) {
@@ -1991,7 +2540,186 @@ function app() {
           new CustomEvent('signal-ticker-sync', { detail: { ticker: this.signalTicker } }),
         );
       }
-      this.$nextTick(() => this.$dispatch('tab-changed', this.tab));
+      // Giữ hành vi như trước: vào tab Tín hiệu / Cổ phiếu (kể cả từ ?tab=&ticker=) là tải chart + khuyến nghị, không cần bấm thêm
+      if (this.tab === 'signals' && this.signalTicker) {
+        await this.loadSignals();
+      } else if (this.tab === 'stocks' && this.priceTicker) {
+        await this.loadStockData();
+      }
+      this.$nextTick(() => {
+        this.updateShareUrl();
+        this.$dispatch('tab-changed', this.tab);
+      });
+      this.setupPwa();
+      this.$watch('pwaMandatoryGate', (on) => {
+        try {
+          document.documentElement.classList.toggle('overflow-hidden', !!on);
+          document.body.classList.toggle('overflow-hidden', !!on);
+          document.documentElement.classList.toggle('pwa-gate-open', !!on);
+        } catch {}
+      });
+      if (this.pwaMandatoryGate) {
+        try {
+          document.documentElement.classList.add('overflow-hidden');
+          document.body.classList.add('overflow-hidden');
+          document.documentElement.classList.add('pwa-gate-open');
+        } catch {}
+      }
+    },
+
+    refreshPwaMandatoryGate() {
+      try {
+        this.pwaGateSkipped = typeof localStorage !== 'undefined' && localStorage.getItem(PWA_GATE_SKIP_KEY) === '1';
+      } catch {
+        this.pwaGateSkipped = false;
+      }
+      this.pwaMandatoryGate = computePwaMandatoryGate();
+    },
+
+    skipPwaMandatoryGate() {
+      try {
+        localStorage.setItem(PWA_GATE_SKIP_KEY, '1');
+      } catch {}
+      this.pwaGateSkipped = true;
+      this.refreshPwaMandatoryGate();
+      this.showToast('Đang dùng trên trình duyệt. Hiện lại màn cài trong Cài đặt nếu cần.', 'info');
+    },
+
+    clearPwaGateSkip() {
+      try {
+        localStorage.removeItem(PWA_GATE_SKIP_KEY);
+      } catch {}
+      this.pwaGateSkipped = false;
+      this.refreshPwaMandatoryGate();
+    },
+
+    setupPwa() {
+      if (typeof window === 'undefined') return;
+      this.refreshPwaMandatoryGate();
+      const onViewportOrDisplayMode = () => this.refreshPwaMandatoryGate();
+      window.addEventListener('resize', onViewportOrDisplayMode, { passive: true });
+      try {
+        window.matchMedia('(display-mode: standalone)').addEventListener('change', onViewportOrDisplayMode);
+      } catch {}
+      if ('Notification' in window) {
+        this.notificationPermission = Notification.permission;
+      }
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        this.pwaDeferredInstall = e;
+        if (this.pwaMandatoryGate) {
+          this.showPwaInstallBanner = false;
+          return;
+        }
+        try {
+          if (sessionStorage.getItem('pwaInstallDismissed') === '1') return;
+        } catch {}
+        this.showPwaInstallBanner = true;
+      });
+      window.addEventListener('appinstalled', () => {
+        this.showPwaInstallBanner = false;
+        this.pwaDeferredInstall = null;
+        this.refreshPwaMandatoryGate();
+        this.showToast('Đã cài app lên thiết bị', 'success');
+      });
+    },
+
+    dismissPwaBanner() {
+      this.showPwaInstallBanner = false;
+      try {
+        sessionStorage.setItem('pwaInstallDismissed', '1');
+      } catch {}
+    },
+
+    async installPwa() {
+      const ev = this.pwaDeferredInstall;
+      if (!ev || typeof ev.prompt !== 'function') {
+        this.showToast('Dùng menu trình duyệt: «Thêm vào màn hình chính» hoặc «Cài đặt app»', 'info');
+        return;
+      }
+      ev.prompt();
+      try {
+        const { outcome } = await ev.userChoice;
+        if (outcome === 'accepted') {
+          this.showToast('Đã thêm vào màn hình chính', 'success');
+        }
+      } catch {}
+      this.pwaDeferredInstall = null;
+      this.showPwaInstallBanner = false;
+      this.refreshPwaMandatoryGate();
+    },
+
+    pwaInstallInstructionHeading() {
+      if (this.pwaIosUi) {
+        return `Hướng dẫn — ${iosBrowserTitleVi(this.pwaIosBrowser)}`;
+      }
+      if (this.pwaAndroidUi) return 'Hướng dẫn — Android (Chrome, Samsung Internet, Edge, Brave…)';
+      return 'Hướng dẫn — trình duyệt điện thoại';
+    },
+
+    async openPwaIosShareSheet() {
+      if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+        this.showToast('Làm theo các bước trong khung dưới', 'info');
+        return;
+      }
+      try {
+        await navigator.share({
+          title: typeof document !== 'undefined' ? document.title : 'Stock Analysis',
+          text: 'Thêm Stock Analysis lên màn hình chính',
+          url: typeof window !== 'undefined' ? window.location.href : '',
+        });
+      } catch (e) {
+        if (!e || e.name !== 'AbortError') {
+          this.showToast('Không mở được bảng chia sẻ — làm theo bước bên dưới', 'info');
+        }
+      }
+    },
+
+    async toggleBrowserNotify() {
+      if (!('Notification' in window)) {
+        this.showToast('Trình duyệt không hỗ trợ thông báo', 'info');
+        return;
+      }
+      this.notificationPermission = Notification.permission;
+      if (Notification.permission === 'denied') {
+        this.showToast('Đã chặn thông báo — bật trong cài đặt trình duyệt / site', 'info');
+        return;
+      }
+      if (Notification.permission === 'granted') {
+        this.browserNotify = !this.browserNotify;
+        try {
+          if (this.browserNotify) localStorage.setItem('browserNotify', 'true');
+          else localStorage.removeItem('browserNotify');
+        } catch {}
+        this.showToast(
+          this.browserNotify ? 'Đã bật thông báo (khi tab ẩn)' : 'Đã tắt thông báo hệ thống',
+          'success',
+        );
+        return;
+      }
+      const p = await Notification.requestPermission();
+      this.notificationPermission = p;
+      if (p === 'granted') {
+        this.browserNotify = true;
+        try {
+          localStorage.setItem('browserNotify', 'true');
+        } catch {}
+        this.showToast('Đã cấp quyền — thông báo khi bạn không mở tab', 'success');
+        try {
+          new Notification('Stock Analysis', {
+            body: 'Thông báo đã bật.',
+            icon: '/icons/icon-192.png',
+          });
+        } catch {}
+      } else {
+        this.browserNotify = false;
+        try {
+          localStorage.removeItem('browserNotify');
+        } catch {}
+      }
     },
 
     async refreshAll() {
@@ -2038,6 +2766,12 @@ function app() {
         this.loadFormingSetups(),
         this.loadScannerLatestSignals(),
       ]);
+      await this.loadTickerPickerUniverse();
+    },
+
+    async loadTickerPickerUniverse() {
+      const r = await fetch('/watchlist/ticker-picker').then((res) => res.json()).catch(() => []);
+      window.__tickerPickerUniverse__ = Array.isArray(r) ? r : [];
     },
 
     async loadScannerLatestSignals() {
@@ -2140,7 +2874,7 @@ function app() {
       this.barData = merged;
       this._barDataTicker = t;
 
-      const from = this.barData.length > 0 ? this.barData[0].tradingDate : '2025-01-01';
+      const from = this.barData.length > 0 ? this.barData[0].tradingDate : '2000-01-01';
       const chartSigs = await fetch(`/signals/${t}/chart?from=${from}`).then(r => r.json()).catch(() => []);
       this._applyChartSignalsPayload(chartSigs);
 
@@ -2177,9 +2911,8 @@ function app() {
       if (!this.signalTicker || !this.isAdmin) return;
       this.actionLoading.backtest = true;
       const t = this.signalTicker.toUpperCase();
-      const q = new URLSearchParams({ months: '12' });
       try {
-        await this.authFetch(`/signals/${t}/backtest/run?${q}`, { method: 'POST' });
+        await this.authFetch(`/signals/${t}/backtest/run`, { method: 'POST' });
         await this.loadBacktestRuns();
         this.showToast('Đã chạy backtest và lưu — ' + t, 'success');
       } catch (e) {
@@ -2206,7 +2939,7 @@ function app() {
 
     async loadChartSignals(ticker) {
       const t = (ticker || this.signalTicker).toUpperCase();
-      const from = this.barData.length > 0 ? this.barData[0].tradingDate : '2025-01-01';
+      const from = this.barData.length > 0 ? this.barData[0].tradingDate : '2000-01-01';
       const sigs = await fetch(`/signals/${t}/chart?from=${from}`).then(r => r.json()).catch(() => []);
       this._applyChartSignalsPayload(sigs);
       if (this.barData.length) this.$nextTick(() => requestAnimationFrame(() => this.renderChart(t)));
@@ -2227,14 +2960,14 @@ function app() {
       this.actionLoading.analyze = false;
     },
 
-    /** Backfill tín hiệu quá khứ qua queue (từ 2025-01-01) — một mã */
+    /** Backfill tín hiệu quá khứ qua queue (toàn bộ lịch sử, mặc định từ đủ 130 nến) — một mã */
     async runAnalyzeHistory() {
       if (!this.signalTicker) return;
       this.actionLoading.analyzeHistory = true;
       const t = this.signalTicker.toUpperCase();
       this.log('info', `▶ Phân tích lịch sử ${t} (job)...`);
       try {
-        const res = await this.authFetch(`/queue/analyze-history/${t}?from=2025-01-01`, { method: 'POST' }).then(r => r.json());
+        const res = await this.authFetch(`/queue/analyze-history/${t}`, { method: 'POST' }).then(r => r.json());
         if (res?.jobId) {
           await this.pollJob(res.jobId, `Lịch sử ${t}`, async () => {
             await this.loadSignals();
@@ -2251,7 +2984,7 @@ function app() {
       this.actionLoading.analyzeHistoryAll = true;
       this.log('info', '▶ Phân tích lịch sử toàn watchlist...');
       try {
-        const res = await this.authFetch('/queue/analyze-history?from=2025-01-01', { method: 'POST' }).then(r => r.json());
+        const res = await this.authFetch('/queue/analyze-history', { method: 'POST' }).then(r => r.json());
         if (res?.jobId) {
           await this.pollJob(res.jobId, 'Phân tích lịch sử toàn watchlist');
           await this.loadSignalSummary();
@@ -2383,18 +3116,20 @@ function app() {
       // Signal markers — mặc định: mua + bán trong cả lịch sử (cooldown tránh dày đặc)
       const SIG_WEIGHTS = {
         RESISTANCE_BREAKOUT: 5, EMA_GOLDEN_CROSS: 3.5, EMA_BOUNCE: 3,
+        WASHOUT_BAR: 3.5,
         BASE_FORMING: 2, MACD_BULLISH_CROSS: 2, RSI_OVERSOLD: 2,
         BULLISH_ENGULFING: 1.5, HAMMER: 1.5, BB_BREAKOUT_DOWN: 1.5,
         EMA_BULLISH_STACK: 2.5, RSI_MOMENTUM_UP: 2.5, VOLUME_SURGE: 1,
       };
       const BUY_PRIORITY = [
-        'RESISTANCE_BREAKOUT', 'EMA_GOLDEN_CROSS', 'EMA_BOUNCE',
-        'BASE_FORMING', 'MACD_BULLISH_CROSS', 'RSI_OVERSOLD',
+        'RESISTANCE_BREAKOUT', 'WASHOUT_BAR', 'EMA_GOLDEN_CROSS', 'EMA_BOUNCE',
+        'BASE_FORMING', 'MACD_BULLISH_CROSS', 'RSI_OVERSOLD', 'BB_BREAKOUT_DOWN',
       ];
       // Chỉ mũi tên bán khi có tín hiệu phân phối/đỉnh (không dùng nến đơn lẻ như SHOOTING_STAR)
       const SELL_PRIORITY = [
         'RSI_BEARISH_DIVERGENCE', 'FAILED_BREAKOUT', 'VOLUME_CLIMAX_TOP',
         'DISTRIBUTION_BAR', 'MACD_BEARISH_DIVERGENCE', 'EMA_DEATH_CROSS',
+        'MA_DEATH_CROSS', 'BB_BREAKOUT_UP',
         'SUPPORT_BREAKDOWN',
       ];
       const MIN_BUY_SCORE = 3.5;
@@ -2403,13 +3138,20 @@ function app() {
 
       const sigSource = this.allChartSignals.length > 0 ? this.allChartSignals : this.signals;
 
-      // Nhóm theo ngày
+      const chartDayKey = (raw) => {
+        if (raw == null || raw === '' || raw === 'N/A') return '';
+        const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(raw).trim());
+        return m ? m[1] : '';
+      };
+
+      // Nhóm theo ngày (YYYY-MM-DD) + loại trùng type — tránh nhiều marker chồng do format ngày khác nhau
       const sigMap = {};
       sigSource.forEach(s => {
-        if (!s.tradingDate || s.tradingDate === 'N/A') return;
-        if (!sigMap[s.tradingDate]) sigMap[s.tradingDate] = { bull: [], bear: [] };
-        if (s.direction === 'BULLISH') sigMap[s.tradingDate].bull.push(s.type);
-        else if (s.direction === 'BEARISH') sigMap[s.tradingDate].bear.push(s.type);
+        const dk = chartDayKey(s.tradingDate);
+        if (!dk) return;
+        if (!sigMap[dk]) sigMap[dk] = { bull: new Set(), bear: new Set() };
+        if (s.direction === 'BULLISH') sigMap[dk].bull.add(s.type);
+        else if (s.direction === 'BEARISH') sigMap[dk].bear.add(s.type);
       });
 
       // Sắp xếp dates theo thứ tự thời gian để áp cooldown đúng
@@ -2423,7 +3165,8 @@ function app() {
       let lastSellBarIdx = -SELL_COOLDOWN;
 
       for (const date of sortedDates) {
-        const { bull, bear } = sigMap[date];
+        const bull = [...sigMap[date].bull];
+        const bear = [...sigMap[date].bear];
         const barIdx = dateToIdx[date] ?? -1;
 
         // ── Điểm mua ─────────────────────────────────────────────────────
@@ -2436,7 +3179,7 @@ function app() {
 
           // Chỉ mark nếu: điểm đủ mạnh VÀ đã qua cooldown
           if ((bullScore >= MIN_BUY_SCORE || topScore >= 3.5) && sinceLastBuy >= BUY_COOLDOWN) {
-            const buyTxt = topBuy.replace(/_/g, ' ');
+            const buyTxt = this.signalTypeLabelVi(topBuy);
             markers.push({
               time: date, position: 'belowBar', color: '#10b981',
               shape: 'arrowUp',
@@ -2453,7 +3196,7 @@ function app() {
           if (topSell) {
             const sinceLastSell = barIdx >= 0 ? barIdx - lastSellBarIdx : SELL_COOLDOWN;
             if (sinceLastSell >= SELL_COOLDOWN) {
-              const sellTxt = topSell.replace(/_/g, ' ');
+              const sellTxt = this.signalTypeLabelVi(topSell);
               markers.push({
                 time: date, position: 'aboveBar', color: '#ef4444',
                 shape: 'arrowDown',
@@ -2465,7 +3208,18 @@ function app() {
           }
         }
       }
-      if (markers.length) candleSeries.setMarkers(markers.sort((a,b) => a.time > b.time ? 1 : -1));
+      if (markers.length) {
+        const sorted = markers.sort((a, b) => (a.time > b.time ? 1 : -1));
+        const seenKey = new Set();
+        const deduped = [];
+        for (const m of sorted) {
+          const k = `${m.time}|${m.position}|${m.text}|${m.shape}`;
+          if (seenKey.has(k)) continue;
+          seenKey.add(k);
+          deduped.push(m);
+        }
+        candleSeries.setMarkers(deduped);
+      }
 
       // ── RSI chart ─────────────────────────────────────────────────────────
       const rsiValues = this.calcRSI(closes, 14);
@@ -2776,13 +3530,14 @@ function app() {
       }
     },
 
-    async syncTicker(fullHistory = false) {
+    async syncTicker(fullIpo) {
       if (!this.priceTicker) return;
-      const key = fullHistory ? 'syncOneFull' : 'syncOne';
-      this.actionLoading[key] = true;
+      const full = !!fullIpo;
+      if (full) this.actionLoading.syncOneFull = true;
+      else this.actionLoading.syncOne = true;
       const t = this.priceTicker.toUpperCase();
-      const q = fullHistory ? '?full=true' : '';
-      const label = fullHistory ? `Sync full ${t}` : `Sync ${t}`;
+      const label = full ? `Full IPO ${t}` : `Đồng bộ ~1 năm / tăng dần ${t}`;
+      const q = full ? '?full=1' : '';
       const res = await this.authFetch(`/queue/sync/${t}${q}`, { method: 'POST' }).then(r => r.json()).catch(() => null);
       if (res?.jobId) {
         this.log('info', `⏳ ${label} job #${res.jobId}...`);
@@ -2791,7 +3546,8 @@ function app() {
           await this.loadSignalSummary();
         });
       }
-      this.actionLoading[key] = false;
+      this.actionLoading.syncOne = false;
+      this.actionLoading.syncOneFull = false;
     },
 
     async trackPositions() {
@@ -2806,13 +3562,13 @@ function app() {
       this.actionLoading[action] = true;
       const endpointMap = {
         sync: '/queue/sync',
-        syncFull: '/queue/sync?full=true',
+        syncFull: '/queue/sync?full=1',
         scan: '/queue/scan',
         recommend: '/scanner/recommend',  // nhẹ, giữ đồng bộ
       };
       const labelMap = {
-        sync: 'Sync giá (1 năm)',
-        syncFull: 'Sync full (IPO → nay)',
+        sync: 'Đồng bộ ~1 năm / tăng dần (watchlist)',
+        syncFull: 'Đồng bộ full IPO (watchlist)',
         scan: 'Quét tín hiệu',
         recommend: 'Khuyến nghị + Telegram',
       };
@@ -2894,26 +3650,43 @@ function app() {
 
     async wlAdd() {
       const { ticker, name, sector } = this.wlAddForm;
-      if (!ticker) return;
-      await this.authFetch('/watchlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticker, name, sector }),
-      });
-      this.wlAddForm = { show: false, ticker: '', name: '', sector: '' };
-      await this.loadWlItems();
-      this.showToast(`Đã thêm ${ticker.toUpperCase()}`, 'success');
+      if (!ticker || this.wlAddSubmitting) return;
+      this.wlAddSubmitting = true;
+      try {
+        const res = await this.authFetch('/watchlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticker, name, sector }),
+        });
+        const data = await res.json().catch(() => ({}));
+        this.wlAddForm = { show: false, ticker: '', name: '', sector: '' };
+        await this.loadWlItems();
+        await this.loadWatchlist();
+        const sym = String(data.ticker || ticker).toUpperCase();
+        const sync = data._sync;
+        let msg = `Đã thêm ${sym}`;
+        if (sync) {
+          if (sync.error) msg += ` — đồng bộ giá lỗi: ${sync.error}`;
+          else
+            msg += ` — đồng bộ ${sync.barsInserted ?? 0} dòng giá mới, đã phân tích`;
+        }
+        this.showToast(msg, sync?.error ? 'info' : 'success');
+      } finally {
+        this.wlAddSubmitting = false;
+      }
     },
 
     async wlActivate(ticker) {
       await this.authFetch(`/watchlist/${ticker}/activate`, { method: 'PUT' });
       await this.loadWlItems();
+      await this.loadTickerPickerUniverse();
       this.showToast(`Đã bật lại ${ticker}`, 'success');
     },
 
     async wlDeactivate(ticker) {
       await this.authFetch(`/watchlist/${ticker}/deactivate`, { method: 'PUT' });
       await this.loadWlItems();
+      await this.loadTickerPickerUniverse();
       this.showToast(`Đã tắt ${ticker}`, 'info');
     },
 
@@ -2921,7 +3694,25 @@ function app() {
       if (!confirm(`Xoá hẳn ${ticker} khỏi watchlist?`)) return;
       await this.authFetch(`/watchlist/${id}`, { method: 'DELETE' });
       await this.loadWlItems();
+      await this.loadTickerPickerUniverse();
       this.showToast(`Đã xoá ${ticker}`, 'success');
+    },
+
+    async wlLoadLiquidityCandidates() {
+      if (!this.isAdmin) return;
+      this.wlLiquidityLoading = true;
+      try {
+        const q = this.wlLiquidityExcludeDb ? '?excludeDb=1' : '';
+        const res = await this.authFetch(`/watchlist/liquidity-candidates${q}`);
+        const data = await res.json().catch(() => ({}));
+        this.wlLiquidityCandidates = Array.isArray(data.tickers) ? data.tickers : [];
+        this.wlLiquidityMeta = data;
+        this.wlLiquidityPanel = true;
+      } catch {
+        this.showToast('Không tải danh sách ứng viên thanh khoản', 'error');
+      } finally {
+        this.wlLiquidityLoading = false;
+      }
     },
 
     async wlCheckLiquidity() {
@@ -2930,6 +3721,7 @@ function app() {
       try {
         const r = await this.authFetch('/watchlist/check-liquidity', { method: 'POST' }).then(res => res.json());
         await this.loadWlItems();
+        await this.loadTickerPickerUniverse();
         await this.loadSignalSummary();
         const liq = r.liquidity ?? r;
         const sync = r.sync;
@@ -2955,7 +3747,30 @@ function app() {
 
     showToast(msg, type = 'success') {
       this.toast = { show: true, msg, type };
-      setTimeout(() => { this.toast.show = false; }, 3000);
+      setTimeout(() => {
+        this.toast.show = false;
+      }, 3000);
+      if (!this.browserNotify) return;
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
+      try {
+        const opts = {
+          body: msg,
+          icon: '/icons/icon-192.png',
+          badge: '/icons/icon-192.png',
+          tag: 'stock-analysis-toast',
+          renotify: true,
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready
+            .then((reg) => reg.showNotification('Stock Analysis', opts))
+            .catch(() => {
+              new Notification('Stock Analysis', opts);
+            });
+        } else {
+          new Notification('Stock Analysis', opts);
+        }
+      } catch {}
     },
 
     // ── Computed ─────────────────────────────────────────────────
@@ -3047,18 +3862,94 @@ function app() {
       }[r] || r;
     },
 
-    /** MUA/STRONG_BUY + giá gần entry gợi ý + trên hỗ trợ → hiện banner “vùng mua phù hợp”. */
+    /** Giá phiên (entry) = đóng cửa; “vùng mua” = không đuổi xa so với limit gợi ý + trên hỗ trợ. */
+    priceTargetPullbackDiffers(pt) {
+      if (!pt) return false;
+      const e = Number(pt.entryPrice);
+      const p = Number(pt.suggestedPullbackPrice);
+      if (!e || e <= 0 || p == null || Number.isNaN(p)) return false;
+      return Math.abs(e - p) / e > 0.005;
+    },
+
+    suggestedBuyCardLabel(mode) {
+      return (
+        {
+          support_base: 'Nền tham chiếu (mua lại)',
+          wait_base: 'Chờ về nền',
+          breakout_entry: 'Giá mua (theo break)',
+          dip_rally_ma20: 'Mua (MA20 + rút chân)',
+          dip_rally_retest: 'Mua (retest cản)',
+          wait_retest_break: 'Chờ retest sau break',
+          wait_dip_rally: 'Chờ pha hồi (EMA / retest)',
+          pullback: 'Mua limit gợi ý',
+        }[mode] || 'Mua limit gợi ý'
+      );
+    },
+
+    /** Tiêu đề ô giá mua — ưu tiên «vùng nền» khi giá đang quanh đáy 20p. */
+    suggestedBuyCardTitle(pt) {
+      if (!pt) return '';
+      if (pt.priceAtBase) return 'Vùng nền (giá mua)';
+      return this.suggestedBuyCardLabel(pt.suggestedPullbackMode);
+    },
+
+    /** Giá hiển thị chính: dải nền hoặc một mức gợi ý. */
+    suggestedBuyCardMainValue(pt) {
+      if (!pt) return '';
+      if (pt.priceAtBase && pt.baseZoneLow != null && pt.baseZoneHigh != null) {
+        return `${this.fmtK(pt.baseZoneLow)} – ${this.fmtK(pt.baseZoneHigh)} đ`;
+      }
+      return `${this.fmtK(pt.suggestedPullbackPrice ?? pt.entryPrice)} đ`;
+    },
+
+    suggestedBuyNoteTitle(mode) {
+      return (
+        {
+          support_base: 'Lý do mức «Nền tham chiếu»',
+          wait_base: 'Lý do mức «Chờ về nền»',
+          breakout_entry: 'Lý do mức «Giá mua theo break»',
+          dip_rally_ma20: 'Lý do mức «Mua sau pha MA20»',
+          dip_rally_retest: 'Lý do mức «Mua sau retest»',
+          wait_retest_break: 'Lý do mức «Chờ retest»',
+          wait_dip_rally: 'Lý do mức «Chờ pha hồi»',
+          pullback: 'Lý do mức «Mua limit gợi ý»',
+        }[mode] || 'Lý do mức «Mua limit gợi ý»'
+      );
+    },
+
+    suggestedBuyShortLabel(mode) {
+      return (
+        {
+          support_base: 'Nền tham chiếu',
+          wait_base: 'Chờ về nền',
+          breakout_entry: 'Giá mua (theo break)',
+          dip_rally_ma20: 'Mua sau pha MA20',
+          dip_rally_retest: 'Mua sau retest',
+          wait_retest_break: 'Chờ retest cản',
+          wait_dip_rally: 'Chờ pha hồi (EMA)',
+          pullback: 'Limit / chờ hồi gợi ý',
+        }[mode] || 'Giá mua gợi ý'
+      );
+    },
+
     inBuyZone(rec) {
       if (!rec?.priceTarget) return false;
       if (!['BUY', 'STRONG_BUY'].includes(rec.recommendation)) return false;
       const pt = rec.priceTarget;
       const cur = Number(pt.currentPrice);
-      const ent = Number(pt.entryPrice);
       const sup = Number(pt.support);
-      if (!ent || ent <= 0) return false;
-      if (Math.abs(cur - ent) / ent > 0.025) return false;
+      const pull = Number(pt.suggestedPullbackPrice ?? pt.entryPrice);
+      if (!cur || cur <= 0) return false;
       if (cur < sup * 0.985) return false;
-      return true;
+      if (!pull || pull <= 0) return false;
+      const m = pt.suggestedPullbackMode;
+      if (m === 'wait_base') {
+        return cur >= sup * 0.995 && cur <= sup * 1.03;
+      }
+      if (m === 'wait_retest_break' || m === 'wait_dip_rally') {
+        return cur >= pull * 0.985 && cur <= pull * 1.025;
+      }
+      return cur <= pull * 1.03;
     },
 
     confidenceClass(c) {
@@ -3079,6 +3970,9 @@ function app() {
 // Usage: x-data="tickerPicker('fieldName', callback)"
 // Reads watchlist from the parent app() via Alpine.$root context
 function tickerPicker(fieldName, onSelect) {
+  const MAX_EMPTY = 80;
+  const MAX_FILTER = 60;
+
   return {
     query: '',
     open: false,
@@ -3093,9 +3987,13 @@ function tickerPicker(fieldName, onSelect) {
     },
     // Reference to parent app state
     get _app() { return Alpine.store ? null : document.querySelector('[x-data="app()"]')?._x_dataStack?.[0]; },
-    get _watchlist() {
-      // Walk up the Alpine component tree to find watchlist
-      try { return window.__watchlist__ || []; } catch { return []; }
+    /** WATCHLIST file + toàn bộ DB; fallback active scanner nếu chưa tải xong. */
+    get _universe() {
+      try {
+        const u = window.__tickerPickerUniverse__;
+        if (Array.isArray(u) && u.length) return u;
+        return window.__watchlist__ || [];
+      } catch { return []; }
     },
     get _signalSummary() {
       try { return window.__signalSummary__ || {}; } catch { return {}; }
@@ -3106,16 +4004,23 @@ function tickerPicker(fieldName, onSelect) {
       this.open = true;
       this.highlighted = -1;
       const q = this.query.toUpperCase().trim();
-      const wl = this._watchlist;
+      const wl = this._universe;
+      const nameU = (s) => String(s.name || '').toUpperCase();
+      const secU = (s) => String(s.sector || '').toUpperCase();
       if (!q) {
-        // Show all with signals first, then rest (limit 30)
-        const withSig = wl.filter(s => this._signalSummary[s.ticker]);
-        const without = wl.filter(s => !this._signalSummary[s.ticker]);
-        this.suggestions = [...withSig, ...without].slice(0, 30);
+        const withSig = wl.filter((s) => this._signalSummary[s.ticker]);
+        const without = wl.filter((s) => !this._signalSummary[s.ticker]);
+        this.suggestions = [...withSig, ...without].slice(0, MAX_EMPTY);
       } else {
-        this.suggestions = wl.filter(s =>
-          s.ticker.startsWith(q) || s.name.toUpperCase().includes(q) || s.sector.toUpperCase().includes(q)
-        ).slice(0, 20);
+        this.suggestions = wl
+          .filter(
+            (s) =>
+              s.ticker.startsWith(q) ||
+              nameU(s).includes(q) ||
+              secU(s).includes(q) ||
+              s.ticker.includes(q),
+          )
+          .slice(0, MAX_FILTER);
       }
     },
     onBlur() { setTimeout(() => { this.open = false; }, 150); },
@@ -3140,22 +4045,25 @@ function tickerPicker(fieldName, onSelect) {
       } else if (this.suggestions.length === 1) {
         this.selectItem(this.suggestions[0]);
       } else {
-        // Free-type: try to match exactly
-        const match = this._watchlist.find(s => s.ticker === this.query.toUpperCase());
+        const q = this.query.toUpperCase().trim();
+        const match = this._universe.find((s) => s.ticker === q);
         if (match) this.selectItem(match);
+        else if (/^[A-Z][A-Z0-9]{1,14}$/.test(q)) this.applyRawTicker(q);
       }
     },
-    selectItem(stock) {
-      this.query = stock.ticker;
+    applyRawTicker(ticker) {
+      this.query = ticker;
       this.open = false;
       this.highlighted = -1;
-      // Write back to parent app field
       const appEl = this.$el.closest('[x-data]');
       if (appEl && appEl._x_dataStack) {
-        const parentData = appEl._x_dataStack.find(d => fieldName in d);
-        if (parentData) parentData[fieldName] = stock.ticker;
+        const parentData = appEl._x_dataStack.find((d) => fieldName in d);
+        if (parentData) parentData[fieldName] = ticker;
       }
       if (onSelect) onSelect();
+    },
+    selectItem(stock) {
+      this.applyRawTicker(stock.ticker);
     },
     clear() {
       this.query = '';

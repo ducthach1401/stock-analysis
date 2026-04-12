@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { OgmaInterceptor, OgmaModule } from '@ogma/nestjs-module';
+import { ExpressParser } from '@ogma/platform-express';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -20,6 +23,20 @@ import { AppService } from './app.service';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    OgmaModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const prod = config.get<string>('NODE_ENV') === 'production';
+        const json =
+          config.get<string>('LOG_JSON') === 'true' ||
+          (prod && config.get<string>('LOG_JSON') !== 'false');
+        return {
+          application: 'stock-analysis',
+          color: !json,
+          json,
+        };
+      },
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'public'),
@@ -57,6 +74,10 @@ import { AppService } from './app.service';
     QueueModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    ExpressParser,
+    { provide: APP_INTERCEPTOR, useClass: OgmaInterceptor },
+  ],
 })
 export class AppModule {}

@@ -12,7 +12,7 @@ export class SignalController {
     private readonly signalBacktestService: SignalBacktestService,
   ) {}
 
-  /** GET /signals/backtest/summary — xếp hạng compound % (run mới nhất / mã), dùng Dashboard */
+  /** GET /signals/backtest/summary — compound % 12 tháng gần nhất (ngày đóng lệnh); run full lịch sử. */
   @Get('backtest/summary')
   getBacktestSummary(@Query('limit') limit?: string) {
     const n = limit ? parseInt(limit, 10) : 10;
@@ -72,16 +72,11 @@ export class SignalController {
     return this.signalService.getSignalsForChart(ticker, from);
   }
 
-  /** POST .../backtest/run — vào STRONG_BUY + TB; thoát target / chặn lãi / cuối kỳ (không đảo chiều). */
+  /** POST .../backtest/run — trong service: sync giá tăng dần rồi giả lập full nến trong DB. */
   @UseGuards(JwtAuthGuard)
   @Post(':ticker/backtest/run')
-  runSignalBacktest(
-    @Param('ticker') ticker: string,
-    @Query('months') months?: string,
-  ) {
-    const m = months ? parseInt(months, 10) : 12;
-    const mb = Number.isFinite(m) && m > 0 && m <= 120 ? m : 12;
-    return this.signalBacktestService.runBacktest(ticker, mb);
+  runSignalBacktest(@Param('ticker') ticker: string) {
+    return this.signalBacktestService.runBacktest(ticker);
   }
 
   @Get(':ticker/backtest/runs')

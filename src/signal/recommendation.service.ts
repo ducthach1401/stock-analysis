@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ATR } from 'technicalindicators';
+import { ATR, EMA } from 'technicalindicators';
 import { Repository } from 'typeorm';
 import { StockPrice } from '../stock/entities/stock-price.entity';
 import { TelegramService } from '../telegram/telegram.service';
@@ -38,7 +38,7 @@ const SIGNAL_WEIGHTS: Record<SignalType, number> = {
   [SignalType.MACD_BULLISH_CROSS]: 2,
   [SignalType.MACD_BEARISH_CROSS]: 2,
 
-  // ── Bollinger Bands ───────────────────────────────────────────────
+  // ── Bollinger — khớp entity: DOWN = chạm lower (thường bull), UP = vượt upper (thường bear) ──
   [SignalType.BB_BREAKOUT_DOWN]: 1.5,
   [SignalType.BB_BREAKOUT_UP]: 1.5,
   [SignalType.BB_SQUEEZE]: 0, // trung tính, chỉ cảnh báo
@@ -57,10 +57,11 @@ const SIGNAL_WEIGHTS: Record<SignalType, number> = {
   [SignalType.FAILED_BREAKOUT]: 5, // bull trap = tín hiệu bán mạnh nhất
   [SignalType.VOLUME_CLIMAX_TOP]: 4, // xả hàng đỉnh điểm
   [SignalType.DISTRIBUTION_BAR]: 3.5, // nến phân phối Wyckoff
+  [SignalType.WASHOUT_BAR]: 3.5, // selling climax / đáy — hấp thụ
   [SignalType.RSI_BEARISH_DIVERGENCE]: 3, // phân kỳ RSI
   [SignalType.MACD_BEARISH_DIVERGENCE]: 3, // phân kỳ MACD
 
-  // ── Legacy ───────────────────────────────────────────────────────
+  // ── Legacy DB — detector mới dùng EMA_GOLDEN/DEATH_CROSS ───────────
   [SignalType.MA_GOLDEN_CROSS]: 2,
   [SignalType.MA_DEATH_CROSS]: 2,
 };
@@ -132,6 +133,7 @@ export class RecommendationService {
       priceTarget,
       patternSummary,
       patternLevels,
+      bars,
     );
   }
 
@@ -262,6 +264,12 @@ export class RecommendationService {
     priceTarget: PriceTarget | null,
     patternSummary: string | null,
     patternLevels: PatternLevel[] | null,
+    bars: {
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+    }[],
   ): RecommendationResult {
     const {
       normalizedScore,
@@ -279,7 +287,19 @@ export class RecommendationService {
       hasVolumeSurge,
       recommendation,
     );
-    const action = buildAction(recommendation, ticker, priceTarget);
+    const priceTargetAdjusted =
+      priceTarget == null
+        ? null
+        : enrichBaseZoneDisplay(
+            applyBullishBuyPriceStrategy(
+              applyPullbackByRecommendation(priceTarget, recommendation),
+              signals,
+              recommendation,
+              bars,
+            ),
+          );
+
+    const action = buildAction(recommendation, ticker, priceTargetAdjusted);
 
     this.logger.log(
       `${ticker} [${tradingDate}]: ${recommendation} (score=${normalizedScore.toFixed(2)})`,
@@ -291,7 +311,7 @@ export class RecommendationService {
       recommendation,
       score: Number(normalizedScore.toFixed(2)),
       confidence,
-      priceTarget,
+      priceTarget: priceTargetAdjusted,
       patternSummary,
       patternLevels,
       bullishSignals,
@@ -344,7 +364,13 @@ export class RecommendationService {
       msg +=
         `\n💰 <b>Giá tham khảo</b>\n` +
         `  • Giá hiện tại:  <b>${fmt(pt.currentPrice)}đ</b>\n` +
-        `  • 🟢 Giá mua vào: <b>${fmt(pt.entryPrice)}đ</b>` +
+        `  • 🟢 Giá phiên (mở lệnh): <b>${fmt(pt.entryPrice)}đ</b>` +
+        telegramPriceTargetExtraLine(pt) +
+        (pt.priceAtBase &&
+        pt.baseZoneLow != null &&
+        pt.baseZoneHigh != null
+          ? `  • 🏔️ Vùng nền (giá mua): <b>${fmt(pt.baseZoneLow)}đ – ${fmt(pt.baseZoneHigh)}đ</b>\n`
+          : '') +
         `  (+${pt.upside.toFixed(1)}% kỳ vọng)\n` +
         `  • 🎯 Chốt lời:    <b>${fmt(pt.targetPrice)}đ</b>\n` +
         `  • 📌 <i>Không đặt cắt lỗ tự động</i> — chiến lược ôm trung/dài hạn\n` +
@@ -470,24 +496,34 @@ export function calcPriceTarget(
   // Kháng cự dài hạn = highest high toàn bộ dữ liệu (tối đa 60 phiên)
   const resistance = Math.max(...bars.map((b) => b.high));
 
-  // Entry = giá hiện tại hoặc pullback nhẹ (~0.3 ATR) để không mua đuổi
-  const entryPrice = Math.max(support, currentPrice - atr * 0.3);
+  // Giá vào thống nhất với mở vị thế: đóng cửa phiên (không dùng vùng limit làm "entry").
+  const sessionEntry = currentPrice;
+  const pullbackFromAtr = currentPrice - atr * 0.3;
+  // Gợi ý chờ hồi / limit: max(đáy 20 phiên, đóng cửa − 0,3×ATR) — lấy mức cao hơn = không đặt limit quá thấp
+  const suggestedPullbackPrice = Math.max(support, pullbackFromAtr);
 
-  // Mục tiêu dài hạn: lấy lớn nhất trong 3 cách tính
-  // 1. Kháng cự toàn dữ liệu (60 phiên)
-  // 2. Entry + tối thiểu 12% (kỳ vọng dài hạn)
-  // 3. Entry + 5×ATR (tương ứng ~3–5 tháng nắm giữ)
+  const fmtK = (v: number) =>
+    new Intl.NumberFormat('vi-VN').format(Math.round(v));
+  const rs = Math.round(support);
+  const rp = Math.round(pullbackFromAtr);
+  const suggestedPullbackNote =
+    rs >= rp
+      ? `Limit gợi ý bám đáy thấp nhất 20 phiên (${fmtK(support)}đ), vì cao hơn hoặc bằng mức chờ hồi theo biến động (đóng cửa − 0,3×ATR ≈ ${fmtK(pullbackFromAtr)}đ) — tránh đặt dưới hỗ trợ gần nhất. ATR 14 ≈ ${fmtK(atr)}đ.`
+      : `Limit gợi ý theo chờ hồi nông (đóng cửa − 0,3×ATR ≈ ${fmtK(pullbackFromAtr)}đ), vì cao hơn đáy 20 phiên (${fmtK(support)}đ) — không cần khớp sâu tới hỗ trợ. ATR 14 ≈ ${fmtK(atr)}đ.`;
+  const suggestedPullbackMode = 'pullback' as const;
+
+  // Mục tiêu dài hạn: lấy lớn nhất trong 3 cách tính (cơ sở = giá phiên)
   const targetByResistance = resistance;
-  const targetByMinUpside = entryPrice * (1 + MIN_UPSIDE_PCT);
-  const targetByAtr = entryPrice + atr * 5;
+  const targetByMinUpside = sessionEntry * (1 + MIN_UPSIDE_PCT);
+  const targetByAtr = sessionEntry + atr * 5;
   const targetPrice = Math.max(
     targetByResistance,
     targetByMinUpside,
     targetByAtr,
   );
 
-  const profitPotential = targetPrice - entryPrice;
-  const syntheticRisk = entryPrice * 0.08;
+  const profitPotential = targetPrice - sessionEntry;
+  const syntheticRisk = sessionEntry * 0.08;
   const riskReward =
     syntheticRisk > 0
       ? Number((profitPotential / syntheticRisk).toFixed(2))
@@ -497,7 +533,10 @@ export function calcPriceTarget(
 
   return {
     currentPrice: Math.round(currentPrice),
-    entryPrice: Math.round(entryPrice),
+    entryPrice: Math.round(sessionEntry),
+    suggestedPullbackPrice: Math.round(suggestedPullbackPrice),
+    suggestedPullbackNote,
+    suggestedPullbackMode,
     targetPrice: Math.round(targetPrice),
     stopLoss: null,
     riskReward,
@@ -506,6 +545,186 @@ export function calcPriceTarget(
     atr: Math.round(atr),
     support: Math.round(support),
     resistance: Math.round(resistance),
+  };
+}
+
+type OhlcBar = { open: number; high: number; low: number; close: number };
+
+/** Kháng cự cũ (60 nến trước phiên hiện — cùng ý detector break). */
+function resistanceBeforeLastBar(bars: OhlcBar[]): number | null {
+  if (bars.length < 62) return null;
+  const prev = bars.slice(-61, -1);
+  return Math.max(...prev.map((b) => b.high));
+}
+
+function lastEma20(bars: OhlcBar[]): number | null {
+  if (bars.length < 20) return null;
+  const closes = bars.map((b) => b.close);
+  const ema = EMA.calculate({ period: 20, values: closes });
+  if (!ema.length) return null;
+  return ema[ema.length - 1];
+}
+
+/**
+ * Pha chạm MA20 + rút chân dưới rõ + đóng cửa trên MA (một nhịp giảm–tăng trong backtest).
+ */
+function detectMa20WickBounce(bars: OhlcBar[]): boolean {
+  const ema20 = lastEma20(bars);
+  if (ema20 == null) return false;
+  const last = bars[bars.length - 1];
+  const range = last.high - last.low;
+  if (range <= 0) return false;
+  const bodyTop = Math.max(last.open, last.close);
+  const lowerWick = bodyTop - last.low;
+  const wickRatio = lowerWick / range;
+  const touched =
+    (last.low <= ema20 * 1.004 && last.low >= ema20 * 0.988) ||
+    (last.low < ema20 && last.close > ema20);
+  const bullish = last.close > last.open;
+  const holdsAbove = last.close > ema20;
+  return touched && wickRatio >= 0.38 && bullish && holdsAbove;
+}
+
+/** Retest vùng cản đã break (R) rồi nến xác nhận bật lên. */
+function detectBreakoutRetestBounce(bars: OhlcBar[]): boolean {
+  const R = resistanceBeforeLastBar(bars);
+  if (R == null || R <= 0) return false;
+  const tail = bars.slice(-6);
+  const last = tail[tail.length - 1];
+  let priorPullback = false;
+  for (let i = 0; i < tail.length - 1; i++) {
+    const b = tail[i];
+    if (b.low <= R * 1.018 && b.low >= R * 0.975) priorPullback = true;
+  }
+  const lastTouches = last.low <= R * 1.012 && last.low >= R * 0.97;
+  const bounce = last.close > R && last.close >= last.open;
+  return (priorPullback || lastTouches) && bounce;
+}
+
+/**
+ * MUA/STRONG_BUY: không phải lúc nào cũng «chờ nền 20p» — ưu tiên **một pha** giảm rồi tăng
+ * (chạm MA20 rút chân, hoặc retest cản đã break). Đối chiếu backtest trên tab Tín hiệu.
+ */
+function applyBullishBuyPriceStrategy(
+  pt: PriceTarget,
+  signals: Signal[],
+  recommendation: Recommendation,
+  bars: OhlcBar[],
+): PriceTarget {
+  if (
+    recommendation !== Recommendation.BUY &&
+    recommendation !== Recommendation.STRONG_BUY
+  ) {
+    return pt;
+  }
+
+  const fmtK = (v: number) =>
+    new Intl.NumberFormat('vi-VN').format(Math.round(v));
+
+  const hasBreakResistance = signals.some(
+    (s) =>
+      s.type === SignalType.RESISTANCE_BREAKOUT &&
+      s.direction === SignalDirection.BULLISH,
+  );
+
+  const ema20 = bars.length >= 20 ? lastEma20(bars as OhlcBar[]) : null;
+  const breakLevel = bars.length >= 62 ? resistanceBeforeLastBar(bars as OhlcBar[]) : null;
+
+  const retestOk =
+    hasBreakResistance && detectBreakoutRetestBounce(bars as OhlcBar[]);
+  const ma20Ok = detectMa20WickBounce(bars as OhlcBar[]);
+
+  const entry = pt.entryPrice;
+
+  if (retestOk) {
+    return {
+      ...pt,
+      suggestedPullbackPrice: entry,
+      suggestedPullbackMode: 'dip_rally_retest',
+      suggestedPullbackNote:
+        `Đã thấy pha retest vùng cản đã break (~${fmtK(breakLevel ?? entry)}đ) rồi bật lên — giá mua gợi ý là đóng cửa phiên xác nhận (${fmtK(entry)}đ). Một nhịp giảm–tăng trong backtest (không phải lúc nào cũng chờ về đáy 20 phiên).`,
+    };
+  }
+
+  if (ma20Ok) {
+    return {
+      ...pt,
+      suggestedPullbackPrice: entry,
+      suggestedPullbackMode: 'dip_rally_ma20',
+      suggestedPullbackNote:
+        `Pha chạm EMA20 với rút chân dưới rồi đóng trên MA — mua theo xác nhận phiên (${fmtK(entry)}đ). Đối chiếu backtest: hồi về MA rồi tăng lại.`,
+    };
+  }
+
+  if (hasBreakResistance && breakLevel != null) {
+    return {
+      ...pt,
+      suggestedPullbackPrice: Math.round(breakLevel),
+      suggestedPullbackMode: 'wait_retest_break',
+      suggestedPullbackNote:
+        `Đã có tín hiệu break kháng cự nhưng phiên gần nhất chưa thấy rõ pha retest cản rồi bật — chờ một nhịp giảm về vùng quanh cản cũ (~${fmtK(breakLevel)}đ) rồi tăng lại (logic backtest: không ép mua đuổi ngay sau break).`,
+    };
+  }
+
+  const refEma = ema20 != null ? Math.round(ema20) : pt.support;
+  return {
+    ...pt,
+    suggestedPullbackPrice: refEma,
+    suggestedPullbackMode: 'wait_dip_rally',
+      suggestedPullbackNote:
+        `Có tín hiệu mua nhưng chưa có xác nhận pha giảm–tăng rõ (MA20 rút chân hoặc retest sau break). Tham chiếu vùng chờ EMA20 (~${fmtK(refEma)}đ), không cố định phải về đáy 20 phiên; đối chiếu backtest trên tab Tín hiệu để thấy từng nhịp hồi–tăng.`,
+  };
+}
+
+/**
+ * Giá đóng cửa đang quanh **nền** (đáy 20p) → gắn dải hiển thị vùng nền cho UI «giá mua».
+ */
+function enrichBaseZoneDisplay(pt: PriceTarget): PriceTarget {
+  const cur = pt.currentPrice;
+  const sup = pt.support;
+  if (sup <= 0 || cur <= 0) {
+    return { ...pt, priceAtBase: false };
+  }
+  const atBase = cur >= sup * 0.99 && cur <= sup * 1.042;
+  if (!atBase) {
+    return { ...pt, priceAtBase: false };
+  }
+  const halfBand = Math.max(
+    Math.round(sup * 0.004),
+    Math.round(pt.atr * 0.22),
+    1,
+  );
+  return {
+    ...pt,
+    priceAtBase: true,
+    baseZoneLow: Math.max(0, sup - halfBand),
+    baseZoneHigh: sup + halfBand,
+  };
+}
+
+/**
+ * Khi khuyến nghị bán: «mua limit» tham chiếu = đáy 20 phiên (không chờ hồi nông quanh đỉnh).
+ */
+function applyPullbackByRecommendation(
+  pt: PriceTarget,
+  recommendation: Recommendation,
+): PriceTarget {
+  const bearish =
+    recommendation === Recommendation.SELL ||
+    recommendation === Recommendation.STRONG_SELL;
+  if (!bearish) return pt;
+
+  const fmtK = (v: number) =>
+    new Intl.NumberFormat('vi-VN').format(Math.round(v));
+  const support = pt.support;
+  const shallow = Math.round(pt.entryPrice - pt.atr * 0.3);
+
+  return {
+    ...pt,
+    suggestedPullbackPrice: support,
+    suggestedPullbackMode: 'support_base',
+    suggestedPullbackNote:
+      `Khuyến nghị bán / giá đã kéo cao: tham chiếu «mua lại / gom tại nền» là đáy 20 phiên (${fmtK(support)}đ), không dùng chờ hồi nông quanh giá hiện tại (~${fmtK(shallow)}đ = đóng cửa − 0,3×ATR). ATR 14 ≈ ${fmtK(pt.atr)}đ.`,
   };
 }
 
@@ -659,6 +878,83 @@ function buildReasoningShort(
   return out;
 }
 
+/** Dòng phụ Telegram sau «Giá phiên» — gợi ý mua / chờ pha. */
+function telegramPriceTargetExtraLine(pt: PriceTarget): string {
+  const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN');
+  const diff =
+    Math.abs(pt.suggestedPullbackPrice - pt.entryPrice) /
+      Math.max(pt.entryPrice, 1) >
+    0.005;
+  if (!diff) {
+    if (
+      pt.suggestedPullbackMode === 'dip_rally_ma20' ||
+      pt.suggestedPullbackMode === 'dip_rally_retest'
+    ) {
+      return `  | Mua sau pha hồi (giá phiên): <b>${fmt(pt.entryPrice)}đ</b>\n`;
+    }
+    if (pt.suggestedPullbackMode === 'breakout_entry') {
+      return `  | Mua theo break: <b>${fmt(pt.entryPrice)}đ</b> (giá phiên)\n`;
+    }
+    return '\n';
+  }
+  switch (pt.suggestedPullbackMode) {
+    case 'support_base':
+      return `  | Nền tham chiếu (mua lại): <b>${fmt(pt.suggestedPullbackPrice)}đ</b>\n`;
+    case 'wait_base':
+      return `  | Chờ về nền: <b>${fmt(pt.suggestedPullbackPrice)}đ</b>\n`;
+    case 'breakout_entry':
+      return `  | Mua theo break (giá phiên): <b>${fmt(pt.suggestedPullbackPrice)}đ</b>\n`;
+    case 'dip_rally_ma20':
+      return `  | MA20 / rút chân → mua: <b>${fmt(pt.suggestedPullbackPrice)}đ</b>\n`;
+    case 'dip_rally_retest':
+      return `  | Retest cản → mua: <b>${fmt(pt.suggestedPullbackPrice)}đ</b>\n`;
+    case 'wait_retest_break':
+      return `  | Chờ retest cản ~<b>${fmt(pt.suggestedPullbackPrice)}đ</b>\n`;
+    case 'wait_dip_rally':
+      return `  | Tham chiếu pha hồi (EMA ~<b>${fmt(pt.suggestedPullbackPrice)}đ</b>)\n`;
+    default:
+      return `  | Limit gợi ý: <b>${fmt(pt.suggestedPullbackPrice)}đ</b>\n`;
+  }
+}
+
+function actionPriceExtra(pt: PriceTarget): string {
+  const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN');
+  const diff =
+    Math.abs(pt.suggestedPullbackPrice - pt.entryPrice) /
+      Math.max(pt.entryPrice, 1) >
+    0.005;
+  if (!diff) {
+    if (
+      pt.suggestedPullbackMode === 'dip_rally_ma20' ||
+      pt.suggestedPullbackMode === 'dip_rally_retest'
+    ) {
+      return `, mua sau pha hồi ~${fmt(pt.entryPrice)}đ`;
+    }
+    if (pt.suggestedPullbackMode === 'breakout_entry') {
+      return `, mua theo break ~${fmt(pt.entryPrice)}đ`;
+    }
+    return '';
+  }
+  switch (pt.suggestedPullbackMode) {
+    case 'support_base':
+      return `, nền tham chiếu (mua lại) ~${fmt(pt.suggestedPullbackPrice)}đ`;
+    case 'wait_base':
+      return `, chờ về nền ~${fmt(pt.suggestedPullbackPrice)}đ`;
+    case 'breakout_entry':
+      return `, mua theo break ~${fmt(pt.suggestedPullbackPrice)}đ`;
+    case 'dip_rally_ma20':
+      return `, MA20 rút chân → ~${fmt(pt.suggestedPullbackPrice)}đ`;
+    case 'dip_rally_retest':
+      return `, retest cản → ~${fmt(pt.suggestedPullbackPrice)}đ`;
+    case 'wait_retest_break':
+      return `, chờ retest ~${fmt(pt.suggestedPullbackPrice)}đ`;
+    case 'wait_dip_rally':
+      return `, chờ pha hồi (EMA ~${fmt(pt.suggestedPullbackPrice)}đ)`;
+    default:
+      return `, limit gợi ý ~${fmt(pt.suggestedPullbackPrice)}đ`;
+  }
+}
+
 function buildAction(
   rec: Recommendation,
   ticker: string,
@@ -666,7 +962,7 @@ function buildAction(
 ): string {
   const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN');
   const priceInfo = pt
-    ? ` Mua quanh ${fmt(pt.entryPrice)}đ, chốt lời ${fmt(pt.targetPrice)}đ (R:R tham chiếu 1:${pt.riskReward.toFixed(1)}, không đặt SL).`
+    ? ` Giá phiên ~${fmt(pt.entryPrice)}đ${actionPriceExtra(pt)}, chốt lời ${fmt(pt.targetPrice)}đ (R:R tham chiếu 1:${pt.riskReward.toFixed(1)}, không đặt SL).`
     : '';
 
   const verbs: Record<Recommendation, string> = {

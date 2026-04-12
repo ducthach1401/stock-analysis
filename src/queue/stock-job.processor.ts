@@ -1,12 +1,20 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
+import { mapPool } from '../common/map-pool';
+import { shouldRunAnalyzeAllHistoryAfterSync } from '../common/sync-analyze-policy';
 import { SignalService } from '../signal/signal.service';
 import { StockService } from '../stock/stock.service';
 import { WatchlistService } from '../watchlist/watchlist.service';
 import { JobName, JobProgress, STOCK_QUEUE } from './queue.constants';
 
-@Processor(STOCK_QUEUE, { concurrency: 1 })
+const queueWorkerConcurrency = (() => {
+  const n = parseInt(process.env.STOCK_QUEUE_CONCURRENCY ?? '2', 10);
+  return Number.isFinite(n) && n >= 1 && n <= 16 ? n : 2;
+})();
+
+@Processor(STOCK_QUEUE, { concurrency: queueWorkerConcurrency })
 export class StockJobProcessor extends WorkerHost {
   private readonly logger = new Logger(StockJobProcessor.name);
 
@@ -14,6 +22,7 @@ export class StockJobProcessor extends WorkerHost {
     private readonly stockService: StockService,
     private readonly signalService: SignalService,
     private readonly watchlistService: WatchlistService,
+    private readonly config: ConfigService,
   ) {
     super();
   }
@@ -48,52 +57,105 @@ export class StockJobProcessor extends WorkerHost {
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
+  private syncPoolSize(): number {
+    const n = parseInt(
+      this.config.get<string>('SYNC_TICKERS_CONCURRENCY', '4') ?? '4',
+      10,
+    );
+    return Number.isFinite(n) && n >= 1 && n <= 32 ? n : 4;
+  }
+
   private async handleSyncAll(
     job: Job<{ from?: string; full?: boolean }>,
   ): Promise<{ synced: number; errors: number }> {
     const { from, full } = job.data;
     const tickers = await this.watchlistService.getActiveTickers();
+    const pool = this.syncPoolSize();
     let synced = 0;
     let errors = 0;
 
-    for (let i = 0; i < tickers.length; i++) {
-      const ticker = tickers[i];
+    await mapPool(tickers, pool, async (ticker, i) => {
       try {
-        if (full) await this.stockService.syncHistoryFull(ticker);
-        else await this.stockService.syncHistory(ticker, from);
-        await this.runSignalsAfterSync(ticker, from);
+        if (full) {
+          const saved = await this.stockService.syncHistoryFull(ticker);
+          await this.runSignalsAfterSync(ticker, from, {
+            isFullPriceSync: true,
+            savedBarCount: saved,
+          });
+        } else {
+          const r = await this.stockService.syncHistorySmart(ticker, from);
+          await this.runSignalsAfterSync(ticker, from, {
+            isFullPriceSync: false,
+            smartMode: r.mode,
+            savedBarCount: r.saved,
+          });
+        }
         synced++;
       } catch (e) {
         this.logger.error(`Sync lỗi ${ticker}: ${(e as Error).message}`);
         errors++;
       }
       await this.updateProgress(job, i + 1, tickers.length, ticker);
-    }
+    });
+
     this.logger.log(`✅ Sync xong: ${synced} ok, ${errors} lỗi`);
     return { synced, errors };
   }
 
   private async handleSyncTicker(
     job: Job<{ ticker: string; from?: string; full?: boolean }>,
-  ): Promise<{ saved: number }> {
+  ): Promise<{ saved: number; mode?: string }> {
     const { ticker, from, full } = job.data;
-    const saved = full
-      ? await this.stockService.syncHistoryFull(ticker)
-      : await this.stockService.syncHistory(ticker, from);
-    await this.runSignalsAfterSync(ticker, from);
+    let saved: number;
+    let mode: string | undefined;
+    if (full) {
+      saved = await this.stockService.syncHistoryFull(ticker);
+      mode = 'full';
+      await this.runSignalsAfterSync(ticker, from, {
+        isFullPriceSync: true,
+        savedBarCount: saved,
+      });
+    } else {
+      const r = await this.stockService.syncHistorySmart(ticker, from);
+      saved = r.saved;
+      mode = r.mode;
+      await this.runSignalsAfterSync(ticker, from, {
+        isFullPriceSync: false,
+        smartMode: r.mode,
+        savedBarCount: r.saved,
+      });
+    }
     await this.updateProgress(job, 1, 1, ticker);
-    return { saved };
+    return { saved, mode };
   }
 
-  /** Sau khi có giá mới: tín hiệu phiên hiện tại + backfill lịch sử (INSERT IGNORE). */
+  /** Sau sync: `analyze` luôn; `analyzeAllHistory` chỉ khi full hoặc có nến mới / không phải incremental “khô”. */
   private async runSignalsAfterSync(
     ticker: string,
     from?: string,
+    sync?: {
+      isFullPriceSync: boolean;
+      smartMode?: string;
+      savedBarCount: number;
+    },
   ): Promise<void> {
     try {
       await this.signalService.analyze(ticker);
     } catch (e) {
       this.logger.warn(`analyze ${ticker} sau sync: ${(e as Error).message}`);
+    }
+    const runFull =
+      sync == null ||
+      shouldRunAnalyzeAllHistoryAfterSync({
+        isFullPriceSync: sync.isFullPriceSync,
+        smartMode: sync.smartMode,
+        savedBarCount: sync.savedBarCount,
+      });
+    if (!runFull) {
+      this.logger.debug(
+        `${ticker}: bỏ qua analyzeAllHistory (incremental, 0 nến mới)`,
+      );
+      return;
     }
     try {
       await this.signalService.analyzeAllHistory(ticker, from);
@@ -108,11 +170,11 @@ export class StockJobProcessor extends WorkerHost {
     job: Job,
   ): Promise<{ scanned: number; errors: number }> {
     const tickers = await this.watchlistService.getActiveTickers();
+    const pool = this.syncPoolSize();
     let scanned = 0;
     let errors = 0;
 
-    for (let i = 0; i < tickers.length; i++) {
-      const ticker = tickers[i];
+    await mapPool(tickers, pool, async (ticker, i) => {
       try {
         await this.signalService.analyze(ticker);
         scanned++;
@@ -121,7 +183,8 @@ export class StockJobProcessor extends WorkerHost {
         errors++;
       }
       await this.updateProgress(job, i + 1, tickers.length, ticker);
-    }
+    });
+
     this.logger.log(`✅ Scan xong: ${scanned} ok, ${errors} lỗi`);
     return { scanned, errors };
   }
@@ -131,11 +194,11 @@ export class StockJobProcessor extends WorkerHost {
   ): Promise<{ totalSaved: number; totalDays: number }> {
     const { from } = job.data;
     const tickers = await this.watchlistService.getActiveTickers();
+    const pool = this.syncPoolSize();
     let totalSaved = 0;
     let totalDays = 0;
 
-    for (let i = 0; i < tickers.length; i++) {
-      const ticker = tickers[i];
+    await mapPool(tickers, pool, async (ticker, i) => {
       try {
         const r = await this.signalService.analyzeAllHistory(ticker, from);
         totalSaved += r.saved;
@@ -146,7 +209,8 @@ export class StockJobProcessor extends WorkerHost {
         );
       }
       await this.updateProgress(job, i + 1, tickers.length, ticker);
-    }
+    });
+
     this.logger.log(
       `✅ analyzeHistory xong: ${totalDays} ngày-mã, ${totalSaved} tín hiệu mới`,
     );

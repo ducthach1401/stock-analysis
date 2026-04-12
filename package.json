@@ -22,10 +22,13 @@
     "lint:check": "eslint \"{src,apps,libs}/**/*.ts\"",
     "prepush": "yarn format:check && yarn lint:check",
     "test": "jest",
+    "test:ci": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "db:reset-market": "bash scripts/reset-market-data.sh",
+    "db:reset-market-all": "bash scripts/reset-market-data.sh --positions",
     "prepare": "husky"
   },
   "dependencies": {
@@ -39,6 +42,8 @@
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/serve-static": "^5.0.5",
     "@nestjs/typeorm": "^11.0.1",
+    "@ogma/nestjs-module": "^5.5.2",
+    "@ogma/platform-express": "^5.1.0",
     "axios": "^1.15.0",
     "bullmq": "^5.73.4",
     "mysql2": "^3.22.0",

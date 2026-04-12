@@ -4,6 +4,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { BollingerBands, EMA, MACD, RSI } from 'technicalindicators';
 import { LessThan, Repository } from 'typeorm';
 import { TelegramService } from '../telegram/telegram.service';
+import { TICKERS } from '../scanner/watchlist';
+import { toChartTradingDateString } from '../common/chart-trading-date';
 import { StockPrice } from '../stock/entities/stock-price.entity';
 import { FormingSetupHint, TickerFormingSetups } from './dto/forming-setup.dto';
 import { Signal, SignalDirection, SignalType } from './entities/signal.entity';
@@ -17,6 +19,7 @@ const SUMMARY_WEIGHTS: Partial<Record<SignalType, number>> = {
   [SignalType.EMA_GOLDEN_CROSS]: 3.5,
   [SignalType.EMA_DEATH_CROSS]: 3.5,
   [SignalType.DISTRIBUTION_BAR]: 3.5,
+  [SignalType.WASHOUT_BAR]: 3.5,
   [SignalType.RSI_BEARISH_DIVERGENCE]: 3,
   [SignalType.MACD_BEARISH_DIVERGENCE]: 3,
   [SignalType.EMA_BOUNCE]: 3,
@@ -58,6 +61,12 @@ interface OhlcvBar {
   tradingDate: string;
 }
 
+/** Đồng bộ với checkLiquidity — dùng cho query gộp / API gợi ý mã. */
+export const LIQUIDITY_WINDOW_DAYS = 30;
+export const LIQUIDITY_MIN_BARS = 10;
+export const LIQUIDITY_MIN_AVG_VOLUME = 100_000;
+export const LIQUIDITY_MIN_TRADING_DAYS = 18;
+
 @Injectable()
 export class SignalService {
   private readonly logger = new Logger(SignalService.name);
@@ -79,18 +88,15 @@ export class SignalService {
     tradingDays: number;
     reason?: string;
   }> {
-    const MIN_AVG_VOLUME = 100_000;
-    const MIN_TRADING_DAYS = 18;
-
     const rows = await this.stockPriceRepo
       .createQueryBuilder('sp')
       .select(['sp.volume', 'sp.tradingDate'])
       .where('sp.ticker = :ticker', { ticker: ticker.toUpperCase() })
       .orderBy('sp.tradingDate', 'DESC')
-      .limit(30)
+      .limit(LIQUIDITY_WINDOW_DAYS)
       .getMany();
 
-    if (rows.length < 10) {
+    if (rows.length < LIQUIDITY_MIN_BARS) {
       return {
         pass: false,
         avgVolume: 0,
@@ -103,23 +109,95 @@ export class SignalService {
     const avgVolume =
       rows.reduce((s, r) => s + Number(r.volume), 0) / rows.length;
 
-    if (avgVolume < MIN_AVG_VOLUME) {
+    if (avgVolume < LIQUIDITY_MIN_AVG_VOLUME) {
       return {
         pass: false,
         avgVolume,
         tradingDays,
-        reason: `Avg vol ${Math.round(avgVolume / 1000)}k < ${MIN_AVG_VOLUME / 1000}k`,
+        reason: `Avg vol ${Math.round(avgVolume / 1000)}k < ${LIQUIDITY_MIN_AVG_VOLUME / 1000}k`,
       };
     }
-    if (tradingDays < MIN_TRADING_DAYS) {
+    if (tradingDays < LIQUIDITY_MIN_TRADING_DAYS) {
       return {
         pass: false,
         avgVolume,
         tradingDays,
-        reason: `Giao dịch thưa: ${tradingDays}/30 ngày`,
+        reason: `Giao dịch thưa: ${tradingDays}/${LIQUIDITY_WINDOW_DAYS} ngày`,
       };
     }
     return { pass: true, avgVolume, tradingDays };
+  }
+
+  /**
+   * Mã có trong `stock_prices`, đạt đúng ngưỡng `checkLiquidity`,
+   * không thuộc `TICKERS` (danh sách chuẩn) và tùy chọn thêm `extraExcludeTickers`.
+   */
+  async findLiquidityOkOutsideCanonicalWatchlist(options?: {
+    extraExcludeTickers?: string[];
+  }): Promise<
+    Array<{
+      ticker: string;
+      avgVolume: number;
+      tradingDays: number;
+      barsInWindow: number;
+    }>
+  > {
+    const exclude = new Set(TICKERS.map((t) => t.toUpperCase()));
+    for (const t of options?.extraExcludeTickers ?? []) {
+      exclude.add(String(t).toUpperCase());
+    }
+
+    const rows: Array<{
+      ticker: string;
+      avgVolume: string | number;
+      tradingDays: string | number;
+      barsInWindow: string | number;
+    }> = await this.stockPriceRepo.query(
+      `
+      WITH ranked AS (
+        SELECT ticker, volume AS vol,
+          ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY tradingDate DESC) AS rn
+        FROM stock_prices
+      ),
+      w AS (
+        SELECT ticker, vol FROM ranked WHERE rn <= ?
+      )
+      SELECT ticker,
+        AVG(vol) AS avgVolume,
+        SUM(CASE WHEN vol > 0 THEN 1 ELSE 0 END) AS tradingDays,
+        COUNT(*) AS barsInWindow
+      FROM w
+      GROUP BY ticker
+      HAVING COUNT(*) >= ?
+        AND AVG(vol) >= ?
+        AND SUM(CASE WHEN vol > 0 THEN 1 ELSE 0 END) >= ?
+      ORDER BY AVG(vol) DESC
+      `,
+      [
+        LIQUIDITY_WINDOW_DAYS,
+        LIQUIDITY_MIN_BARS,
+        LIQUIDITY_MIN_AVG_VOLUME,
+        LIQUIDITY_MIN_TRADING_DAYS,
+      ],
+    );
+
+    const out: Array<{
+      ticker: string;
+      avgVolume: number;
+      tradingDays: number;
+      barsInWindow: number;
+    }> = [];
+    for (const r of rows) {
+      const t = String(r.ticker).toUpperCase();
+      if (exclude.has(t)) continue;
+      out.push({
+        ticker: t,
+        avgVolume: Math.round(Number(r.avgVolume)),
+        tradingDays: Number(r.tradingDays),
+        barsInWindow: Number(r.barsInWindow),
+      });
+    }
+    return out;
   }
 
   // ─── Phân tích và lưu tín hiệu cho một mã ───────────────────────────────
@@ -156,6 +234,7 @@ export class SignalService {
       ...this.detectMacdBearishDivergence(bars),
       ...this.detectVolumeClimaxTop(bars),
       ...this.detectDistributionBar(bars),
+      ...this.detectWashoutBar(bars),
       ...this.detectFailedBreakout(bars),
       // ────────────────────────────────────────────────────────────
       ...this.detectCandlestickPatterns(bars),
@@ -211,7 +290,6 @@ export class SignalService {
     from?: string,
   ): Promise<{ analyzed: number; saved: number }> {
     const MIN_BARS = 130;
-    const startDate = from ?? '2025-01-01';
 
     // Load tất cả bars một lần duy nhất (ASC)
     const allBars = await this.loadAllBars(ticker);
@@ -221,6 +299,9 @@ export class SignalService {
       );
       return { analyzed: 0, saved: 0 };
     }
+
+    /** Mặc định: phân tích mọi phiên từ ngày đầu tiên đủ cửa sổ 130 nến → nay. */
+    const startDate = from ?? allBars[MIN_BARS - 1].tradingDate;
 
     let analyzed = 0;
     let saved = 0;
@@ -245,6 +326,7 @@ export class SignalService {
         ...this.detectMacdBearishDivergence(slice),
         ...this.detectVolumeClimaxTop(slice),
         ...this.detectDistributionBar(slice),
+        ...this.detectWashoutBar(slice),
         ...this.detectFailedBreakout(slice),
         ...this.detectCandlestickPatterns(slice),
         ...this.detectVolumeSurge(slice),
@@ -290,7 +372,7 @@ export class SignalService {
       const backtest = this.moduleRef.get(SignalBacktestService, {
         strict: false,
       });
-      const run = await backtest.runBacktest(ticker.toUpperCase(), 12);
+      const run = await backtest.runBacktest(ticker.toUpperCase());
       this.logger.log(
         `${ticker}: backtest đã lưu — run #${run.id}, ${run.tradeCount} lệnh, compound=${Number(run.compoundPnlPercent).toFixed(2)}%`,
       );
@@ -321,7 +403,15 @@ export class SignalService {
       .where('s.ticker = :ticker', { ticker: ticker.toUpperCase() });
     if (from) qb.andWhere('s.tradingDate >= :from', { from });
     qb.orderBy('s.tradingDate', 'ASC');
-    return qb.getMany();
+    const rows = await qb.getMany();
+    return rows
+      .map((r) => ({
+        tradingDate: toChartTradingDateString(r.tradingDate),
+        direction: r.direction,
+        type: r.type,
+        description: r.description,
+      }))
+      .filter((r) => r.tradingDate !== '');
   }
 
   // Phân tích và gửi Telegram ngay — chỉ phiên mới nhất (cây nến ngày đó), tránh spam cũ
@@ -479,6 +569,7 @@ export class SignalService {
         SignalType.FAILED_BREAKOUT,
         SignalType.VOLUME_CLIMAX_TOP,
         SignalType.DISTRIBUTION_BAR,
+        SignalType.WASHOUT_BAR,
         SignalType.EMA_GOLDEN_CROSS,
         SignalType.EMA_DEATH_CROSS,
         SignalType.BASE_FORMING,
@@ -922,7 +1013,7 @@ export class SignalService {
         type: SignalType.BB_BREAKOUT_DOWN,
         direction: SignalDirection.BULLISH,
         value: close,
-        description: `Giá chạm BB Lower(${(bb.lower / 1000).toFixed(1)}k) → oversold, khả năng bật`,
+        description: `Chạm dải dưới BB (Lower ${(bb.lower / 1000).toFixed(1)}k) — oversold, tín hiệu tăng (enum BB_BREAKOUT_DOWN = giá so với dải dưới)`,
       });
     }
 
@@ -946,7 +1037,7 @@ export class SignalService {
           type: SignalType.BB_BREAKOUT_UP,
           direction: SignalDirection.BEARISH,
           value: close,
-          description: `Giá vượt BB Upper(${(bb.upper / 1000).toFixed(1)}k) không có lực → overbought ngắn hạn`,
+          description: `Vượt dải trên BB (Upper ${(bb.upper / 1000).toFixed(1)}k) nhưng không breakout mạnh — overbought ngắn hạn, tín hiệu giảm (enum BB_BREAKOUT_UP = giá so với dải trên)`,
         });
       }
       // Nếu là breakout mạnh: bỏ qua (không phạt, RESISTANCE_BREAKOUT sẽ xử lý)
@@ -1221,12 +1312,13 @@ export class SignalService {
    * Kiểm tra cổ phiếu đã tăng đủ mạnh từ nền trước khi có thể "phân phối đỉnh"
    * Điều kiện:
    *  1. Giá đã tăng ≥ minRise (15%) từ đáy của lookback phiên gần nhất
-   *  2. Giá hiện tại ở upper 40% của range → đang thực sự ở vùng đỉnh
+   *  2. Đóng cửa ở vùng cao của range (mặc định upper 40%, có thể siết hơn cho từng detector)
    */
   private hasUptrendToDistribute(
     bars: OhlcvBar[],
     lookback = 60,
     minRise = 0.15,
+    minPricePosition = 0.6,
   ): boolean {
     if (bars.length < lookback) return false;
 
@@ -1239,9 +1331,8 @@ export class SignalService {
     const riseFromLow = (currClose - low) / low;
     if (riseFromLow < minRise) return false;
 
-    // Giá hiện tại phải ở upper 40% của range → đang ở vùng đỉnh thực sự
     const pricePosition = high > low ? (currClose - low) / (high - low) : 0;
-    return pricePosition >= 0.6;
+    return pricePosition >= minPricePosition;
   }
 
   /**
@@ -1460,14 +1551,13 @@ export class SignalService {
   }
 
   /**
-   * Distribution Bar (Wyckoff): nến biên độ rộng ở đỉnh,
-   * close gần low, volume cao → phiên phân phối điển hình
-   * Điều kiện BẮT BUỘC: phải có uptrend thực sự trước đó
+   * **Wyckoff — nến phân phối (distribution bar):** sau giai đoạn markup / uptrend,
+   * nến có spread rộng, khối lượng lớn, đóng gần đáy (áp lực bán đẩy giá xuống sau khi đẩy lên).
+   * Cùng ngữ cảnh uptrend với climax / divergence đỉnh (`hasUptrendToDistribute` 60 phiên).
    */
   private detectDistributionBar(bars: OhlcvBar[]): DetectedSignal[] {
     if (bars.length < 21) return [];
 
-    // Điều kiện tiên quyết: phải có uptrend mạnh từ nền
     if (!this.hasUptrendToDistribute(bars, 60, 0.15)) return [];
 
     const curr = bars[bars.length - 1];
@@ -1484,8 +1574,7 @@ export class SignalService {
     const closePosition = range > 0 ? (curr.close - curr.low) / range : 0.5;
     const upperShadow = curr.high - Math.max(curr.open, curr.close);
 
-    // Distribution bar: biên độ rộng (>1.5x avg), volume cao (>1.5x),
-    // đóng cửa gần đáy (<35%), bóng trên dài (>25% range)
+    // Wyckoff: wide spread + high volume + close in lower third + notable upper shadow (effort vs result)
     if (
       range > avgRange * 1.5 &&
       curr.volume > avgVol * 1.5 &&
@@ -1497,11 +1586,76 @@ export class SignalService {
           type: SignalType.DISTRIBUTION_BAR,
           direction: SignalDirection.BEARISH,
           value: closePosition,
-          description: `Nến phân phối Wyckoff tại đỉnh: biên độ ${(range / avgRange).toFixed(1)}x, đóng gần đáy (${(closePosition * 100).toFixed(0)}%), KL=${(curr.volume / avgVol).toFixed(1)}x → xả hàng`,
+          description: `Wyckoff — nến phân phối: spread ${(range / avgRange).toFixed(1)}× TB, đóng dưới ~35% thân, KL ${(curr.volume / avgVol).toFixed(1)}×, bóng trên — áp lực cung sau markup`,
         },
       ];
     }
     return [];
+  }
+
+  /**
+   * **Washout (selling climax / đáy):** sau giai đoạn giảm hoặc ở vùng thấp range,
+   * nến có KL đột biến, spread rộng, đóng lệch khỏi đáy nến (hấp thụ / lực mua gom) —
+   * đối lập tinh thần với climax ở đỉnh (`detectVolumeClimaxTop`).
+   */
+  private hasWashoutContext(bars: OhlcvBar[], lookback = 60): boolean {
+    if (bars.length < lookback) return false;
+
+    const recentBars = bars.slice(-lookback);
+    const curr = bars[bars.length - 1];
+    const high = Math.max(...recentBars.map((b) => b.high));
+    const low = Math.min(...recentBars.map((b) => b.low));
+    if (high <= low) return false;
+
+    const pricePosition = (curr.close - low) / (high - low);
+    // Giá đang ở vùng thấp của range 60 phiên (không phải đỉnh)
+    if (pricePosition > 0.42) return false;
+
+    const fallFromHigh = (high - curr.close) / high;
+    // Đã tụt đủ xa so với đỉnh lookback — không washout khi sát đỉnh
+    if (fallFromHigh < 0.06) return false;
+
+    return true;
+  }
+
+  private detectWashoutBar(bars: OhlcvBar[]): DetectedSignal[] {
+    if (bars.length < 21) return [];
+
+    if (!this.hasWashoutContext(bars, 60)) return [];
+
+    const curr = bars[bars.length - 1];
+    const prevBars = bars.slice(-21, -1);
+    const avgVol =
+      prevBars.map((b) => b.volume).reduce((s, v) => s + v, 0) /
+      prevBars.length;
+    const avgRange =
+      prevBars.map((b) => b.high - b.low).reduce((s, v) => s + v, 0) /
+      prevBars.length;
+
+    const range = curr.high - curr.low;
+    if (range <= 0 || avgRange <= 0) return [];
+
+    if (curr.volume < avgVol * 2.2) return [];
+    if (range < avgRange * 1.35) return [];
+
+    const closePos = (curr.close - curr.low) / range;
+    // Đóng không sát đáy nến — lực mua / hấp thụ sau khi quét đáy
+    if (closePos < 0.48) return [];
+
+    const lowerShadow = Math.min(curr.open, curr.close) - curr.low;
+    const strongRejection = closePos >= 0.55;
+    const hammerWashout = lowerShadow >= range * 0.33 && closePos >= 0.45;
+
+    if (!strongRejection && !hammerWashout) return [];
+
+    return [
+      {
+        type: SignalType.WASHOUT_BAR,
+        direction: SignalDirection.BULLISH,
+        value: curr.volume / avgVol,
+        description: `Washout (selling climax): KL ${(curr.volume / avgVol).toFixed(1)}× TB, spread ${(range / avgRange).toFixed(1)}× TB, đóng ~${(closePos * 100).toFixed(0)}% range → hấp thụ ở vùng đáy`,
+      },
+    ];
   }
 
   /**
