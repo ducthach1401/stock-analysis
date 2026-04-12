@@ -212,7 +212,9 @@ export class SignalBacktestService {
    * Giả lập trên **toàn bộ nến giá** đã lưu (IPO → phiên mới nhất). Tín hiệu cùng kỳ.
    * Xếp hạng trang chủ dùng thêm cửa sổ **12 tháng** (theo ngày đóng lệnh) — xem `getBacktestGoodBad`.
    */
-  async runBacktest(ticker: string): Promise<BacktestRun & { trades: SimulatedTrade[] }> {
+  async runBacktest(
+    ticker: string,
+  ): Promise<BacktestRun & { trades: SimulatedTrade[] }> {
     const t = ticker.toUpperCase();
     const reentryCooldownDays = backtestReentryCooldownDaysFromEnv();
     if (reentryCooldownDays > 0) {

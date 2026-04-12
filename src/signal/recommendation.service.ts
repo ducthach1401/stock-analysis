@@ -366,9 +366,7 @@ export class RecommendationService {
         `  • Giá hiện tại:  <b>${fmt(pt.currentPrice)}đ</b>\n` +
         `  • 🟢 Giá phiên (mở lệnh): <b>${fmt(pt.entryPrice)}đ</b>` +
         telegramPriceTargetExtraLine(pt) +
-        (pt.priceAtBase &&
-        pt.baseZoneLow != null &&
-        pt.baseZoneHigh != null
+        (pt.priceAtBase && pt.baseZoneLow != null && pt.baseZoneHigh != null
           ? `  • 🏔️ Vùng nền (giá mua): <b>${fmt(pt.baseZoneLow)}đ – ${fmt(pt.baseZoneHigh)}đ</b>\n`
           : '') +
         `  (+${pt.upside.toFixed(1)}% kỳ vọng)\n` +
@@ -628,7 +626,8 @@ function applyBullishBuyPriceStrategy(
   );
 
   const ema20 = bars.length >= 20 ? lastEma20(bars as OhlcBar[]) : null;
-  const breakLevel = bars.length >= 62 ? resistanceBeforeLastBar(bars as OhlcBar[]) : null;
+  const breakLevel =
+    bars.length >= 62 ? resistanceBeforeLastBar(bars as OhlcBar[]) : null;
 
   const retestOk =
     hasBreakResistance && detectBreakoutRetestBounce(bars as OhlcBar[]);
@@ -641,8 +640,7 @@ function applyBullishBuyPriceStrategy(
       ...pt,
       suggestedPullbackPrice: entry,
       suggestedPullbackMode: 'dip_rally_retest',
-      suggestedPullbackNote:
-        `Đã thấy pha retest vùng cản đã break (~${fmtK(breakLevel ?? entry)}đ) rồi bật lên — giá mua gợi ý là đóng cửa phiên xác nhận (${fmtK(entry)}đ). Một nhịp giảm–tăng trong backtest (không phải lúc nào cũng chờ về đáy 20 phiên).`,
+      suggestedPullbackNote: `Đã thấy pha retest vùng cản đã break (~${fmtK(breakLevel ?? entry)}đ) rồi bật lên — giá mua gợi ý là đóng cửa phiên xác nhận (${fmtK(entry)}đ). Một nhịp giảm–tăng trong backtest (không phải lúc nào cũng chờ về đáy 20 phiên).`,
     };
   }
 
@@ -651,8 +649,7 @@ function applyBullishBuyPriceStrategy(
       ...pt,
       suggestedPullbackPrice: entry,
       suggestedPullbackMode: 'dip_rally_ma20',
-      suggestedPullbackNote:
-        `Pha chạm EMA20 với rút chân dưới rồi đóng trên MA — mua theo xác nhận phiên (${fmtK(entry)}đ). Đối chiếu backtest: hồi về MA rồi tăng lại.`,
+      suggestedPullbackNote: `Pha chạm EMA20 với rút chân dưới rồi đóng trên MA — mua theo xác nhận phiên (${fmtK(entry)}đ). Đối chiếu backtest: hồi về MA rồi tăng lại.`,
     };
   }
 
@@ -661,8 +658,7 @@ function applyBullishBuyPriceStrategy(
       ...pt,
       suggestedPullbackPrice: Math.round(breakLevel),
       suggestedPullbackMode: 'wait_retest_break',
-      suggestedPullbackNote:
-        `Đã có tín hiệu break kháng cự nhưng phiên gần nhất chưa thấy rõ pha retest cản rồi bật — chờ một nhịp giảm về vùng quanh cản cũ (~${fmtK(breakLevel)}đ) rồi tăng lại (logic backtest: không ép mua đuổi ngay sau break).`,
+      suggestedPullbackNote: `Đã có tín hiệu break kháng cự nhưng phiên gần nhất chưa thấy rõ pha retest cản rồi bật — chờ một nhịp giảm về vùng quanh cản cũ (~${fmtK(breakLevel)}đ) rồi tăng lại (logic backtest: không ép mua đuổi ngay sau break).`,
     };
   }
 
@@ -671,8 +667,7 @@ function applyBullishBuyPriceStrategy(
     ...pt,
     suggestedPullbackPrice: refEma,
     suggestedPullbackMode: 'wait_dip_rally',
-      suggestedPullbackNote:
-        `Có tín hiệu mua nhưng chưa có xác nhận pha giảm–tăng rõ (MA20 rút chân hoặc retest sau break). Tham chiếu vùng chờ EMA20 (~${fmtK(refEma)}đ), không cố định phải về đáy 20 phiên; đối chiếu backtest trên tab Tín hiệu để thấy từng nhịp hồi–tăng.`,
+    suggestedPullbackNote: `Có tín hiệu mua nhưng chưa có xác nhận pha giảm–tăng rõ (MA20 rút chân hoặc retest sau break). Tham chiếu vùng chờ EMA20 (~${fmtK(refEma)}đ), không cố định phải về đáy 20 phiên; đối chiếu backtest trên tab Tín hiệu để thấy từng nhịp hồi–tăng.`,
   };
 }
 
@@ -723,8 +718,7 @@ function applyPullbackByRecommendation(
     ...pt,
     suggestedPullbackPrice: support,
     suggestedPullbackMode: 'support_base',
-    suggestedPullbackNote:
-      `Khuyến nghị bán / giá đã kéo cao: tham chiếu «mua lại / gom tại nền» là đáy 20 phiên (${fmtK(support)}đ), không dùng chờ hồi nông quanh giá hiện tại (~${fmtK(shallow)}đ = đóng cửa − 0,3×ATR). ATR 14 ≈ ${fmtK(pt.atr)}đ.`,
+    suggestedPullbackNote: `Khuyến nghị bán / giá đã kéo cao: tham chiếu «mua lại / gom tại nền» là đáy 20 phiên (${fmtK(support)}đ), không dùng chờ hồi nông quanh giá hiện tại (~${fmtK(shallow)}đ = đóng cửa − 0,3×ATR). ATR 14 ≈ ${fmtK(pt.atr)}đ.`,
   };
 }
 
