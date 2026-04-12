@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BollingerBands, EMA, MACD, RSI } from 'technicalindicators';
-import { Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
 import { TelegramService } from '../telegram/telegram.service';
 import { StockPrice } from '../stock/entities/stock-price.entity';
+import { FormingSetupHint, TickerFormingSetups } from './dto/forming-setup.dto';
 import { Signal, SignalDirection, SignalType } from './entities/signal.entity';
 
 // Trọng số tín hiệu cho scanner summary (đồng bộ với RecommendationService)
@@ -66,6 +68,7 @@ export class SignalService {
     @InjectRepository(StockPrice)
     private readonly stockPriceRepo: Repository<StockPrice>,
     private readonly telegramService: TelegramService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   // ─── Kiểm tra thanh khoản tối thiểu ───────────────────────────────────────
@@ -88,21 +91,31 @@ export class SignalService {
       .getMany();
 
     if (rows.length < 10) {
-      return { pass: false, avgVolume: 0, tradingDays: rows.length, reason: 'Quá ít dữ liệu' };
+      return {
+        pass: false,
+        avgVolume: 0,
+        tradingDays: rows.length,
+        reason: 'Quá ít dữ liệu',
+      };
     }
 
     const tradingDays = rows.filter((r) => Number(r.volume) > 0).length;
-    const avgVolume = rows.reduce((s, r) => s + Number(r.volume), 0) / rows.length;
+    const avgVolume =
+      rows.reduce((s, r) => s + Number(r.volume), 0) / rows.length;
 
     if (avgVolume < MIN_AVG_VOLUME) {
       return {
-        pass: false, avgVolume, tradingDays,
+        pass: false,
+        avgVolume,
+        tradingDays,
         reason: `Avg vol ${Math.round(avgVolume / 1000)}k < ${MIN_AVG_VOLUME / 1000}k`,
       };
     }
     if (tradingDays < MIN_TRADING_DAYS) {
       return {
-        pass: false, avgVolume, tradingDays,
+        pass: false,
+        avgVolume,
+        tradingDays,
         reason: `Giao dịch thưa: ${tradingDays}/30 ngày`,
       };
     }
@@ -171,6 +184,25 @@ export class SignalService {
     return saved;
   }
 
+  /** Ngày giao dịch mới nhất có trong DB giá (trùng cây nến dùng cho analyze). */
+  async getLatestStockTradingDate(ticker: string): Promise<string | null> {
+    const row = await this.stockPriceRepo.findOne({
+      where: { ticker: ticker.toUpperCase() },
+      order: { tradingDate: 'DESC' },
+    });
+    return row?.tradingDate ?? null;
+  }
+
+  /** Tất cả tín hiệu đã lưu cho phiên (cây nến) mới nhất — dùng cho Telegram tổng hợp. */
+  async getSignalsForLatestSession(ticker: string): Promise<Signal[]> {
+    const d = await this.getLatestStockTradingDate(ticker);
+    if (!d) return [];
+    return this.signalRepo.find({
+      where: { ticker: ticker.toUpperCase(), tradingDate: d },
+      order: { type: 'ASC' },
+    });
+  }
+
   // ─── Phân tích toàn bộ lịch sử (sliding window) ──────────────────────────
   // Với mỗi ngày từ `from` đến nay, chạy lại bộ detect trên slice 130 bars
   // Kết quả lưu vào DB theo (ticker, tradingDate, type) — INSERT IGNORE
@@ -184,7 +216,9 @@ export class SignalService {
     // Load tất cả bars một lần duy nhất (ASC)
     const allBars = await this.loadAllBars(ticker);
     if (allBars.length < MIN_BARS) {
-      this.logger.warn(`${ticker}: không đủ dữ liệu lịch sử (${allBars.length} nến)`);
+      this.logger.warn(
+        `${ticker}: không đủ dữ liệu lịch sử (${allBars.length} nến)`,
+      );
       return { analyzed: 0, saved: 0 };
     }
 
@@ -192,7 +226,7 @@ export class SignalService {
     let saved = 0;
 
     for (let i = MIN_BARS - 1; i < allBars.length; i++) {
-      const tradingDate = allBars[i]!.tradingDate;
+      const tradingDate = allBars[i].tradingDate;
       if (tradingDate < startDate) continue;
 
       const slice = allBars.slice(i - MIN_BARS + 1, i + 1);
@@ -230,11 +264,18 @@ export class SignalService {
           s.description,
           true,
         ]);
-        const result = (await this.signalRepo.query(
+        const insertResult: unknown = await this.signalRepo.query(
           `INSERT IGNORE INTO signals ${COLS} VALUES ${placeholders}`,
           params,
-        )) as { affectedRows?: number };
-        saved += result?.affectedRows ?? 0;
+        );
+        if (
+          insertResult &&
+          typeof insertResult === 'object' &&
+          'affectedRows' in insertResult
+        ) {
+          const ar = (insertResult as { affectedRows?: unknown }).affectedRows;
+          saved += typeof ar === 'number' ? ar : Number(ar) || 0;
+        }
       }
       analyzed++;
     }
@@ -242,6 +283,24 @@ export class SignalService {
     this.logger.log(
       `${ticker}: analyzeHistory done — ${analyzed} ngày, ${saved} tín hiệu mới`,
     );
+
+    try {
+      const { SignalBacktestService } = await import(
+        './signal-backtest.service'
+      );
+      const backtest = this.moduleRef.get(SignalBacktestService, {
+        strict: false,
+      });
+      const run = await backtest.runBacktest(ticker.toUpperCase(), 12);
+      this.logger.log(
+        `${ticker}: backtest đã lưu — run #${run.id}, ${run.tradeCount} lệnh, compound=${Number(run.compoundPnlPercent).toFixed(2)}%`,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `${ticker}: backtest sau lịch sử — ${(e as Error).message}`,
+      );
+    }
+
     return { analyzed, saved };
   }
 
@@ -249,7 +308,14 @@ export class SignalService {
   async getSignalsForChart(
     ticker: string,
     from?: string,
-  ): Promise<{ tradingDate: string; direction: string; type: string; description: string | null }[]> {
+  ): Promise<
+    {
+      tradingDate: string;
+      direction: string;
+      type: string;
+      description: string | null;
+    }[]
+  > {
     const qb = this.signalRepo
       .createQueryBuilder('s')
       .select(['s.tradingDate', 's.direction', 's.type', 's.description'])
@@ -259,14 +325,29 @@ export class SignalService {
     return qb.getMany();
   }
 
-  // Phân tích và gửi Telegram ngay
+  // Phân tích và gửi Telegram ngay — chỉ phiên mới nhất (cây nến ngày đó), tránh spam cũ
   async analyzeAndNotify(ticker: string): Promise<void> {
-    // Phân tích tín hiệu mới, sau đó lấy tất cả chưa gửi từ DB
     await this.analyze(ticker);
 
+    const sessionDate = await this.getLatestStockTradingDate(ticker);
+    if (!sessionDate) return;
+
+    await this.signalRepo.update(
+      {
+        ticker: ticker.toUpperCase(),
+        notified: false,
+        tradingDate: LessThan(sessionDate),
+      },
+      { notified: true },
+    );
+
     const unnotified = await this.signalRepo.find({
-      where: { ticker: ticker.toUpperCase(), notified: false },
-      order: { tradingDate: 'DESC' },
+      where: {
+        ticker: ticker.toUpperCase(),
+        notified: false,
+        tradingDate: sessionDate,
+      },
+      order: { id: 'ASC' },
     });
 
     if (!unnotified.length) return;
@@ -280,13 +361,12 @@ export class SignalService {
 
     await this.telegramService.sendStockAlert(
       ticker,
-      `<b>Phát hiện ${unnotified.length} tín hiệu đảo chiều</b>\n\n${lines}`,
+      `<b>Phiên ${sessionDate}: ${unnotified.length} tín hiệu</b>\n\n${lines}`,
     );
 
-    await this.signalRepo.update(
-      unnotified.map((s) => s.id),
-      { notified: true },
-    );
+    await this.signalRepo.update(unnotified.map((s) => s.id), {
+      notified: true,
+    });
   }
 
   // Lấy tín hiệu đã lưu
@@ -373,10 +453,8 @@ export class SignalService {
 
       // ── Tính điểm theo trọng số giống RecommendationService ─────────────
       let rawScore = 0;
-      for (const t of bullish)
-        rawScore += SUMMARY_WEIGHTS[t as SignalType] ?? 1;
-      for (const t of bearish)
-        rawScore -= SUMMARY_WEIGHTS[t as SignalType] ?? 1;
+      for (const t of bullish) rawScore += SUMMARY_WEIGHTS[t] ?? 1;
+      for (const t of bearish) rawScore -= SUMMARY_WEIGHTS[t] ?? 1;
       const score = Math.round(Math.max(-10, Math.min(10, rawScore)) * 10) / 10;
 
       // ── Số sao ───────────────────────────────────────────────────────────
@@ -429,7 +507,302 @@ export class SignalService {
       };
     }
 
-    return result;
+    // Thứ tự key theo watchlist (vốn hoá / thanh khoản) — không đổi nội dung
+    const ordered: typeof result = {};
+    const seenUpper = new Set<string>();
+    for (const t of tickers) {
+      const u = t.toUpperCase();
+      const rk = Object.keys(result).find((k) => k.toUpperCase() === u);
+      if (rk && result[rk] && !seenUpper.has(u)) {
+        ordered[rk] = result[rk];
+        seenUpper.add(u);
+      }
+    }
+    for (const k of Object.keys(result)) {
+      const ku = k.toUpperCase();
+      if (!seenUpper.has(ku)) {
+        ordered[k] = result[k];
+        seenUpper.add(ku);
+      }
+    }
+    return ordered;
+  }
+
+  /**
+   * Các bản ghi tín hiệu gần nhất trong danh sách mã (theo ngày giao dịch, rồi id).
+   * Dùng feed «tín hiệu mới nhất» trên Scanner / watchlist.
+   */
+  async getLatestSignalsForTickers(
+    tickers: string[],
+    limit = 40,
+  ): Promise<
+    Array<{
+      id: number;
+      ticker: string;
+      tradingDate: string;
+      type: SignalType;
+      direction: SignalDirection;
+      description: string | null;
+    }>
+  > {
+    const cap = Math.min(200, Math.max(1, limit));
+    if (!tickers.length) return [];
+    const upper = tickers.map((t) => t.toUpperCase());
+    const rows = await this.signalRepo
+      .createQueryBuilder('s')
+      .where('s.ticker IN (:...tickers)', { tickers: upper })
+      .orderBy('s.tradingDate', 'DESC')
+      .addOrderBy('s.id', 'DESC')
+      .take(cap)
+      .getMany();
+    return rows.map((s) => ({
+      id: s.id,
+      ticker: s.ticker,
+      tradingDate: s.tradingDate,
+      type: s.type,
+      direction: s.direction,
+      description: s.description,
+    }));
+  }
+
+  // ─── Thiết lập sắp hình thành (heuristic — vài nến tới có thể có tín hiệu) ─
+
+  async getFormingSetups(ticker: string): Promise<FormingSetupHint[]> {
+    const liq = await this.checkLiquidity(ticker);
+    if (!liq.pass) return [];
+    const bars = await this.loadBars(ticker, 130);
+    if (bars.length < 65) return [];
+    return this.computeFormingSetups(bars);
+  }
+
+  async getFormingSetupsForWatchlist(
+    tickers: string[],
+  ): Promise<{ tradingDate: string; items: TickerFormingSetups[] }> {
+    const rows = await Promise.all(
+      tickers.map(async (ticker) => {
+        const liq = await this.checkLiquidity(ticker);
+        if (!liq.pass) return null;
+        const bars = await this.loadBars(ticker, 130);
+        if (bars.length < 65) return null;
+        const hints = this.computeFormingSetups(bars);
+        if (!hints.length) return null;
+        return {
+          ticker: ticker.toUpperCase(),
+          tradingDate: bars[bars.length - 1].tradingDate,
+          hints,
+        } satisfies TickerFormingSetups;
+      }),
+    );
+    const items = rows.filter((x): x is TickerFormingSetups => x != null);
+    items.sort(
+      (a, b) =>
+        b.hints.reduce((s, h) => s + h.priority, 0) -
+        a.hints.reduce((s, h) => s + h.priority, 0),
+    );
+    return {
+      tradingDate: items[0]?.tradingDate ?? '',
+      items,
+    };
+  }
+
+  /** Quy tắc tĩnh — không lưu DB; chỉ đọc chỉ báo hiện tại. */
+  private computeFormingSetups(bars: OhlcvBar[]): FormingSetupHint[] {
+    const hints: FormingSetupHint[] = [];
+    const closes = bars.map((b) => b.close);
+    const last = closes[closes.length - 1];
+
+    const rsiSeries = RSI.calculate({ values: closes, period: 14 });
+    if (rsiSeries.length >= 3) {
+      const rsi = rsiSeries[rsiSeries.length - 1];
+      const prevRsi = rsiSeries[rsiSeries.length - 2];
+      const rsi3 = rsiSeries[rsiSeries.length - 3];
+      if (rsi > 31 && rsi < 38 && prevRsi > rsi3) {
+        hints.push({
+          code: 'RSI_APPROACH_OVERSOLD',
+          direction: 'BULLISH',
+          priority: 2,
+          etaMin: 1,
+          etaMax: 4,
+          summary: `RSI=${rsi.toFixed(1)} đang áp vùng quá bán — theo dõi phục hồi 1–4 phiên`,
+        });
+      }
+      if (rsi > 62 && rsi < 70 && prevRsi < rsi) {
+        hints.push({
+          code: 'RSI_APPROACH_OVERBOUGHT',
+          direction: 'BEARISH',
+          priority: 2,
+          etaMin: 1,
+          etaMax: 4,
+          summary: `RSI=${rsi.toFixed(1)} áp vùng quá mua — cẩn trọng điều chỉnh ngắn hạn`,
+        });
+      }
+      if (prevRsi < 49 && rsi >= 47 && rsi < 50) {
+        hints.push({
+          code: 'RSI_APPROACH_50_UP',
+          direction: 'BULLISH',
+          priority: 1,
+          etaMin: 1,
+          etaMax: 2,
+          summary: `RSI sắp thử lại vùng 50 (${prevRsi.toFixed(1)}→${rsi.toFixed(1)}) — momentum có thể xác nhận`,
+        });
+      }
+      if (prevRsi > 51 && rsi <= 53 && rsi > 49) {
+        hints.push({
+          code: 'RSI_APPROACH_50_DOWN',
+          direction: 'BEARISH',
+          priority: 1,
+          etaMin: 1,
+          etaMax: 2,
+          summary: `RSI sắp rớt khỏi 50 — theo dõi yếu đi`,
+        });
+      }
+    }
+
+    const macdRows = MACD.calculate({
+      values: closes,
+      fastPeriod: 12,
+      slowPeriod: 26,
+      signalPeriod: 9,
+      SimpleMAOscillator: false,
+      SimpleMASignal: false,
+    });
+    if (macdRows.length >= 4) {
+      const c = macdRows[macdRows.length - 1];
+      const p = macdRows[macdRows.length - 2];
+      const p3 = macdRows[macdRows.length - 4];
+      if (
+        c.MACD != null &&
+        c.signal != null &&
+        p.MACD != null &&
+        p.signal != null &&
+        p3.MACD != null &&
+        p3.signal != null
+      ) {
+        const gap = c.signal - c.MACD;
+        const gapP = p.signal - p.MACD;
+        const scale = Math.max(Math.abs(last), 1);
+        const rel = gap / scale;
+        if (c.MACD < c.signal && gap > 0 && gap < gapP && rel < 0.0025) {
+          hints.push({
+            code: 'MACD_NEAR_BULL_CROSS',
+            direction: 'BULLISH',
+            priority: 4,
+            etaMin: 1,
+            etaMax: 3,
+            summary:
+              'MACD đang thu hẹp với Signal (dưới) — có thể cắt lên trong 1–3 phiên',
+          });
+        }
+        const gapBear = c.MACD - c.signal;
+        const gapPBear = p.MACD - p.signal;
+        if (
+          c.MACD > c.signal &&
+          gapBear > 0 &&
+          gapBear < gapPBear &&
+          gapBear / scale < 0.0025
+        ) {
+          hints.push({
+            code: 'MACD_NEAR_BEAR_CROSS',
+            direction: 'BEARISH',
+            priority: 4,
+            etaMin: 1,
+            etaMax: 3,
+            summary:
+              'MACD đang thu hẹp với Signal (trên) — có thể cắt xuống trong 1–3 phiên',
+          });
+        }
+      }
+    }
+
+    if (closes.length >= 51) {
+      const ema20 = EMA.calculate({ values: closes, period: 20 });
+      const ema50 = EMA.calculate({ values: closes, period: 50 });
+      if (ema20.length >= 2 && ema50.length >= 2) {
+        const offset = ema20.length - ema50.length;
+        const curr20 = ema20[ema20.length - 1];
+        const curr50 = ema50[ema50.length - 1];
+        const prev20 = ema20[ema20.length - 2];
+        const prev50 = ema50[ema50.length - 2 - Math.max(0, offset)];
+        const gap = curr50 - curr20;
+        const prevGap = prev50 - prev20;
+        const rel = gap / Math.max(last, 1);
+        if (curr20 < curr50 && gap > 0 && prevGap > gap && rel < 0.006) {
+          hints.push({
+            code: 'EMA_NEAR_GOLDEN',
+            direction: 'BULLISH',
+            priority: 3,
+            etaMin: 2,
+            etaMax: 8,
+            summary:
+              'EMA20 đang thu hẹp khoảng cách với EMA50 phía dưới — Golden Cross có thể trong vài phiên',
+          });
+        }
+        if (curr20 > curr50) {
+          const g = curr20 - curr50;
+          const pg = prev20 - prev50;
+          if (g > 0 && pg > g && g / Math.max(last, 1) < 0.006) {
+            hints.push({
+              code: 'EMA_NEAR_DEATH',
+              direction: 'BEARISH',
+              priority: 3,
+              etaMin: 2,
+              etaMax: 8,
+              summary:
+                'EMA20 đang thu hẹp với EMA50 phía trên — Death Cross có thể trong vài phiên',
+            });
+          }
+        }
+      }
+    }
+
+    const bb = BollingerBands.calculate({
+      values: closes,
+      period: 20,
+      stdDev: 2,
+    });
+    if (bb.length) {
+      const b = bb[bb.length - 1];
+      const bw = (b.upper - b.lower) / Math.max(b.middle, 1);
+      if (bw < 0.07) {
+        hints.push({
+          code: 'BB_SQUEEZE_TIGHT',
+          direction: 'NEUTRAL',
+          priority: 2,
+          etaMin: 1,
+          etaMax: 5,
+          summary: `BB thắt (${(bw * 100).toFixed(1)}% băng) — thường bùng biên sau vài nến, chờ hướng`,
+        });
+      }
+      const distLower = (last - b.lower) / Math.max(b.middle, 1);
+      if (distLower > 0 && distLower < 0.003 && last >= b.lower) {
+        hints.push({
+          code: 'BB_NEAR_LOWER',
+          direction: 'BULLISH',
+          priority: 2,
+          etaMin: 1,
+          etaMax: 3,
+          summary: 'Giá áp sát BB dưới — theo dõi phản ứng / đóng cửa',
+        });
+      }
+      const distUpper = (b.upper - last) / Math.max(b.middle, 1);
+      if (distUpper > 0 && distUpper < 0.003 && last <= b.upper) {
+        hints.push({
+          code: 'BB_NEAR_UPPER',
+          direction: 'BEARISH',
+          priority: 2,
+          etaMin: 1,
+          etaMax: 3,
+          summary: 'Giá áp sát BB trên — theo dõi từ chối / điều chỉnh',
+        });
+      }
+    }
+
+    const seen = new Set<string>();
+    return hints.filter((h) => {
+      if (seen.has(h.code)) return false;
+      seen.add(h.code);
+      return true;
+    });
   }
 
   // ─── Indicators ──────────────────────────────────────────────────────────
@@ -439,8 +812,8 @@ export class SignalService {
     const results = RSI.calculate({ values: closes, period: 14 });
     if (results.length < 2) return [];
 
-    const rsi = results[results.length - 1]!;
-    const prevRsi = results[results.length - 2]!;
+    const rsi = results[results.length - 1];
+    const prevRsi = results[results.length - 2];
     const signals: DetectedSignal[] = [];
 
     if (rsi < 30) {
@@ -537,8 +910,8 @@ export class SignalService {
     });
 
     if (!results.length) return [];
-    const bb = results[results.length - 1]!;
-    const close = closes[closes.length - 1]!;
+    const bb = results[results.length - 1];
+    const close = closes[closes.length - 1];
     const signals: DetectedSignal[] = [];
 
     // BB Lower chạm → oversold, cơ hội mua
@@ -554,7 +927,7 @@ export class SignalService {
     // BB Upper: chỉ bearish nếu KHÔNG phải breakout mạnh
     // Nếu cùng lúc có volume bình thường + không phải nến xanh mạnh → overbought
     if (close > bb.upper) {
-      const curr = bars[bars.length - 1]!;
+      const curr = bars[bars.length - 1];
       const avgVol =
         bars
           .slice(-20, -1)
@@ -600,10 +973,10 @@ export class SignalService {
     if (ema20.length < 2 || ema50.length < 2) return [];
 
     const offset = ema20.length - ema50.length;
-    const prevEma20 = ema20[ema20.length - 2]!;
-    const currEma20 = ema20[ema20.length - 1]!;
-    const prevEma50 = ema50[ema50.length - 2 - Math.max(0, offset)]!;
-    const currEma50 = ema50[ema50.length - 1]!;
+    const prevEma20 = ema20[ema20.length - 2];
+    const currEma20 = ema20[ema20.length - 1];
+    const prevEma50 = ema50[ema50.length - 2 - Math.max(0, offset)];
+    const currEma50 = ema50[ema50.length - 1];
 
     if (prevEma20 <= prevEma50 && currEma20 > currEma50) {
       return [
@@ -642,9 +1015,9 @@ export class SignalService {
 
     if (!ema20.length || !ema50.length) return [];
 
-    const currClose = closes[closes.length - 1]!;
-    const currEma20 = ema20[ema20.length - 1]!;
-    const currEma50 = ema50[ema50.length - 1]!;
+    const currClose = closes[closes.length - 1];
+    const currEma20 = ema20[ema20.length - 1];
+    const currEma50 = ema50[ema50.length - 1];
     const currEma100 = ema100 ? (ema100[ema100.length - 1] ?? null) : null;
     const signals: DetectedSignal[] = [];
 
@@ -688,12 +1061,12 @@ export class SignalService {
     const ema50 = EMA.calculate({ values: closes, period: 50 });
     if (ema20.length < 3 || ema50.length < 3) return [];
 
-    const curr = bars[bars.length - 1]!;
-    const prev = bars[bars.length - 2]!;
-    const currEma20 = ema20[ema20.length - 1]!;
-    const prevEma20 = ema20[ema20.length - 2]!;
-    const currEma50 = ema50[ema50.length - 1]!;
-    const prevEma50 = ema50[ema50.length - 2]!;
+    const curr = bars[bars.length - 1];
+    const prev = bars[bars.length - 2];
+    const currEma20 = ema20[ema20.length - 1];
+    const prevEma20 = ema20[ema20.length - 2];
+    const currEma50 = ema50[ema50.length - 1];
+    const prevEma50 = ema50[ema50.length - 2];
 
     // Bounce từ EMA20: phiên trước low chạm EMA20, phiên này đóng cửa trên EMA20
     const touchedEma20 =
@@ -757,7 +1130,7 @@ export class SignalService {
 
     // Thêm: xu hướng trước khi tạo nền phải là tăng (close 20 phiên trước < close đầu nền)
     const priorBar = bars[bars.length - BASE_PERIOD - 5];
-    const firstBaseClose = closes[0]!;
+    const firstBaseClose = closes[0];
     const priorIsUptrend = priorBar
       ? priorBar.close < firstBaseClose * 1.05
       : true;
@@ -776,7 +1149,7 @@ export class SignalService {
   private detectResistanceBreakout(bars: OhlcvBar[]): DetectedSignal[] {
     if (bars.length < 62) return [];
 
-    const curr = bars[bars.length - 1]!;
+    const curr = bars[bars.length - 1];
     // Kháng cự = highest high của 60 phiên trước (~3 tháng)
     const prevBars = bars.slice(-61, -1);
     const resistance = Math.max(...prevBars.map((b) => b.high));
@@ -811,7 +1184,7 @@ export class SignalService {
   private detectSupportBreakdown(bars: OhlcvBar[]): DetectedSignal[] {
     if (bars.length < 62) return [];
 
-    const curr = bars[bars.length - 1]!;
+    const curr = bars[bars.length - 1];
     const prevBars = bars.slice(-61, -1);
     const support = Math.min(...prevBars.map((b) => b.low));
     const avgVol =
@@ -856,7 +1229,7 @@ export class SignalService {
     if (bars.length < lookback) return false;
 
     const recentBars = bars.slice(-lookback);
-    const currClose = bars[bars.length - 1]!.close;
+    const currClose = bars[bars.length - 1].close;
     const low = Math.min(...recentBars.map((b) => b.low));
     const high = Math.max(...recentBars.map((b) => b.high));
 
@@ -867,6 +1240,35 @@ export class SignalService {
     // Giá hiện tại phải ở upper 40% của range → đang ở vùng đỉnh thực sự
     const pricePosition = high > low ? (currClose - low) / (high - low) : 0;
     return pricePosition >= 0.6;
+  }
+
+  /**
+   * Bull trap chỉ đáng tin sau khi giá đã nới rộng rồi thử vùng đỉnh.
+   * Trong nền hẹp / sideway hoặc EMA20≈EMA50 (không trend), spike qua đỉnh range rồi đóng lại
+   * là nhiễu — không coi là tín hiệu bán phân phối.
+   */
+  private isChopOrBaseContextForFailedBreakout(bars: OhlcvBar[]): boolean {
+    if (bars.length < 30) return false;
+
+    const prior = bars.slice(-26, -1);
+    if (prior.length < 15) return false;
+    const avgClose = prior.reduce((s, b) => s + b.close, 0) / prior.length;
+    const maxH = Math.max(...prior.map((b) => b.high));
+    const minL = Math.min(...prior.map((b) => b.low));
+    const rangeRatio = (maxH - minL) / avgClose;
+
+    const closes = bars.map((b) => b.close);
+    const ema20 = EMA.calculate({ values: closes, period: 20 });
+    const ema50 = EMA.calculate({ values: closes, period: 50 });
+    if (!ema20.length || !ema50.length) return false;
+    const e20 = ema20[ema20.length - 1];
+    const e50 = ema50[ema50.length - 1];
+    const emaSpread = Math.abs(e20 - e50) / e50;
+
+    const ultraTightRange = rangeRatio < 0.065;
+    const tightRange = rangeRatio < 0.092;
+    const flatEma = emaSpread < 0.013;
+    return ultraTightRange || (tightRange && flatEma);
   }
 
   /**
@@ -893,13 +1295,13 @@ export class SignalService {
     const peaks: Array<{ idx: number; price: number; rsi: number }> = [];
 
     for (let i = 2; i < lookback.length - 2; i++) {
-      const bar = lookback[i]!;
+      const bar = lookback[i];
       // Đỉnh rõ ràng: cao hơn 2 nến hai bên
       if (
-        bar.high > lookback[i - 1]!.high &&
-        bar.high > lookback[i - 2]!.high &&
-        bar.high > lookback[i + 1]!.high &&
-        bar.high > lookback[i + 2]!.high
+        bar.high > lookback[i - 1].high &&
+        bar.high > lookback[i - 2].high &&
+        bar.high > lookback[i + 1].high &&
+        bar.high > lookback[i + 2].high
       ) {
         const absIdx = bars.length - 40 + i;
         const rsiIdx = absIdx - rsiOffset;
@@ -911,8 +1313,8 @@ export class SignalService {
     }
 
     if (peaks.length < 2) return [];
-    const p1 = peaks[peaks.length - 2]!;
-    const p2 = peaks[peaks.length - 1]!;
+    const p1 = peaks[peaks.length - 2];
+    const p2 = peaks[peaks.length - 1];
 
     // Hai đỉnh phải cách nhau ít nhất 5 phiên
     if (p2.idx - p1.idx < 5) return [];
@@ -986,8 +1388,8 @@ export class SignalService {
     }
 
     if (histPeaks.length < 2) return [];
-    const h1 = histPeaks[histPeaks.length - 2]!;
-    const h2 = histPeaks[histPeaks.length - 1]!;
+    const h1 = histPeaks[histPeaks.length - 2];
+    const h2 = histPeaks[histPeaks.length - 1];
 
     // Histogram đỉnh sau yếu hơn đáng kể (30%) trong khi giá vẫn tăng
     const recentHighs = bars.slice(-15).map((b) => b.high);
@@ -1018,7 +1420,7 @@ export class SignalService {
     // Điều kiện tiên quyết: phải có uptrend mạnh từ nền
     if (!this.hasUptrendToDistribute(bars, 60, 0.15)) return [];
 
-    const curr = bars[bars.length - 1]!;
+    const curr = bars[bars.length - 1];
     const prevBars = bars.slice(-21, -1);
     const avgVol =
       prevBars.map((b) => b.volume).reduce((s, v) => s + v, 0) /
@@ -1066,7 +1468,7 @@ export class SignalService {
     // Điều kiện tiên quyết: phải có uptrend mạnh từ nền
     if (!this.hasUptrendToDistribute(bars, 60, 0.15)) return [];
 
-    const curr = bars[bars.length - 1]!;
+    const curr = bars[bars.length - 1];
     const prevBars = bars.slice(-21, -1);
 
     const avgVol =
@@ -1108,10 +1510,12 @@ export class SignalService {
   private detectFailedBreakout(bars: OhlcvBar[]): DetectedSignal[] {
     if (bars.length < 22) return [];
 
-    // Điều kiện tiên quyết: phải có uptrend — mới có "đỉnh" thực để bull trap
-    if (!this.hasUptrendToDistribute(bars, 60, 0.10)) return []; // 10% là đủ cho bull trap
+    // Phải có xu hướng tăng đủ rộng (cùng ngưỡng phân phối đỉnh) — không bắt trap trong nền hẹp
+    if (!this.hasUptrendToDistribute(bars, 60, 0.15)) return [];
 
-    const curr = bars[bars.length - 1]!;
+    if (this.isChopOrBaseContextForFailedBreakout(bars)) return [];
+
+    const curr = bars[bars.length - 1];
     const prevBars = bars.slice(-22, -1);
     const resistance = Math.max(...prevBars.map((b) => b.high));
 
@@ -1122,6 +1526,9 @@ export class SignalService {
       curr.close < curr.open
     ) {
       const failPct = ((resistance - curr.close) / resistance) * 100;
+      // Đóng sát đỉnh range (noise) — chưa đủ xác nhận bull trap đỉnh
+      if (failPct < 0.4) return [];
+
       return [
         {
           type: SignalType.FAILED_BREAKOUT,

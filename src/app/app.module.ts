@@ -36,7 +36,14 @@ import { AppService } from './app.service';
         password: config.getOrThrow<string>('DB_PASSWORD'),
         database: config.getOrThrow<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: config.get<string>('NODE_ENV') !== 'production',
+        // Mặc định: sync khi không phải production. Production: đặt DB_SYNCHRONIZE=true
+        // trong .env để TypeORM cập nhật schema theo entity khi khởi động app.
+        synchronize: (() => {
+          const explicit = config.get<string>('DB_SYNCHRONIZE');
+          if (explicit === 'true') return true;
+          if (explicit === 'false') return false;
+          return config.get<string>('NODE_ENV') !== 'production';
+        })(),
       }),
     }),
     ScheduleModule.forRoot(),

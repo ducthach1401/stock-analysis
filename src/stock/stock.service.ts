@@ -28,7 +28,8 @@ export class StockService {
       ? new Date(from)
       : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
 
-    return this.dnseService.fetchOhlc(ticker, fromDate, toDate);
+    const bars = await this.dnseService.fetchOhlc(ticker, fromDate, toDate);
+    return bars.sort((a, b) => a.tradingDate.localeCompare(b.tradingDate));
   }
 
   /** Lịch sử tối đa từ DNSE (từ ~2000 / ngày IPO trên hệ thống) đến `to`. */
@@ -144,6 +145,7 @@ export class StockService {
     ticker: string,
     from?: string,
     to?: string,
+    opts?: { limit?: number; before?: string },
   ): Promise<StockPrice[]> {
     const qb = this.stockPriceRepo
       .createQueryBuilder('sp')
@@ -152,6 +154,11 @@ export class StockService {
 
     if (from) qb.andWhere('sp.tradingDate >= :from', { from });
     if (to) qb.andWhere('sp.tradingDate <= :to', { to });
+    if (opts?.before)
+      qb.andWhere('sp.tradingDate < :before', { before: opts.before });
+
+    const lim = opts?.limit;
+    if (lim != null && lim > 0) qb.take(Math.min(lim, 5000));
 
     return qb.getMany();
   }

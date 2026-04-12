@@ -11,6 +11,8 @@ services:
     environment:
       - DB_HOST=mysql
       - REDIS_HOST=redis
+      # Đồng bộ schema MySQL theo entity khi deploy (cột mới, enum…)
+      - DB_SYNCHRONIZE=true
     depends_on:
       - mysql
       - redis

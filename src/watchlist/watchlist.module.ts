@@ -7,7 +7,11 @@ import { WatchlistController } from './watchlist.controller';
 import { WatchlistService } from './watchlist.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([WatchlistItem]), SignalModule, AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([WatchlistItem]),
+    SignalModule,
+    AuthModule,
+  ],
   controllers: [WatchlistController],
   providers: [WatchlistService],
   exports: [WatchlistService],

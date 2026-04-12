@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RecommendationService } from './recommendation.service';
+import { SignalBacktestService } from './signal-backtest.service';
 import { SignalService } from './signal.service';
 
 @Controller('signals')
@@ -8,7 +9,16 @@ export class SignalController {
   constructor(
     private readonly signalService: SignalService,
     private readonly recommendationService: RecommendationService,
+    private readonly signalBacktestService: SignalBacktestService,
   ) {}
+
+  /** GET /signals/backtest/summary — xếp hạng compound % (run mới nhất / mã), dùng Dashboard */
+  @Get('backtest/summary')
+  getBacktestSummary(@Query('limit') limit?: string) {
+    const n = limit ? parseInt(limit, 10) : 10;
+    const lim = Number.isFinite(n) && n > 0 && n <= 50 ? n : 10;
+    return this.signalBacktestService.getBacktestGoodBad(lim);
+  }
 
   // POST /signals/:ticker/analyze — phân tích và lưu tín hiệu
   @UseGuards(JwtAuthGuard)
@@ -60,5 +70,37 @@ export class SignalController {
     @Query('from') from?: string,
   ) {
     return this.signalService.getSignalsForChart(ticker, from);
+  }
+
+  /** POST .../backtest/run — vào STRONG_BUY + TB; thoát target / chặn lãi / cuối kỳ (không đảo chiều). */
+  @UseGuards(JwtAuthGuard)
+  @Post(':ticker/backtest/run')
+  runSignalBacktest(
+    @Param('ticker') ticker: string,
+    @Query('months') months?: string,
+  ) {
+    const m = months ? parseInt(months, 10) : 12;
+    const mb = Number.isFinite(m) && m > 0 && m <= 120 ? m : 12;
+    return this.signalBacktestService.runBacktest(ticker, mb);
+  }
+
+  @Get(':ticker/backtest/runs')
+  listBacktestRuns(
+    @Param('ticker') ticker: string,
+    @Query('take') take?: string,
+  ) {
+    const n = take ? parseInt(take, 10) : 20;
+    return this.signalBacktestService.listRuns(
+      ticker,
+      Number.isFinite(n) && n > 0 ? Math.min(n, 100) : 20,
+    );
+  }
+
+  @Get(':ticker/backtest/runs/:runId')
+  getBacktestRun(
+    @Param('ticker') ticker: string,
+    @Param('runId') runId: string,
+  ) {
+    return this.signalBacktestService.getRun(ticker, parseInt(runId, 10));
   }
 }

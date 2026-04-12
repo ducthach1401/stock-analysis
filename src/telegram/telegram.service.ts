@@ -19,12 +19,15 @@ export class TelegramService {
   private readonly botToken: string;
   private readonly defaultChatId: string;
   private readonly apiUrl: string;
+  /** Chỉ gửi tin thật khi NODE_ENV=production (tránh spam dev/staging). */
+  private readonly isProduction: boolean;
 
   // Queue để tránh vượt rate limit
   private queue: Array<() => Promise<void>> = [];
   private processing = false;
 
   constructor(private readonly configService: ConfigService) {
+    this.isProduction = process.env.NODE_ENV === 'production';
     this.botToken = this.configService.getOrThrow<string>('TELEGRAM_BOT_TOKEN');
     this.defaultChatId =
       this.configService.getOrThrow<string>('TELEGRAM_CHAT_ID');
@@ -32,6 +35,12 @@ export class TelegramService {
   }
 
   async sendMessage(message: TelegramMessage): Promise<void> {
+    if (!this.isProduction) {
+      this.logger.debug(
+        'Telegram: bỏ qua gửi (chỉ bật khi NODE_ENV=production)',
+      );
+      return;
+    }
     return new Promise((resolve, reject) => {
       this.queue.push(async () => {
         try {

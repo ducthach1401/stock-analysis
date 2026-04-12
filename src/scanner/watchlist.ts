@@ -217,3 +217,11 @@ export const WATCHLIST: WatchlistStock[] = [
 ];
 
 export const TICKERS = WATCHLIST.map((s) => s.ticker);
+
+/** Thứ tự trong WATCHLIST ≈ ưu tiên vốn hoá + thanh khoản (đầu danh sách = blue-chip hơn). */
+const RANK_MAP = new Map(WATCHLIST.map((s, i) => [s.ticker.toUpperCase(), i]));
+
+/** Số càng nhỏ = ưu tiên càng cao. Mã không có trong danh sách → xếp sau cùng. */
+export function tickerCapLiquidityRank(ticker: string): number {
+  return RANK_MAP.get(ticker.toUpperCase()) ?? 100_000;
+}

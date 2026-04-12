@@ -11,7 +11,12 @@ import { ScannerService } from './scanner.service';
 
 @Module({
   imports: [
-    StockModule, SignalModule, TelegramModule, PositionModule, WatchlistModule, AuthModule,
+    StockModule,
+    SignalModule,
+    TelegramModule,
+    PositionModule,
+    WatchlistModule,
+    AuthModule,
     forwardRef(() => QueueModule),
   ],
   controllers: [ScannerController],

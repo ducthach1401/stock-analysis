@@ -56,10 +56,10 @@ export class WatchlistController {
     return this.watchlistService.remove(id);
   }
 
-  // POST /watchlist/check-liquidity — chạy thủ công
+  // POST /watchlist/check-liquidity — đồng bộ mã từ danh sách chuẩn + kiểm tra thanh khoản (cùng cron)
   @UseGuards(JwtAuthGuard)
   @Post('check-liquidity')
   checkLiquidity() {
-    return this.watchlistService.checkAllLiquidity();
+    return this.watchlistService.runWatchlistAutoRules();
   }
 }

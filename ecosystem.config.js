@@ -11,6 +11,8 @@ module.exports = {
       },
       env_production: {
         NODE_ENV: 'production',
+        // Đồng bộ schema DB theo entity (cột/enum mới). Có thể ghi đè bằng .env.
+        DB_SYNCHRONIZE: 'true',
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       error_file: 'logs/error.log',

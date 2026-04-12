@@ -17,15 +17,50 @@ export class ScannerController {
   // GET /scanner/watchlist — danh sách active từ DB
   @Get('watchlist')
   async getWatchlist() {
-    return this.watchlistService.findActive();
+    return this.watchlistService.findActiveSortedByPriority();
   }
 
-  // GET /scanner/signals-summary — tín hiệu mới nhất của toàn bộ watchlist
+  // GET /scanner/signals-summary — tín hiệu mới nhất; orderedTickers = ưu tiên vốn hoá + thanh khoản
   @Get('signals-summary')
   async getSignalsSummary() {
-    const items = await this.watchlistService.findActive();
+    const items = await this.watchlistService.findActiveSortedByPriority();
     const tickers = items.map((s) => s.ticker);
-    return this.signalService.getSignalsSummary(tickers);
+    const summary = await this.signalService.getSignalsSummary(tickers);
+    return { orderedTickers: tickers, summary };
+  }
+
+  /** GET /scanner/latest-signals?limit=40 — feed các bản ghi tín hiệu gần nhất (chỉ mã trong watchlist active) */
+  @Get('latest-signals')
+  async getLatestSignals(@Query('limit') limit?: string) {
+    const items = await this.watchlistService.findActiveSortedByPriority();
+    const tickers = items.map((s) => s.ticker);
+    const n = Math.min(200, Math.max(1, parseInt(limit ?? '40', 10) || 40));
+    const signals = await this.signalService.getLatestSignalsForTickers(
+      tickers,
+      n,
+    );
+    return { signals };
+  }
+
+  /** Heuristic: mã đang «sắp» có tín hiệu (MACD/RSI/EMA/BB) — cần thêm vài nến xác nhận */
+  @Get('forming-setups')
+  async getFormingSetups() {
+    const wl = await this.watchlistService.findActiveSortedByPriority();
+    const tickers = wl.map((s) => s.ticker);
+    const meta = new Map(
+      wl.map((i) => [
+        i.ticker.toUpperCase(),
+        { name: i.name, sector: i.sector },
+      ]),
+    );
+    const data = await this.signalService.getFormingSetupsForWatchlist(tickers);
+    return {
+      ...data,
+      items: data.items.map((row) => ({
+        ...row,
+        ...meta.get(row.ticker),
+      })),
+    };
   }
 
   // POST /scanner/sync?full=true — enqueue sync giá tất cả mã
@@ -45,7 +80,11 @@ export class ScannerController {
   @Post('scan')
   async scanAll() {
     const job = await this.queueService.enqueueScanAll();
-    return { jobId: job.id, status: 'queued', message: 'Đang quét tín hiệu toàn watchlist' };
+    return {
+      jobId: job.id,
+      status: 'queued',
+      message: 'Đang quét tín hiệu toàn watchlist',
+    };
   }
 
   // POST /scanner/alert — kiểm tra biến động intraday (nhẹ, giữ đồng bộ)
@@ -66,7 +105,13 @@ export class ScannerController {
   @UseGuards(JwtAuthGuard)
   @Post('analyze-history')
   async analyzeHistoryAll(@Query('from') from?: string) {
-    const job = await this.queueService.enqueueAnalyzeHistoryAll(from ?? '2025-01-01');
-    return { jobId: job.id, status: 'queued', message: `Phân tích lịch sử từ ${from ?? '2025-01-01'}` };
+    const job = await this.queueService.enqueueAnalyzeHistoryAll(
+      from ?? '2025-01-01',
+    );
+    return {
+      jobId: job.id,
+      status: 'queued',
+      message: `Phân tích lịch sử từ ${from ?? '2025-01-01'}`,
+    };
   }
 }

@@ -5,12 +5,14 @@ import { Repository } from 'typeorm';
 import { StockPrice } from '../stock/entities/stock-price.entity';
 import { TelegramService } from '../telegram/telegram.service';
 import {
+  PatternLevel,
   PriceTarget,
   Recommendation,
   RecommendationResult,
   SignalWeight,
 } from './dto/recommendation.dto';
 import { Signal, SignalDirection, SignalType } from './entities/signal.entity';
+import { buildPatternAnalysis } from './chart-patterns';
 import { SignalService } from './signal.service';
 
 const SIGNAL_WEIGHTS: Record<SignalType, number> = {
@@ -88,6 +90,8 @@ export class RecommendationService {
         score: 0,
         confidence: 'LOW',
         priceTarget: null,
+        patternSummary: null,
+        patternLevels: null,
         bullishSignals: [],
         bearishSignals: [],
         neutralSignals: [],
@@ -98,9 +102,13 @@ export class RecommendationService {
 
     await this.signalService.analyze(ticker);
 
-    // Luôn tải bars để tính priceTarget dù có hay không có tín hiệu
-    const bars = await this.loadBars(ticker, 60);
+    // Một lần tải 130 phiên daily: price target + mô hình giá
+    const bars = await this.loadBars(ticker, 130);
     const priceTarget = bars.length >= 20 ? calcPriceTarget(bars) : null;
+    const patternAnalysis =
+      bars.length >= 80 ? buildPatternAnalysis(bars) : null;
+    const patternSummary = patternAnalysis?.summary ?? null;
+    const patternLevels = patternAnalysis?.levels ?? null;
 
     // Lấy ngày giao dịch mới nhất từ DB giá
     const latestPrice = await this.stockPriceRepo.findOne({
@@ -117,7 +125,14 @@ export class RecommendationService {
           })
         : [];
 
-    return this.buildResult(ticker, tradingDate, signals, priceTarget);
+    return this.buildResult(
+      ticker,
+      tradingDate,
+      signals,
+      priceTarget,
+      patternSummary,
+      patternLevels,
+    );
   }
 
   async recommendAndNotify(ticker: string): Promise<RecommendationResult> {
@@ -142,12 +157,62 @@ export class RecommendationService {
 
   // ─── Core ────────────────────────────────────────────────────────────
 
-  private buildResult(
-    ticker: string,
-    tradingDate: string,
-    signals: Signal[],
-    priceTarget: PriceTarget | null,
-  ): RecommendationResult {
+  /**
+   * Cùng công thức với khuyến nghị realtime — dùng backtest lịch sử theo từng phiên.
+   * `reasoning`: một dòng gọn (điểm · khuyến nghị · ↑/↓ loại tín hiệu), không phải đoạn dài như recommend UI.
+   * `buyStrength` / `sellStrength`: STRONG = STRONG_BUY/STRONG_SELL, MODERATE = BUY/SELL (lọc nhiễu khi chỉ dùng tín hiệu mạnh).
+   */
+  evaluateSignals(signals: Signal[]): {
+    score: number;
+    recommendation: Recommendation;
+    reasoning: string;
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+    buyStrength: 'STRONG' | 'MODERATE' | null;
+    sellStrength: 'STRONG' | 'MODERATE' | null;
+  } {
+    const {
+      normalizedScore,
+      recommendation,
+      bullishSignals,
+      bearishSignals,
+      neutralSignals,
+      hasVolumeSurge,
+    } = this.computeRecommendationFromSignals(signals);
+    const confidence = calcConfidence(signals.length, normalizedScore);
+    /** Một dòng gọn cho backtest (điểm + khuyến nghị + loại tín hiệu) */
+    const reasoning = buildReasoningShort(
+      normalizedScore,
+      recommendation,
+      bullishSignals,
+      bearishSignals,
+      neutralSignals,
+      hasVolumeSurge,
+    );
+    let buyStrength: 'STRONG' | 'MODERATE' | null = null;
+    let sellStrength: 'STRONG' | 'MODERATE' | null = null;
+    if (recommendation === Recommendation.STRONG_BUY) buyStrength = 'STRONG';
+    else if (recommendation === Recommendation.BUY) buyStrength = 'MODERATE';
+    if (recommendation === Recommendation.STRONG_SELL) sellStrength = 'STRONG';
+    else if (recommendation === Recommendation.SELL) sellStrength = 'MODERATE';
+
+    return {
+      score: Number(normalizedScore.toFixed(2)),
+      recommendation,
+      reasoning,
+      confidence,
+      buyStrength,
+      sellStrength,
+    };
+  }
+
+  private computeRecommendationFromSignals(signals: Signal[]): {
+    normalizedScore: number;
+    recommendation: Recommendation;
+    bullishSignals: SignalWeight[];
+    bearishSignals: SignalWeight[];
+    neutralSignals: SignalWeight[];
+    hasVolumeSurge: boolean;
+  } {
     const bullishSignals: SignalWeight[] = [];
     const bearishSignals: SignalWeight[] = [];
     const neutralSignals: SignalWeight[] = [];
@@ -178,8 +243,34 @@ export class RecommendationService {
       }
     }
 
-    const normalizedScore = Math.max(-10, Math.min(10, (score / 10) * 10));
+    const normalizedScore = Math.max(-10, Math.min(10, score));
     const recommendation = scoreToRecommendation(normalizedScore);
+    return {
+      normalizedScore,
+      recommendation,
+      bullishSignals,
+      bearishSignals,
+      neutralSignals,
+      hasVolumeSurge,
+    };
+  }
+
+  private buildResult(
+    ticker: string,
+    tradingDate: string,
+    signals: Signal[],
+    priceTarget: PriceTarget | null,
+    patternSummary: string | null,
+    patternLevels: PatternLevel[] | null,
+  ): RecommendationResult {
+    const {
+      normalizedScore,
+      recommendation,
+      bullishSignals,
+      bearishSignals,
+      neutralSignals,
+      hasVolumeSurge,
+    } = this.computeRecommendationFromSignals(signals);
     const confidence = calcConfidence(signals.length, normalizedScore);
     const reasoning = buildReasoning(
       bullishSignals,
@@ -201,6 +292,8 @@ export class RecommendationService {
       score: Number(normalizedScore.toFixed(2)),
       confidence,
       priceTarget,
+      patternSummary,
+      patternLevels,
       bullishSignals,
       bearishSignals,
       neutralSignals,
@@ -210,6 +303,22 @@ export class RecommendationService {
   }
 
   // ─── Telegram ────────────────────────────────────────────────────────
+
+  private formatPatternLevelsForTelegram(levels: PatternLevel[] | null): string {
+    if (!levels?.length) return '';
+    const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN');
+    return (
+      '\n<b>Đỉnh / đáy tham chiếu</b>\n' +
+      levels
+        .map(
+          (l) =>
+            `  • ${l.role}: <b>${fmt(l.price)}đ</b>` +
+            (l.date ? ` <i>(${l.date})</i>` : ''),
+        )
+        .join('\n') +
+      '\n'
+    );
+  }
 
   private async sendRecommendation(
     result: RecommendationResult,
@@ -236,9 +345,8 @@ export class RecommendationService {
         `  • 🟢 Giá mua vào: <b>${fmt(pt.entryPrice)}đ</b>` +
         `  (+${pt.upside.toFixed(1)}% kỳ vọng)\n` +
         `  • 🎯 Chốt lời:    <b>${fmt(pt.targetPrice)}đ</b>\n` +
-        `  • 🛑 Cắt lỗ:      <b>${fmt(pt.stopLoss)}đ</b>` +
-        `  (-${pt.downside.toFixed(1)}% nếu sai)\n` +
-        `  • ⚖️ R:R = ${rrStr}\n` +
+        `  • 📌 <i>Không đặt cắt lỗ tự động</i> — chiến lược ôm trung/dài hạn\n` +
+        `  • ⚖️ R:R tham chiếu (lợi nhuận mục tiêu / 8% vốn) = ${rrStr}\n` +
         `  • 📐 ATR-14: ${fmt(pt.atr)}đ` +
         ` | Hỗ trợ: ${fmt(pt.support)}đ | Kháng cự: ${fmt(pt.resistance)}đ\n`;
     }
@@ -264,6 +372,9 @@ export class RecommendationService {
 
     msg +=
       `\n💡 ${result.reasoning}\n` +
+      (result.patternSummary
+        ? `\n📐 <b>Mô hình giá (daily)</b>\n${result.patternSummary}${this.formatPatternLevelsForTelegram(result.patternLevels)}\n`
+        : '') +
       `\n📌 <b>${result.action}</b>\n\n` +
       `<i>⚠️ Phân tích kỹ thuật tự động, không phải tư vấn đầu tư chuyên nghiệp.</i>`;
 
@@ -286,8 +397,8 @@ export class RecommendationService {
       msg +=
         `\n⚠️ <b>Vùng giá cảnh báo</b>\n` +
         `  • Giá hiện tại: <b>${fmt(pt.currentPrice)}đ</b>\n` +
-        `  • 🛑 Chốt lời/cắt lỗ nếu giá < <b>${fmt(pt.stopLoss)}đ</b>\n` +
-        `  • 📐 Hỗ trợ gần: ${fmt(pt.support)}đ | Kháng cự: ${fmt(pt.resistance)}đ\n`;
+        `  • 📐 Hỗ trợ gần: ${fmt(pt.support)}đ | Kháng cự: ${fmt(pt.resistance)}đ\n` +
+        `  • <i>Chiến lược không dùng SL tự động — cân nhắc giảm tỷ trọng theo tín hiệu.</i>\n`;
     }
 
     if (result.bearishSignals.length) {
@@ -299,6 +410,9 @@ export class RecommendationService {
 
     msg +=
       `\n💡 ${result.reasoning}\n` +
+      (result.patternSummary
+        ? `\n📐 <b>Mô hình giá (daily)</b>\n${result.patternSummary}${this.formatPatternLevelsForTelegram(result.patternLevels)}\n`
+        : '') +
       `\n📌 <b>${result.action}</b>\n\n` +
       `<i>⚠️ Phân tích kỹ thuật tự động, không phải tư vấn đầu tư chuyên nghiệp.</i>`;
 
@@ -322,6 +436,7 @@ export class RecommendationService {
       low: Number(r.low),
       close: Number(r.close),
       volume: Number(r.volume),
+      tradingDate: r.tradingDate,
     }));
   }
 }
@@ -329,9 +444,9 @@ export class RecommendationService {
 // ─── Price Target Calculator ─────────────────────────────────────────────────
 
 const MIN_UPSIDE_PCT = 0.12; // kỳ vọng tối thiểu 12% để xứng đáng đầu tư dài hạn
-const MAX_STOP_PCT = 0.07; // cắt lỗ tối đa 7% từ giá vào
 
-function calcPriceTarget(
+/** Dùng chung recommend + backtest: mục tiêu từ nến lịch sử đến phiên hiện tại (không đặt SL). */
+export function calcPriceTarget(
   bars: { open: number; high: number; low: number; close: number }[],
 ): PriceTarget {
   const last = bars[bars.length - 1];
@@ -369,30 +484,81 @@ function calcPriceTarget(
     targetByAtr,
   );
 
-  // Cắt lỗ: không quá 7% từ giá vào, dùng support - 0.5×ATR làm sàn kỹ thuật
-  const stopByPct = entryPrice * (1 - MAX_STOP_PCT);
-  const stopBySupport = support - atr * 0.5;
-  // Lấy mức cắt lỗ cao hơn (gần entry hơn) để kiểm soát rủi ro
-  const stopLoss = Math.max(stopByPct, stopBySupport);
-
   const profitPotential = targetPrice - entryPrice;
-  const lossPotential = entryPrice - stopLoss;
+  const syntheticRisk = entryPrice * 0.08;
   const riskReward =
-    lossPotential > 0
-      ? Number((profitPotential / lossPotential).toFixed(2))
+    syntheticRisk > 0
+      ? Number((profitPotential / syntheticRisk).toFixed(2))
       : 0;
 
   const upside = ((targetPrice - currentPrice) / currentPrice) * 100;
-  const downside = ((currentPrice - stopLoss) / currentPrice) * 100;
 
   return {
     currentPrice: Math.round(currentPrice),
     entryPrice: Math.round(entryPrice),
     targetPrice: Math.round(targetPrice),
-    stopLoss: Math.round(stopLoss),
+    stopLoss: null,
     riskReward,
     upside: Number(upside.toFixed(2)),
-    downside: Number(downside.toFixed(2)),
+    downside: 0,
+    atr: Math.round(atr),
+    support: Math.round(support),
+    resistance: Math.round(resistance),
+  };
+}
+
+/** Chiến lược vị thế (TB giá): TP tối thiểu từ giá vào bình quân — mặc định ≥ 20%. */
+export const POSITION_MIN_UPSIDE_PCT = 0.2;
+
+/**
+ * TP từ **giá vào thực tế** (bình quân sau TB), tận dụng kháng cự/ATR; tối thiểu `minUpsidePct` (mặc định 20%).
+ * Không tính mức cắt lỗ — `stopLoss` luôn null.
+ */
+export function calcPriceTargetForFixedEntry(
+  fixedEntryPrice: number,
+  bars: { open: number; high: number; low: number; close: number }[],
+  options?: { minUpsidePct?: number },
+): Pick<
+  PriceTarget,
+  'targetPrice' | 'stopLoss' | 'riskReward' | 'atr' | 'support' | 'resistance'
+> {
+  const minPct = options?.minUpsidePct ?? POSITION_MIN_UPSIDE_PCT;
+  const last = bars[bars.length - 1];
+  const currentPrice = last.close;
+  const entryPrice = Number(fixedEntryPrice);
+
+  const atrResults = ATR.calculate({
+    high: bars.map((b) => b.high),
+    low: bars.map((b) => b.low),
+    close: bars.map((b) => b.close),
+    period: 14,
+  });
+  const atr = atrResults[atrResults.length - 1] ?? currentPrice * 0.02;
+
+  const recent20 = bars.slice(-20);
+  const support = Math.min(...recent20.map((b) => b.low));
+  const resistance = Math.max(...bars.map((b) => b.high));
+
+  const targetByResistance = resistance;
+  const targetByMinUpside = entryPrice * (1 + minPct);
+  const targetByAtr = entryPrice + atr * 5;
+  const targetPrice = Math.max(
+    targetByResistance,
+    targetByMinUpside,
+    targetByAtr,
+  );
+
+  const profitPotential = targetPrice - entryPrice;
+  const syntheticRisk = entryPrice * 0.08;
+  const riskReward =
+    syntheticRisk > 0
+      ? Number((profitPotential / syntheticRisk).toFixed(2))
+      : 0;
+
+  return {
+    targetPrice: Math.round(targetPrice),
+    stopLoss: null,
+    riskReward,
     atr: Math.round(atr),
     support: Math.round(support),
     resistance: Math.round(resistance),
@@ -444,10 +610,51 @@ function buildReasoning(
     [Recommendation.STRONG_BUY]: 'Chỉ báo hội tụ mạnh — cơ hội mua tốt.',
     [Recommendation.BUY]: 'Xu hướng tăng chiếm ưu thế — có thể mua vào.',
     [Recommendation.HOLD]: 'Chưa rõ xu hướng — chờ xác nhận thêm.',
-    [Recommendation.SELL]: 'Xu hướng giảm — cân nhắc chốt lời/cắt lỗ.',
+    [Recommendation.SELL]: 'Xu hướng giảm — cân nhắc giảm tỷ trọng.',
     [Recommendation.STRONG_SELL]: 'Chỉ báo giảm mạnh — nên thoát hàng.',
   };
   return (parts.length ? parts.join('; ') + '. ' : '') + suffix[rec];
+}
+
+/** Một dòng: điểm + khuyến nghị + ↑/↓ loại tín hiệu (rút gọn, không đoạn văn dài). */
+function buildReasoningShort(
+  normalizedScore: number,
+  rec: Recommendation,
+  bullish: SignalWeight[],
+  bearish: SignalWeight[],
+  neutral: SignalWeight[],
+  volumeSurge: boolean,
+): string {
+  const recVi: Record<Recommendation, string> = {
+    [Recommendation.STRONG_BUY]: 'MUA+',
+    [Recommendation.BUY]: 'MUA',
+    [Recommendation.HOLD]: 'GIỮ',
+    [Recommendation.SELL]: 'BÁN',
+    [Recommendation.STRONG_SELL]: 'BÁN+',
+  };
+  const chunks: string[] = [
+    `${Number(normalizedScore.toFixed(1))} · ${recVi[rec]}`,
+  ];
+  const joinTypes = (sw: SignalWeight[], max: number) =>
+    sw
+      .slice(0, max)
+      .map((s) => s.type)
+      .join(',');
+  if (bullish.length) {
+    const t = joinTypes(bullish, 5);
+    const more = bullish.length > 5 ? `+${bullish.length - 5}` : '';
+    chunks.push(`↑${t}${more ? '(' + more + ')' : ''}`);
+  }
+  if (bearish.length) {
+    const t = joinTypes(bearish, 5);
+    const more = bearish.length > 5 ? `+${bearish.length - 5}` : '';
+    chunks.push(`↓${t}${more ? '(' + more + ')' : ''}`);
+  }
+  if (neutral.length) chunks.push(`○${neutral.length} trung tính`);
+  if (volumeSurge) chunks.push('KL×1.3');
+  let out = chunks.join(' ');
+  if (out.length > 240) out = out.slice(0, 237) + '…';
+  return out;
 }
 
 function buildAction(
@@ -457,15 +664,15 @@ function buildAction(
 ): string {
   const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN');
   const priceInfo = pt
-    ? ` Mua quanh ${fmt(pt.entryPrice)}đ, chốt lời ${fmt(pt.targetPrice)}đ, cắt lỗ ${fmt(pt.stopLoss)}đ (R:R = 1:${pt.riskReward}).`
+    ? ` Mua quanh ${fmt(pt.entryPrice)}đ, chốt lời ${fmt(pt.targetPrice)}đ (R:R tham chiếu 1:${pt.riskReward.toFixed(1)}, không đặt SL).`
     : '';
 
   const verbs: Record<Recommendation, string> = {
-    [Recommendation.STRONG_BUY]: `🚀 MUA MẠNH ${ticker} — Tăng tỷ trọng ngay.${priceInfo}`,
+    [Recommendation.STRONG_BUY]: `🚀 Khuyến nghị mua tích cực ${ticker} — Có thể tăng tỷ trọng.${priceInfo}`,
     [Recommendation.BUY]: `📈 MUA ${ticker} — Mua một phần, chờ xác nhận thêm.${priceInfo}`,
     [Recommendation.HOLD]: `⏸️ GIỮ ${ticker} — Không hành động, theo dõi phiên sau.`,
     [Recommendation.SELL]: `📉 BÁN ${ticker} — Giảm tỷ trọng hoặc chốt lời.${priceInfo}`,
-    [Recommendation.STRONG_SELL]: `🔥 BÁN MẠNH ${ticker} — Thoát toàn bộ.${priceInfo}`,
+    [Recommendation.STRONG_SELL]: `🔥 Khuyến nghị bán tích cực ${ticker} — Cân nhắc thoát.${priceInfo}`,
   };
   return verbs[rec];
 }

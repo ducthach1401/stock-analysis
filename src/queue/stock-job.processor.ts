@@ -22,15 +22,25 @@ export class StockJobProcessor extends WorkerHost {
     this.logger.log(`▶ Job [${job.name}] #${job.id} bắt đầu`);
     switch (job.name as JobName) {
       case JobName.SYNC_ALL:
-        return this.handleSyncAll(job);
+        return this.handleSyncAll(
+          job as Job<{ from?: string; full?: boolean }>,
+        );
       case JobName.SYNC_TICKER:
-        return this.handleSyncTicker(job);
+        return this.handleSyncTicker(
+          job as Job<{
+            ticker: string;
+            from?: string;
+            full?: boolean;
+          }>,
+        );
       case JobName.SCAN_ALL:
-        return this.handleScanAll(job);
+        return this.handleScanAll(job as Job<{ from?: string }>);
       case JobName.ANALYZE_HISTORY_ALL:
-        return this.handleAnalyzeHistoryAll(job);
+        return this.handleAnalyzeHistoryAll(job as Job<{ from?: string }>);
       case JobName.ANALYZE_HISTORY_TICKER:
-        return this.handleAnalyzeHistoryTicker(job);
+        return this.handleAnalyzeHistoryTicker(
+          job as Job<{ ticker: string; from?: string }>,
+        );
       default:
         throw new Error(`Unknown job: ${job.name}`);
     }
@@ -47,10 +57,11 @@ export class StockJobProcessor extends WorkerHost {
     let errors = 0;
 
     for (let i = 0; i < tickers.length; i++) {
-      const ticker = tickers[i]!;
+      const ticker = tickers[i];
       try {
         if (full) await this.stockService.syncHistoryFull(ticker);
         else await this.stockService.syncHistory(ticker, from);
+        await this.runSignalsAfterSync(ticker, from);
         synced++;
       } catch (e) {
         this.logger.error(`Sync lỗi ${ticker}: ${(e as Error).message}`);
@@ -69,8 +80,28 @@ export class StockJobProcessor extends WorkerHost {
     const saved = full
       ? await this.stockService.syncHistoryFull(ticker)
       : await this.stockService.syncHistory(ticker, from);
+    await this.runSignalsAfterSync(ticker, from);
     await this.updateProgress(job, 1, 1, ticker);
     return { saved };
+  }
+
+  /** Sau khi có giá mới: tín hiệu phiên hiện tại + backfill lịch sử (INSERT IGNORE). */
+  private async runSignalsAfterSync(
+    ticker: string,
+    from?: string,
+  ): Promise<void> {
+    try {
+      await this.signalService.analyze(ticker);
+    } catch (e) {
+      this.logger.warn(`analyze ${ticker} sau sync: ${(e as Error).message}`);
+    }
+    try {
+      await this.signalService.analyzeAllHistory(ticker, from);
+    } catch (e) {
+      this.logger.warn(
+        `analyzeAllHistory ${ticker} sau sync: ${(e as Error).message}`,
+      );
+    }
   }
 
   private async handleScanAll(
@@ -81,7 +112,7 @@ export class StockJobProcessor extends WorkerHost {
     let errors = 0;
 
     for (let i = 0; i < tickers.length; i++) {
-      const ticker = tickers[i]!;
+      const ticker = tickers[i];
       try {
         await this.signalService.analyze(ticker);
         scanned++;
@@ -104,7 +135,7 @@ export class StockJobProcessor extends WorkerHost {
     let totalDays = 0;
 
     for (let i = 0; i < tickers.length; i++) {
-      const ticker = tickers[i]!;
+      const ticker = tickers[i];
       try {
         const r = await this.signalService.analyzeAllHistory(ticker, from);
         totalSaved += r.saved;

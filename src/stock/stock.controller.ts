@@ -9,11 +9,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SignalService } from '../signal/signal.service';
 import { StockService } from './stock.service';
 
 @Controller('stocks')
 export class StockController {
-  constructor(private readonly stockService: StockService) {}
+  constructor(
+    private readonly stockService: StockService,
+    private readonly signalService: SignalService,
+  ) {}
 
   // GET /stocks/:ticker/history?from=2024-01-01&to=2024-12-31
   @Get(':ticker/history')
@@ -34,28 +38,45 @@ export class StockController {
     return this.stockService.fetchLatestBar(ticker);
   }
 
-  // GET /stocks/:ticker/stored?from=2024-01-01&to=2024-12-31
+  // GET /stocks/:ticker/stored?from=&to=&limit=500&before=YYYY-MM-DD
+  // limit: chỉ lấy N bản ghi mới nhất (DESC). before: tradingDate < before (tải trang cũ hơn).
   @Get(':ticker/stored')
   getStoredHistory(
     @Param('ticker') ticker: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('limit') limitStr?: string,
+    @Query('before') before?: string,
   ) {
-    return this.stockService.getStoredHistory(ticker, from, to);
+    const parsed = limitStr ? parseInt(limitStr, 10) : NaN;
+    const limit =
+      !Number.isNaN(parsed) && parsed > 0 ? Math.min(parsed, 5000) : undefined;
+    return this.stockService.getStoredHistory(ticker, from, to, {
+      limit,
+      before,
+    });
   }
 
-  // POST /stocks/:ticker/sync?from=2024-01-01
+  // POST /stocks/:ticker/sync?from=2024-01-01 — sau sync tự chạy phân tích + lịch sử tín hiệu
   @UseGuards(JwtAuthGuard)
   @Post(':ticker/sync')
-  syncHistory(
+  async syncHistory(
     @Param('ticker') ticker: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('full') full?: string,
   ) {
-    if (full === '1' || full === 'true')
-      return this.stockService.syncHistoryFull(ticker, to);
-    return this.stockService.syncHistory(ticker, from, to);
+    const saved =
+      full === '1' || full === 'true'
+        ? await this.stockService.syncHistoryFull(ticker, to)
+        : await this.stockService.syncHistory(ticker, from, to);
+    try {
+      await this.signalService.analyze(ticker);
+      await this.signalService.analyzeAllHistory(ticker, from);
+    } catch {
+      /* analyze* đã log trong SignalService */
+    }
+    return saved;
   }
 
   // POST /stocks/:ticker/seed?bars=120 — tạo dữ liệu mẫu để test

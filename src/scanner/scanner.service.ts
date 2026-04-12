@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { Recommendation } from '../signal/dto/recommendation.dto';
 import { RecommendationService } from '../signal/recommendation.service';
 import { SignalDirection } from '../signal/entities/signal.entity';
 import { SignalService } from '../signal/signal.service';
@@ -7,6 +8,13 @@ import { StockService } from '../stock/stock.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { PositionService } from '../position/position.service';
 import { WatchlistService } from '../watchlist/watchlist.service';
+import { tickerCapLiquidityRank } from './watchlist';
+
+const REC_CONF_ORDER: Record<'HIGH' | 'MEDIUM' | 'LOW', number> = {
+  HIGH: 3,
+  MEDIUM: 2,
+  LOW: 1,
+};
 
 @Injectable()
 export class ScannerService {
@@ -84,6 +92,14 @@ export class ScannerService {
       for (const ticker of tickers) {
         try {
           result[ticker] = await this.stockService.syncHistory(ticker, from);
+          try {
+            await this.signalService.analyze(ticker);
+            await this.signalService.analyzeAllHistory(ticker, from);
+          } catch (e) {
+            this.logger.warn(
+              `Tín hiệu sau sync ${ticker}: ${(e as Error).message}`,
+            );
+          }
           await delay(300);
         } catch (e) {
           this.logger.error(`Sync lỗi ${ticker}: ${(e as Error).message}`);
@@ -105,7 +121,7 @@ export class ScannerService {
   }
 
   async scanAll(): Promise<void> {
-    const watchlist = await this.watchlistService.findActive();
+    const watchlist = await this.watchlistService.findActiveSortedByPriority();
     const allSignals: Array<{
       ticker: string;
       name: string;
@@ -116,7 +132,10 @@ export class ScannerService {
 
     for (const stock of watchlist) {
       try {
-        const signals = await this.signalService.analyze(stock.ticker);
+        await this.signalService.analyze(stock.ticker);
+        const signals = await this.signalService.getSignalsForLatestSession(
+          stock.ticker,
+        );
         const bullish = signals
           .filter((s) => s.direction === SignalDirection.BULLISH)
           .map((s) => s.type.toString());
@@ -154,54 +173,67 @@ export class ScannerService {
   }
 
   async recommendAll(): Promise<void> {
-    const watchlist = await this.watchlistService.findActive();
+    const watchlist = await this.watchlistService.findActiveSortedByPriority();
     const date = new Date().toLocaleDateString('vi-VN', {
       timeZone: 'Asia/Ho_Chi_Minh',
     });
 
-    const buys: string[] = [];
-    const distributions: string[] = [];
-    const distributionTickers: string[] = [];
+    const buyRows: { rank: number; conf: number; line: string }[] = [];
+    const distRows: { rank: number; conf: number; line: string }[] = [];
 
     for (const stock of watchlist) {
       try {
         const result = await this.recommendationService.recommend(stock.ticker);
         const pt = result.priceTarget;
         const rec = result.recommendation;
+        const rank = tickerCapLiquidityRank(stock.ticker);
+        const conf = REC_CONF_ORDER[result.confidence] ?? 0;
 
-        if (rec === 'STRONG_BUY' || rec === 'BUY') {
-          // Lớp bảo vệ: chỉ mở vị thế mới khi tín hiệu đủ mạnh (HIGH confidence)
-          // BUY thường có thể là noise; STRONG_BUY hoặc HIGH confidence mới đáng tin
-          const strongEnough =
-            rec === 'STRONG_BUY' || result.confidence === 'HIGH';
-          const isNew = strongEnough
-            ? await this.positionService.openPosition(result)
-            : false;
-          if (isNew) {
-            await this.recommendationService.recommendAndNotify(stock.ticker);
-          }
+        if (rec === Recommendation.STRONG_BUY || rec === Recommendation.BUY) {
+          const scale = await this.positionService.openOrScaleIn(result);
           const priceStr = pt
             ? ` | ${(pt.currentPrice / 1000).toFixed(1)}k → ${(pt.targetPrice / 1000).toFixed(1)}k (+${pt.upside.toFixed(0)}%)`
             : '';
           const star = result.confidence === 'HIGH' ? ' ⭐' : '';
-          const newTag = isNew
-            ? ''
-            : strongEnough
-              ? ' <i>(đang theo dõi)</i>'
-              : ' <i>(tín hiệu yếu, không mở lệnh)</i>';
-          buys.push(`  • <b>${stock.ticker}</b>${star}${priceStr}${newTag}`);
-        } else if (rec === 'STRONG_SELL' || rec === 'SELL') {
-          distributionTickers.push(stock.ticker);
-          await this.recommendationService.recommendAndNotify(stock.ticker);
+          let newTag = '';
+          if (scale.outcome === 'OPENED') newTag = '';
+          else if (scale.outcome === 'AVERAGED') {
+            const ep = scale.weightedEntryPrice;
+            newTag =
+              ep != null
+                ? ` <i>(TB giá — <b>giá vào mới</b> ${(ep / 1000).toFixed(1)}k)</i>`
+                : ' <i>(trung bình giá thêm)</i>';
+          } else if (scale.detail) {
+            newTag = ` <i>(${scale.detail})</i>`;
+          } else {
+            newTag = ' <i>(không hành động)</i>';
+          }
+          buyRows.push({
+            rank,
+            conf,
+            line: `  • <b>${stock.ticker}</b>${star}${priceStr}${newTag}`,
+          });
+        } else if (
+          rec === Recommendation.STRONG_SELL ||
+          rec === Recommendation.SELL
+        ) {
           const priceStr = pt
             ? ` | ${(pt.currentPrice / 1000).toFixed(1)}k`
             : '';
           const star = result.confidence === 'HIGH' ? ' ⭐' : '';
           const topSignal =
             result.bearishSignals[0]?.type.replace(/_/g, ' ') ?? '';
-          distributions.push(
-            `  • <b>${stock.ticker}</b>${star}${priceStr} — ${topSignal}`,
-          );
+          const sellNote =
+            rec === Recommendation.STRONG_SELL
+              ? ' <i>— Chiến lược không tự đóng vị thế theo đảo chiều</i>'
+              : ' <i>— BÁN: chỉ theo dõi</i>';
+          distRows.push({
+            rank,
+            conf,
+            line:
+              `  • <b>${stock.ticker}</b>${star}${priceStr} — ` +
+              `${topSignal || 'bearish'}${sellNote}`,
+          });
         }
 
         await delay(300);
@@ -212,21 +244,29 @@ export class ScannerService {
       }
     }
 
-    if (distributionTickers.length) {
-      await this.positionService.trackAll(distributionTickers);
-    }
+    const sortRecRows = (rows: typeof buyRows) =>
+      [...rows].sort((a, b) => {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        return b.conf - a.conf;
+      });
+    const buys = sortRecRows(buyRows).map((r) => r.line);
+    const distributions = sortRecRows(distRows).map((r) => r.line);
 
     const hasAlert = buys.length > 0 || distributions.length > 0;
     if (hasAlert) {
       let summary = `📊 <b>Tổng hợp tín hiệu</b> — ${date}\n`;
-      summary += `<i>Quét ${watchlist.length} mã VNIndex</i>\n`;
+      summary += `<i>Chỉ khuyến nghị theo phiên mới nhất · Quét ${watchlist.length} mã — ưu tiên blue-chip + thanh khoản, độ tin cậy</i>\n`;
       summary += '─'.repeat(30) + '\n\n';
 
       if (buys.length) {
         summary += `📈 <b>MUA (${buys.length} mã)</b>\n${buys.join('\n')}\n\n`;
       }
       if (distributions.length) {
-        summary += `🔴 <b>PHÂN PHỐI ĐỈNH (${distributions.length} mã)</b>\n${distributions.join('\n')}\n\n`;
+        summary += `🔻 <b>ĐẢO CHIỀU / BÁN (${distributions.length} mã)</b>\n`;
+        summary +=
+          `<i><b>STRONG_SELL</b> = điểm tổng ≤ −6. ` +
+          `Hệ thống <b>không</b> tự đóng vị thế theo tín hiệu bán — chỉ mua/TB và chờ target (hoặc đóng tay).</i>\n`;
+        summary += `${distributions.join('\n')}\n\n`;
       }
 
       summary += `<i>⚠️ Phân tích kỹ thuật tự động, không phải tư vấn đầu tư chuyên nghiệp.</i>`;
@@ -251,14 +291,24 @@ export class ScannerService {
     }>,
     totalScanned: number,
   ): Promise<void> {
-    const bullishStocks = results.filter((r) => r.bullish.length > 0);
-    const bearishStocks = results.filter((r) => r.bearish.length > 0);
+    const bullishStocks = results
+      .filter((r) => r.bullish.length > 0)
+      .sort(
+        (a, b) =>
+          tickerCapLiquidityRank(a.ticker) - tickerCapLiquidityRank(b.ticker),
+      );
+    const bearishStocks = results
+      .filter((r) => r.bearish.length > 0)
+      .sort(
+        (a, b) =>
+          tickerCapLiquidityRank(a.ticker) - tickerCapLiquidityRank(b.ticker),
+      );
     const date = new Date().toLocaleDateString('vi-VN', {
       timeZone: 'Asia/Ho_Chi_Minh',
     });
 
     let msg = `📊 <b>Báo cáo tín hiệu đảo chiều</b> — ${date}\n`;
-    msg += `<i>Quét ${totalScanned} mã | ${results.length} mã có tín hiệu</i>\n`;
+    msg += `<i>Chỉ phiên giao dịch mới nhất (cây nến ngày đó) · Quét ${totalScanned} mã | ${results.length} mã có tín hiệu</i>\n`;
     msg += '─'.repeat(30) + '\n\n';
 
     if (bullishStocks.length) {
@@ -288,14 +338,18 @@ export class ScannerService {
     const results: { ticker: string; analyzed: number; saved: number }[] = [];
     const fromLabel = from ?? '2025-01-01';
 
-    this.logger.log(`Bắt đầu analyzeHistory ${tickers.length} mã từ ${fromLabel}...`);
+    this.logger.log(
+      `Bắt đầu analyzeHistory ${tickers.length} mã từ ${fromLabel}...`,
+    );
     for (const ticker of tickers) {
       try {
         const r = await this.signalService.analyzeAllHistory(ticker, from);
         results.push({ ticker, ...r });
         await delay(50); // nhẹ để không block CPU
       } catch (e) {
-        this.logger.error(`analyzeHistory lỗi ${ticker}: ${(e as Error).message}`);
+        this.logger.error(
+          `analyzeHistory lỗi ${ticker}: ${(e as Error).message}`,
+        );
         results.push({ ticker, analyzed: 0, saved: 0 });
       }
     }

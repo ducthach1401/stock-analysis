@@ -51,9 +51,10 @@ export class QueueService {
     if (!job) return null;
 
     const state = await job.getState();
-    const progress = job.progress as object | number;
-    const result = state === 'completed' ? job.returnvalue : null;
-    const failReason = state === 'failed' ? job.failedReason : null;
+    const progress: unknown = job.progress;
+    const result: unknown = state === 'completed' ? job.returnvalue : null;
+    const failReason: unknown =
+      state === 'failed' ? job.failedReason : undefined;
 
     return {
       id: job.id,
@@ -62,7 +63,7 @@ export class QueueService {
       progress,
       result,
       failReason,
-      data: job.data,
+      data: job.data as unknown,
       createdAt: new Date(job.timestamp).toISOString(),
     };
   }
@@ -81,7 +82,7 @@ export class QueueService {
 
   private defaultOpts() {
     return {
-      removeOnComplete: 50,   // giữ 50 jobs hoàn thành gần nhất
+      removeOnComplete: 50, // giữ 50 jobs hoàn thành gần nhất
       removeOnFail: 20,
       attempts: 2,
       backoff: { type: 'fixed' as const, delay: 5000 },

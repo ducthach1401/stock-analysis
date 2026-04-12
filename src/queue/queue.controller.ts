@@ -46,7 +46,11 @@ export class QueueController {
     @Query('full') full?: string,
   ) {
     const fullSync = full === 'true' || full === '1';
-    const job = await this.queueService.enqueueSyncTicker(ticker, from, fullSync);
+    const job = await this.queueService.enqueueSyncTicker(
+      ticker,
+      from,
+      fullSync,
+    );
     return { jobId: job.id, status: 'queued', name: job.name };
   }
 
