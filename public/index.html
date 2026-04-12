@@ -48,7 +48,7 @@
     </div>
     <nav class="flex gap-1">
       <template x-for="t in tabs" :key="t.id">
-        <button @click="tab = t.id"
+        <button @click="tab = t.id; $dispatch('tab-changed', t.id)"
           :class="tab === t.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'"
           class="px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5">
           <span x-html="t.icon" class="w-4 h-4"></span>
@@ -408,13 +408,15 @@
   </div>
 
   <!-- ═══ SIGNALS TAB ═══ -->
-  <div x-show="tab === 'signals'" x-cloak>
+  <div x-show="tab === 'signals'" x-cloak
+    @tab-changed.window="if ($event.detail === 'signals' && signalTicker && !barData.length) loadSignals()">
     <div class="card">
       <div class="flex flex-wrap items-center gap-3 mb-5">
         <h2 class="font-semibold text-gray-900">🔍 Tín hiệu kỹ thuật</h2>
 
         <!-- Ticker autocomplete -->
-        <div class="relative" x-data="tickerPicker('signalTicker', () => loadSignals())">
+        <div class="relative" x-data="tickerPicker('signalTicker', () => loadSignals())"
+          x-effect="if (signalTicker && query !== signalTicker) query = signalTicker">
           <div class="flex items-center border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-300"
             :class="open ? 'border-indigo-400' : 'border-gray-200'">
             <input
@@ -480,6 +482,41 @@
           </div>
         </div>
         <div x-ref="chartContainer" class="w-full rounded-xl overflow-hidden border border-gray-100" style="height:500px"></div>
+
+        <!-- RSI sub-chart -->
+        <div class="mt-1">
+          <div class="flex items-center justify-between px-1 mb-0.5">
+            <span class="text-xs font-semibold text-gray-500">RSI (14)</span>
+            <span class="text-xs font-mono" x-show="indicators.rsi !== null"
+              :class="{
+                'text-red-500 font-bold':   indicators.rsi >= 70,
+                'text-emerald-500 font-bold': indicators.rsi <= 30,
+                'text-gray-600': indicators.rsi > 30 && indicators.rsi < 70,
+              }">
+              <span x-text="indicators.rsi?.toFixed(1)"></span>
+              <span class="ml-1 text-gray-400"
+                x-text="indicators.rsi >= 70 ? '— Overbought ⚠' : indicators.rsi <= 30 ? '— Oversold 💡' : ''"></span>
+            </span>
+          </div>
+          <div x-ref="rsiContainer" class="w-full rounded-lg overflow-hidden border border-gray-100" style="height:120px"></div>
+        </div>
+
+        <!-- MACD sub-chart -->
+        <div class="mt-1">
+          <div class="flex items-center justify-between px-1 mb-0.5">
+            <span class="text-xs font-semibold text-gray-500">MACD (12, 26, 9)</span>
+            <span class="text-xs font-mono" x-show="indicators.macd !== null">
+              <span class="text-blue-500">MACD <span x-text="indicators.macd?.toFixed(3)"></span></span>
+              <span class="mx-1 text-gray-300">|</span>
+              <span class="text-orange-400">Signal <span x-text="indicators.macdSignal?.toFixed(3)"></span></span>
+              <span class="mx-1 text-gray-300">|</span>
+              <span :class="(indicators.macdHist ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-500'">
+                Hist <span x-text="((indicators.macdHist ?? 0) >= 0 ? '+' : '') + indicators.macdHist?.toFixed(3)"></span>
+              </span>
+            </span>
+          </div>
+          <div x-ref="macdContainer" class="w-full rounded-lg overflow-hidden border border-gray-100" style="height:120px"></div>
+        </div>
       </div>
 
       <!-- Recommendation Card -->
@@ -733,6 +770,9 @@ function app() {
     priceTicker: '',
     barData: [],
     lwChart: null,
+    rsiChart: null,
+    macdChart: null,
+    indicators: { rsi: null, macd: null, macdSignal: null, macdHist: null },
     actionLoading: { sync: false, scan: false, recommend: false, analyze: false, syncOne: false },
     actionLog: [],
     toast: { show: false, msg: '', type: 'success' },
@@ -771,6 +811,17 @@ function app() {
       const r = await fetch('/scanner/signals-summary').then(r => r.json()).catch(() => ({}));
       this.signalSummary = r && typeof r === 'object' ? r : {};
       window.__signalSummary__ = this.signalSummary;
+
+      // Auto-select mã mạnh nhất nếu chưa chọn
+      if (!this.signalTicker && Object.keys(this.signalSummary).length > 0) {
+        const top = Object.entries(this.signalSummary)
+          .sort((a, b) => Math.abs(b[1].score) - Math.abs(a[1].score))[0];
+        if (top) {
+          this.signalTicker = top[0];
+          // Chỉ auto-load nếu đang ở tab signals, không thì chờ user mở tab
+          if (this.tab === 'signals') this.loadSignals();
+        }
+      }
     },
 
     async loadSignals() {
@@ -798,42 +849,39 @@ function app() {
     },
 
     renderChart(ticker) {
-      const container = this.$refs.chartContainer;
+      const container    = this.$refs.chartContainer;
+      const rsiContainer = this.$refs.rsiContainer;
+      const macdContainer = this.$refs.macdContainer;
       if (!container || !this.barData.length) return;
 
-      if (this.lwChart) { this.lwChart.remove(); this.lwChart = null; }
+      // Destroy existing charts
+      if (this.lwChart)   { this.lwChart.remove();   this.lwChart   = null; }
+      if (this.rsiChart)  { this.rsiChart.remove();  this.rsiChart  = null; }
+      if (this.macdChart) { this.macdChart.remove();  this.macdChart = null; }
 
-      const isDark = false;
+      // ── Shared chart options ──────────────────────────────────────────────
+      const baseLayout = {
+        background: { color: '#ffffff' },
+        textColor: '#374151',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: 11,
+      };
+      const baseGrid   = { vertLines: { color: '#f3f4f6' }, horzLines: { color: '#f3f4f6' } };
+      const baseTS     = { borderColor: '#e5e7eb', timeVisible: false, fixLeftEdge: false, fixRightEdge: false, rightOffset: 0 };
+
+      // ── Main candlestick chart ────────────────────────────────────────────
       const chart = LightweightCharts.createChart(container, {
         width: container.clientWidth,
         height: 500,
-        layout: {
-          background: { color: '#ffffff' },
-          textColor: '#374151',
-          fontFamily: 'Inter, system-ui, sans-serif',
-          fontSize: 12,
-        },
-        grid: { vertLines: { color: '#f3f4f6' }, horzLines: { color: '#f3f4f6' } },
+        layout: { ...baseLayout, fontSize: 12 },
+        grid: baseGrid,
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-        rightPriceScale: {
-          borderColor: '#e5e7eb',
-          scaleMargins: { top: 0.08, bottom: 0.22 },
-          minimumWidth: 70,
-        },
-        timeScale: {
-          borderColor: '#e5e7eb',
-          timeVisible: true,
-          fixLeftEdge: true,
-          fixRightEdge: false,
-          rightOffset: 8,
-          barSpacing: 8,
-          minBarSpacing: 4,
-        },
+        rightPriceScale: { borderColor: '#e5e7eb', scaleMargins: { top: 0.08, bottom: 0.22 }, minimumWidth: 70 },
+        timeScale: { ...baseTS, timeVisible: true, barSpacing: 8, minBarSpacing: 4 },
         localization: { priceFormatter: p => p.toFixed(1) + 'k' },
       });
       this.lwChart = chart;
 
-      // ── Candlestick ────────────────────────────────────────────────────
       const candleSeries = chart.addCandlestickSeries({
         upColor: '#26a69a', downColor: '#ef5350',
         borderVisible: false,
@@ -848,35 +896,30 @@ function app() {
       }));
       candleSeries.setData(candleData);
 
-      // ── Volume ────────────────────────────────────────────────────────
-      const volSeries = chart.addHistogramSeries({
-        priceFormat: { type: 'volume' },
-        priceScaleId: 'vol',
-      });
+      // Volume
+      const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
       volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
       volSeries.setData(this.barData.map(b => ({
-        time: b.tradingDate,
-        value: b.volume,
+        time: b.tradingDate, value: b.volume,
         color: b.close >= b.open ? '#26a69a33' : '#ef535033',
       })));
 
-      // ── EMA helper ───────────────────────────────────────────────────
+      // EMA20 / EMA50
       const closes = this.barData.map(b => b.close / 1000);
-      const ema = (vals, p) => {
-        const k = 2 / (p + 1); let e = null;
-        return vals.map(v => { e = e === null ? v : v * k + e * (1 - k); return +e.toFixed(3); });
+      const emaFn = (vals, p) => {
+        const k = 2/(p+1); let e = null;
+        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return +e.toFixed(3); });
       };
-      const ema20 = ema(closes, 20);
-      const ema50 = ema(closes, 50);
-
+      const ema20 = emaFn(closes, 20);
+      const ema50 = emaFn(closes, 50);
       const addEma = (values, warmup, color, title) => {
         const s = chart.addLineSeries({ color, lineWidth: 1.5, title, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
-        s.setData(this.barData.slice(warmup).map((b, i) => ({ time: b.tradingDate, value: values[i + warmup] })));
+        s.setData(this.barData.slice(warmup).map((b, i) => ({ time: b.tradingDate, value: values[i+warmup] })));
       };
       addEma(ema20, 19, '#3b82f6', 'EMA20');
       addEma(ema50, 49, '#f97316', 'EMA50');
 
-      // ── Signal markers ───────────────────────────────────────────────
+      // Signal markers
       const sigMap = {};
       this.signals.forEach(s => {
         if (!s.tradingDate || s.tradingDate === 'N/A') return;
@@ -891,20 +934,151 @@ function app() {
       }
       if (markers.length) candleSeries.setMarkers(markers.sort((a,b) => a.time > b.time ? 1 : -1));
 
-      // Fit rồi scroll sang phải để nến mới nhất không bị sát mép
-      chart.timeScale().fitContent();
-      // Giữ rightOffset sau khi fitContent (fitContent reset về 0)
-      setTimeout(() => {
-        if (this.lwChart) this.lwChart.timeScale().applyOptions({ rightOffset: 8 });
-      }, 50);
+      // ── RSI chart ─────────────────────────────────────────────────────────
+      const rsiValues = this.calcRSI(closes, 14);
+      if (rsiContainer) {
+        const rsiChart = LightweightCharts.createChart(rsiContainer, {
+          width: rsiContainer.clientWidth, height: 120,
+          layout: baseLayout, grid: baseGrid,
+          crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+          rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 70, autoScale: false },
+          timeScale: baseTS,
+        });
+        this.rsiChart = rsiChart;
+        rsiChart.priceScale('right').applyOptions({ minimum: 0, maximum: 100 });
 
-      // Responsive resize — giữ nguyên rightOffset khi resize
-      const ro = new ResizeObserver(() => {
-        if (this.lwChart) {
-          this.lwChart.applyOptions({ width: container.clientWidth });
+        const rsiSeries = rsiChart.addLineSeries({ color: '#8b5cf6', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: 'RSI' });
+        rsiSeries.setData(
+          this.barData
+            .map((b, i) => rsiValues[i] != null ? { time: b.tradingDate, value: rsiValues[i] } : null)
+            .filter(Boolean)
+        );
+        // Overbought / Oversold / Mid reference lines
+        const lineStyle = LightweightCharts.LineStyle.Dashed;
+        rsiSeries.createPriceLine({ price: 70, color: '#ef4444', lineWidth: 1, lineStyle, axisLabelVisible: true,  title: '70' });
+        rsiSeries.createPriceLine({ price: 30, color: '#10b981', lineWidth: 1, lineStyle, axisLabelVisible: true,  title: '30' });
+        rsiSeries.createPriceLine({ price: 50, color: '#94a3b8', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+
+        // Cập nhật giá trị hiện tại
+        const lastRsi = rsiValues.filter(v => v != null).at(-1);
+        this.indicators = { ...this.indicators, rsi: lastRsi ?? null };
+      }
+
+      // ── MACD chart ────────────────────────────────────────────────────────
+      const macdData = this.calcMACD(closes, 12, 26, 9);
+      if (macdContainer) {
+        const macdChart = LightweightCharts.createChart(macdContainer, {
+          width: macdContainer.clientWidth, height: 120,
+          layout: baseLayout, grid: baseGrid,
+          crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+          rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 70 },
+          timeScale: { ...baseTS, timeVisible: true },
+        });
+        this.macdChart = macdChart;
+
+        // MACD histogram
+        const histSeries = macdChart.addHistogramSeries({ priceScaleId: 'right', lastValueVisible: false });
+        histSeries.setData(
+          macdData
+            .filter(d => d.hist != null)
+            .map(d => ({ time: d.time, value: d.hist, color: d.hist >= 0 ? '#26a69a88' : '#ef535088' }))
+        );
+
+        // MACD line
+        const macdLine = macdChart.addLineSeries({ color: '#3b82f6', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'MACD' });
+        macdLine.setData(macdData.filter(d => d.macd != null).map(d => ({ time: d.time, value: d.macd })));
+
+        // Signal line
+        const sigLine = macdChart.addLineSeries({ color: '#f97316', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'Signal' });
+        sigLine.setData(macdData.filter(d => d.signal != null).map(d => ({ time: d.time, value: d.signal })));
+
+        // Zero line
+        histSeries.createPriceLine({ price: 0, color: '#94a3b8', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+
+        // Cập nhật giá trị hiện tại
+        const lastMacd = macdData.filter(d => d.signal != null).at(-1);
+        if (lastMacd) this.indicators = { ...this.indicators, macd: lastMacd.macd, macdSignal: lastMacd.signal, macdHist: lastMacd.hist };
+      }
+
+      // ── Sync time scales ─────────────────────────────────────────────────
+      chart.timeScale().fitContent();
+      setTimeout(() => {
+        if (!this.lwChart) return;
+        // Sau fitContent, lấy span hiển thị rồi tính rightOffset = 25% span
+        // → nến cuối nằm ở ~3/4 chart, dư 1/4 phía phải
+        const range = this.lwChart.timeScale().getVisibleLogicalRange();
+        const rightOffset = range ? Math.round((range.to - range.from) * 0.27) : 15;
+        [this.lwChart, this.rsiChart, this.macdChart].forEach(c => {
+          if (c) c.timeScale().applyOptions({ rightOffset });
+        });
+        // Sync sub-charts về cùng range với main chart (sau khi áp rightOffset)
+        const synced = this.lwChart.timeScale().getVisibleLogicalRange();
+        if (synced) {
+          this.rsiChart?.timeScale().setVisibleLogicalRange(synced);
+          this.macdChart?.timeScale().setVisibleLogicalRange(synced);
         }
+      }, 60);
+
+      let syncing = false;
+      const syncAll = (source, others) => {
+        source.timeScale().subscribeVisibleLogicalRangeChange(range => {
+          if (syncing || !range) return;
+          syncing = true;
+          others.forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(range); });
+          syncing = false;
+        });
+      };
+      const sub = [this.rsiChart, this.macdChart];
+      syncAll(chart, sub);
+      if (this.rsiChart)  syncAll(this.rsiChart,  [chart, this.macdChart]);
+      if (this.macdChart) syncAll(this.macdChart, [chart, this.rsiChart]);
+
+      // Responsive resize
+      const ro = new ResizeObserver(() => {
+        if (this.lwChart)   this.lwChart.applyOptions({ width: container.clientWidth });
+        if (this.rsiChart)  this.rsiChart.applyOptions({ width: rsiContainer?.clientWidth ?? 0 });
+        if (this.macdChart) this.macdChart.applyOptions({ width: macdContainer?.clientWidth ?? 0 });
       });
       ro.observe(container);
+    },
+
+    // ── Indicator calculations ──────────────────────────────────────────────
+
+    calcRSI(closes, period = 14) {
+      if (closes.length < period + 1) return [];
+      let avgGain = 0, avgLoss = 0;
+      for (let i = 1; i <= period; i++) {
+        const d = closes[i] - closes[i-1];
+        if (d > 0) avgGain += d; else avgLoss -= d;
+      }
+      avgGain /= period; avgLoss /= period;
+      const rsi = new Array(period + 1).fill(null);
+      rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2));
+      for (let i = period + 1; i < closes.length; i++) {
+        const d = closes[i] - closes[i-1];
+        avgGain = (avgGain * (period-1) + Math.max(0,  d)) / period;
+        avgLoss = (avgLoss * (period-1) + Math.max(0, -d)) / period;
+        rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2));
+      }
+      return rsi;
+    },
+
+    calcMACD(closes, fast = 12, slow = 26, signal = 9) {
+      const emaFn = (vals, p) => {
+        const k = 2/(p+1); let e = null;
+        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return e; });
+      };
+      const ef = emaFn(closes, fast);
+      const es = emaFn(closes, slow);
+      const macdLine = closes.map((_, i) => ef[i] - es[i]);
+      const sigLine  = emaFn(macdLine.slice(slow-1), signal);
+      return closes.map((_, i) => {
+        if (i < slow - 1) return { time: this.barData[i]?.tradingDate, macd: null, signal: null, hist: null };
+        const si = i - (slow-1);
+        const m  = +macdLine[i].toFixed(4);
+        const s  = si >= signal-1 ? +sigLine[si-(signal-1)].toFixed(4) : null;
+        return { time: this.barData[i]?.tradingDate, macd: m, signal: s, hist: s != null ? +(m-s).toFixed(4) : null };
+      });
     },
 
     viewSignals(ticker) {

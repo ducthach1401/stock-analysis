@@ -11,18 +11,23 @@ async function bootstrap() {
   const env = process.env.NODE_ENV ?? 'development';
   const hostname = process.env.HOSTNAME ?? 'localhost';
 
-  await telegram
-    .sendMessage({
-      text:
-        `🚀 <b>Stock Analysis Server</b> đã khởi động\n\n` +
-        `🌍 Env: <code>${env}</code>\n` +
-        `🖥️ Host: <code>${hostname}</code>\n` +
-        `🔌 Port: <code>${port}</code>\n` +
-        `🕐 Time: <code>${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</code>`,
-    })
-    .catch(() => {
-      // Không để lỗi Telegram làm crash server
-    });
+  // Gửi sau 5s để Docker network ổn định, không block startup
+  setTimeout(() => {
+    telegram
+      .sendMessage({
+        text:
+          `🚀 <b>Stock Analysis Server</b> đã khởi động\n\n` +
+          `🌍 Env: <code>${env}</code>\n` +
+          `🖥️ Host: <code>${hostname}</code>\n` +
+          `🔌 Port: <code>${port}</code>\n` +
+          `🕐 Time: <code>${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</code>`,
+      })
+      .catch((err: unknown) => {
+        // Không crash server nếu Telegram lỗi lúc startup
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[TelegramService] Startup notification failed: ${msg}`);
+      });
+  }, 5000);
 }
 
 bootstrap();

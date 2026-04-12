@@ -144,11 +144,76 @@ export const WATCHLIST: WatchlistStock[] = [
   { ticker: 'MSH', name: 'May Sông Hồng', sector: 'Dệt may' },
   { ticker: 'TCM', name: 'Dệt may Thành Công', sector: 'Dệt may' },
   { ticker: 'TNG', name: 'TNG Investment', sector: 'Dệt may' },
+  { ticker: 'STK', name: 'Thế Kỷ Corp', sector: 'Dệt may' },
+  { ticker: 'GIL', name: 'Gilimex', sector: 'Dệt may' },
 
   // ── Thuỷ sản ───────────────────────────────────────────────────────────
   { ticker: 'VHC', name: 'Vĩnh Hoàn', sector: 'Thuỷ sản' },
   { ticker: 'ANV', name: 'Nam Việt', sector: 'Thuỷ sản' },
   { ticker: 'MPC', name: 'Minh Phú Seafood', sector: 'Thuỷ sản' },
+  { ticker: 'FMC', name: 'Sao Ta Foods', sector: 'Thuỷ sản' },
+  { ticker: 'CMX', name: 'Cà Mau Seafood', sector: 'Thuỷ sản' },
+
+  // ── Ngân hàng mid-cap ──────────────────────────────────────────────────
+  { ticker: 'VIB', name: 'Vietnam International Bank', sector: 'Ngân hàng' },
+  { ticker: 'NAB', name: 'Nam A Bank', sector: 'Ngân hàng' },
+  { ticker: 'BAB', name: 'Bắc Á Bank', sector: 'Ngân hàng' },
+  { ticker: 'BVB', name: 'Viet Capital Bank', sector: 'Ngân hàng' },
+
+  // ── Bất động sản mid/small ─────────────────────────────────────────────
+  { ticker: 'BCG', name: 'Bamboo Capital', sector: 'Bất động sản' },
+  { ticker: 'AGG', name: 'An Gia Real Estate', sector: 'Bất động sản' },
+  { ticker: 'DXS', name: 'Đất Xanh Services', sector: 'Bất động sản' },
+  { ticker: 'KOS', name: 'Kosy Group', sector: 'Bất động sản' },
+  { ticker: 'ITA', name: 'Tân Tạo Industrial', sector: 'Bất động sản KCN' },
+  { ticker: 'TIP', name: 'Khu CN Tín Nghĩa', sector: 'Bất động sản KCN' },
+  { ticker: 'SZC', name: 'Sonadezi Châu Đức', sector: 'Bất động sản KCN' },
+
+  // ── Xây dựng mid/small ────────────────────────────────────────────────
+  { ticker: 'HHV', name: 'Đèo Cả Infrastructure', sector: 'Xây dựng' },
+  { ticker: 'DPG', name: 'Đạt Phương Group', sector: 'Xây dựng' },
+  { ticker: 'C4G', name: 'COFICO', sector: 'Xây dựng' },
+  { ticker: 'L14', name: 'Licogi 14', sector: 'Xây dựng' },
+
+  // ── Vật liệu / Gỗ ─────────────────────────────────────────────────────
+  { ticker: 'PTB', name: 'Phú Tài', sector: 'Vật liệu - Gỗ' },
+  { ticker: 'GDT', name: 'Gỗ Đức Thành', sector: 'Vật liệu - Gỗ' },
+
+  // ── Điện mid/small ────────────────────────────────────────────────────
+  { ticker: 'SHP', name: 'Thuỷ điện Miền Nam', sector: 'Điện' },
+  { ticker: 'TMP', name: 'Thuỷ điện Thác Mơ', sector: 'Điện' },
+  { ticker: 'GHC', name: 'Thuỷ điện Gia Lai', sector: 'Điện' },
+  { ticker: 'HND', name: 'Nhiệt điện Hải Phòng', sector: 'Điện' },
+
+  // ── Thép mid/small ─────────────────────────────────────────────────────
+  { ticker: 'SMC', name: 'SMC Trading', sector: 'Thép' },
+  { ticker: 'VGS', name: 'Ống thép Việt Đức', sector: 'Thép' },
+  { ticker: 'TVN', name: 'Thép Việt Nam (VNSTEEL)', sector: 'Thép' },
+
+  // ── Logistics mid/small ────────────────────────────────────────────────
+  { ticker: 'PVT', name: 'PV Trans', sector: 'Logistics' },
+  { ticker: 'VTP', name: 'Viettel Post', sector: 'Logistics' },
+  { ticker: 'DVP', name: 'Dịch vụ cảng Việt Nam', sector: 'Cảng biển' },
+
+  // ── Thực phẩm / Nông nghiệp mid/small ────────────────────────────────
+  { ticker: 'BAF', name: 'Nông nghiệp Ba Huan', sector: 'Nông nghiệp' },
+  { ticker: 'MML', name: 'Masan MEATLife', sector: 'Thực phẩm' },
+  { ticker: 'NSC', name: 'Giống cây trồng TW', sector: 'Nông nghiệp' },
+  { ticker: 'LAF', name: 'Thực phẩm Long An', sector: 'Thực phẩm' },
+
+  // ── Dược phẩm mid/small ───────────────────────────────────────────────
+  { ticker: 'PME', name: 'Pymepharco', sector: 'Dược phẩm' },
+  { ticker: 'OPC', name: 'OPC Pharma', sector: 'Dược phẩm' },
+  { ticker: 'JVC', name: 'Thiết bị y tế JVC', sector: 'Y tế' },
+
+  // ── Bảo hiểm mid/small ────────────────────────────────────────────────
+  { ticker: 'PTI', name: 'PTI Insurance', sector: 'Bảo hiểm' },
+  { ticker: 'BIC', name: 'BIDV Insurance', sector: 'Bảo hiểm' },
+  { ticker: 'MIG', name: 'Military Insurance', sector: 'Bảo hiểm' },
+
+  // ── Công nghệ mid/small ───────────────────────────────────────────────
+  { ticker: 'ELC', name: 'Điện tử Bình Hoà', sector: 'Công nghệ' },
+  { ticker: 'SGT', name: 'Saigon Telecom', sector: 'Viễn thông' },
 ];
 
 export const TICKERS = WATCHLIST.map((s) => s.ticker);

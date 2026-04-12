@@ -86,10 +86,12 @@ export class TelegramService {
       const status = error.response?.status;
       const tgDesc = error.response?.data?.description ?? error.message;
       const tgCode = error.response?.data?.error_code;
+      const netCode = error.code ?? ''; // ECONNREFUSED, ETIMEDOUT, ENOTFOUND...
 
       this.logger.warn(
         `Telegram gửi thất bại (lần ${attempt + 1}/${MAX_RETRIES + 1}) ` +
-          `status=${status ?? 'N/A'} code=${tgCode ?? 'N/A'}: ${tgDesc}`,
+          `status=${status ?? 'N/A'} tgCode=${tgCode ?? 'N/A'} ` +
+          `netCode=${netCode || 'N/A'}: ${tgDesc || netCode || 'unknown error'}`,
       );
 
       // 429 = rate limit → bắt buộc phải retry
@@ -119,14 +121,18 @@ export class TelegramService {
 
       if (shouldRetry) {
         const delay = RETRY_DELAYS_MS[attempt] ?? 10000;
-        this.logger.warn(`Thử lại sau ${delay}ms...`);
-        await this.sleep(delay);
+        // Network error khi mới boot → delay ngắn hơn vì thường tự recover
+        const isNetworkErr = !status && !!netCode;
+        const actualDelay = isNetworkErr && attempt === 0 ? 3000 : delay;
+        this.logger.warn(`Thử lại sau ${actualDelay}ms...`);
+        await this.sleep(actualDelay);
         return this.sendWithRetry(message, attempt + 1);
       }
 
       // Hết retry → log lỗi nhưng không crash toàn bộ scan
       this.logger.error(
-        `Telegram gửi thất bại hoàn toàn sau ${attempt + 1} lần: ${tgDesc}`,
+        `Telegram gửi thất bại hoàn toàn sau ${attempt + 1} lần: ` +
+          `${tgDesc || netCode || 'unknown error'}`,
       );
     }
   }
