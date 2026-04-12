@@ -3,9 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        PORT: ${PORT}
     container_name: stock-analysis-app
     ports:
-      - '${POST}:${PORT}'
+      - '${PORT}:${PORT}'
     env_file:
       - .env
     environment:

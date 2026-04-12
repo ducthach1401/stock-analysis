@@ -4,8 +4,10 @@ services:
     container_name: stock-analysis-app-dev
     working_dir: /app
     command: yarn start:dev
+    env_file:
+      - .env
     ports:
-      - '${POST}:${PORT}'
+      - '${PORT}:${PORT}'
     volumes:
       - .:/app
     restart: unless-stopped

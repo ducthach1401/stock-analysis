@@ -26,6 +26,7 @@ COPY ecosystem.config.js ./
 
 RUN mkdir -p logs
 
-EXPOSE 3000
+# EXPOSE dùng ARG (build-time). docker-compose truyền PORT từ .env qua build.args; app vẫn đọc PORT lúc chạy.
+EXPOSE ${PORT}
 
 CMD ["pm2-runtime", "ecosystem.config.js", "--env", "production"]
