@@ -8,7 +8,10 @@ export async function mapPool<T, R>(
 ): Promise<R[]> {
   if (items.length === 0) return [];
   const n = Math.max(1, Math.min(concurrency, items.length));
-  const results = Array.from({ length: items.length });
+  const results: R[] = Array.from(
+    { length: items.length },
+    () => undefined as R,
+  );
   let next = 0;
 
   async function runWorker(): Promise<void> {
