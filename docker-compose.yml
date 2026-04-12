@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: stock-analysis-app
     ports:
-      - "${PORT:-3000}:3000"
+      - '${POST}:${PORT}'
     env_file:
       - .env
     environment:

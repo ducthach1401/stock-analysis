@@ -5,7 +5,7 @@ services:
     working_dir: /app
     command: yarn start:dev
     ports:
-      - '${PORT:-3000}:3000'
+      - '${POST}:${PORT}'
     volumes:
       - .:/app
     restart: unless-stopped
