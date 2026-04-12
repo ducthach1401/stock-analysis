@@ -1,35 +1,280 @@
 <!DOCTYPE html>
-<html lang="vi" x-data="app()" x-init="init()">
+<html lang="vi" x-data="app()" x-init="init()" :class="darkMode ? 'dark' : ''">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stock Analysis Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cg stroke='white' stroke-width='2' stroke-linecap='round'%3E%3Cline x1='7' y1='22' x2='7' y2='14'/%3E%3Crect x='5' y='14' width='4' height='5' rx='0.5' fill='%2310b981' stroke='%2310b981'/%3E%3Cline x1='13' y1='24' x2='13' y2='10'/%3E%3Crect x='11' y='17' width='4' height='6' rx='0.5' fill='%23ef4444' stroke='%23ef4444'/%3E%3Cline x1='19' y1='20' x2='19' y2='8'/%3E%3Crect x='17' y='10' width='4' height='7' rx='0.5' fill='%2310b981' stroke='%2310b981'/%3E%3Cline x1='25' y1='18' x2='25' y2='6'/%3E%3Crect x='23' y='8' width='4' height='6' rx='0.5' fill='%2310b981' stroke='%2310b981'/%3E%3C/g%3E%3C/svg%3E">
+  <script>tailwind.config = { darkMode: 'class' }</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     [x-cloak] { display: none !important; }
-    .tab-active { @apply border-b-2 border-indigo-500 text-indigo-600 font-semibold; }
-    .card { @apply bg-white rounded-xl shadow-sm border border-gray-100 p-5; }
-    .btn { @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all; }
-    .btn-primary { @apply btn bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95; }
-    .btn-secondary { @apply btn bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95; }
-    .btn-danger { @apply btn bg-red-100 text-red-700 hover:bg-red-200 active:scale-95; }
-    .badge { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium; }
-    .badge-green { @apply badge bg-emerald-100 text-emerald-700; }
-    .badge-red { @apply badge bg-red-100 text-red-700; }
-    .badge-blue { @apply badge bg-blue-100 text-blue-700; }
-    .badge-yellow { @apply badge bg-yellow-100 text-yellow-700; }
-    .badge-gray { @apply badge bg-gray-100 text-gray-600; }
-    .pnl-positive { @apply text-emerald-600 font-semibold; }
-    .pnl-negative { @apply text-red-600 font-semibold; }
-    .skeleton { @apply animate-pulse bg-gray-200 rounded; }
-    body { background: #f8fafc; font-family: 'Inter', system-ui, sans-serif; }
+
+    /* ═══════════════════════════════════════════════════════
+       Design tokens — flip toàn bộ màu chỉ bằng .dark class
+    ═══════════════════════════════════════════════════════ */
+    :root {
+      --bg-page:     #f1f5f9;
+      --bg-card:     #ffffff;
+      --bg-raised:   #f8fafc;
+      --bg-muted:    #f1f5f9;
+      --bg-input:    #ffffff;
+      --bg-hover:    #f1f5f9;
+      --border:      #e2e8f0;
+      --border-sub:  #f1f5f9;
+      --text-1:      #0f172a;
+      --text-2:      #475569;
+      --text-3:      #94a3b8;
+      --text-4:      #cbd5e1;
+      --accent:      #6366f1;
+      --accent-dim:  rgba(99,102,241,0.12);
+      --accent-text: #4f46e5;
+      --shadow-card: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .dark {
+      --bg-page:     #09090b;
+      --bg-card:     #18181b;
+      --bg-raised:   #27272a;
+      --bg-muted:    #27272a;
+      --bg-input:    #09090b;
+      --bg-hover:    #27272a;
+      --border:      #3f3f46;
+      --border-sub:  #27272a;
+      --text-1:      #fafafa;
+      --text-2:      #a1a1aa;
+      --text-3:      #71717a;
+      --text-4:      #52525b;
+      --accent:      #818cf8;
+      --accent-dim:  rgba(129,140,248,0.15);
+      --accent-text: #a5b4fc;
+      --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    /* ── Base ─────────────────────────────────────────────── */
+    html {
+      background: var(--bg-page);
+      transition: background-color 0.25s ease;
+    }
+    body {
+      background: var(--bg-page);
+      color: var(--text-1);
+      font-family: 'Inter', system-ui, sans-serif;
+      transition: background-color 0.25s ease, color 0.2s ease;
+    }
+
+    /* ── Components ───────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      box-shadow: var(--shadow-card);
+      transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.5rem 1.125rem; border-radius: 0.625rem;
+      font-weight: 500; font-size: 0.875rem;
+      transition: all 0.15s ease; cursor: pointer; border: none;
+      letter-spacing: 0.01em;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 60%, #4338ca 100%);
+      color: #fff;
+      box-shadow: 0 1px 3px rgba(79,70,229,0.35), 0 0 0 1px rgba(79,70,229,0.18);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #818cf8 0%, #6366f1 60%, #4f46e5 100%);
+      box-shadow: 0 4px 12px rgba(79,70,229,0.4), 0 0 0 1px rgba(99,102,241,0.3);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active { transform: scale(0.97) translateY(0); box-shadow: 0 1px 4px rgba(79,70,229,0.3); }
+    .dark .btn-primary {
+      background: linear-gradient(135deg, #818cf8 0%, #6366f1 60%, #4f46e5 100%);
+      box-shadow: 0 1px 3px rgba(99,102,241,0.5), 0 0 0 1px rgba(129,140,248,0.25);
+    }
+    .dark .btn-primary:hover {
+      background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 60%, #6366f1 100%);
+      box-shadow: 0 4px 14px rgba(99,102,241,0.5), 0 0 0 1px rgba(165,180,252,0.3);
+    }
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-2);
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      color: var(--text-1);
+      border-color: var(--accent);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      transform: translateY(-1px);
+    }
+    .btn-secondary:active { transform: scale(0.97) translateY(0); }
+    .btn-danger {
+      background: rgba(239,68,68,0.08); color: #ef4444;
+      border: 1px solid rgba(239,68,68,0.2);
+      box-shadow: 0 1px 2px rgba(239,68,68,0.08);
+    }
+    .btn-danger:hover {
+      background: rgba(239,68,68,0.15);
+      border-color: rgba(239,68,68,0.35);
+      transform: translateY(-1px);
+    }
+    .dark .btn-danger { background: rgba(239,68,68,0.12); color: #fca5a5; border-color: rgba(239,68,68,0.2); }
+    .dark .btn-danger:hover { background: rgba(239,68,68,0.22); }
+
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 0.125rem 0.5rem; border-radius: 9999px;
+      font-size: 0.75rem; font-weight: 500;
+    }
+    .badge-green  { background: #dcfce7; color: #15803d; }
+    .badge-red    { background: #fee2e2; color: #b91c1c; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .badge-yellow { background: #fef9c3; color: #a16207; }
+    .badge-gray   { background: var(--bg-muted); color: var(--text-2); border: 1px solid var(--border); }
+    .dark .badge-green  { background: rgba(21,128,61,0.2);  color: #86efac; }
+    .dark .badge-red    { background: rgba(185,28,28,0.2);  color: #fca5a5; }
+    .dark .badge-blue   { background: rgba(29,78,216,0.2);  color: #93c5fd; }
+    .dark .badge-yellow { background: rgba(161,98,7,0.2);   color: #fde68a; }
+
+    .pnl-positive { color: #16a34a; font-weight: 600; }
+    .pnl-negative { color: #dc2626; font-weight: 600; }
+    .dark .pnl-positive { color: #4ade80; }
+    .dark .pnl-negative { color: #f87171; }
+
+    .skeleton { animation: pulse 1.5s ease-in-out infinite; background: var(--bg-muted); border-radius: 0.375rem; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
     .spin { animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
     .ticker-dropdown { max-height: 260px; overflow-y: auto; scrollbar-width: thin; }
     .ticker-dropdown::-webkit-scrollbar { width: 4px; }
-    .ticker-dropdown::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+    .ticker-dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Action tile (scanner grid buttons) ───────────────── */
+    .action-tile {
+      display: flex; flex-direction: column; align-items: center; gap: 0.375rem;
+      padding: 0.75rem 0.5rem; border-radius: 0.875rem;
+      border: 1.5px solid var(--border);
+      background: var(--bg-card);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      transition: all 0.18s ease; cursor: pointer; text-align: center;
+    }
+    .action-tile:hover:not(:disabled) {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      box-shadow: 0 4px 12px rgba(99,102,241,0.12);
+      transform: translateY(-2px);
+    }
+    .action-tile:active:not(:disabled) { transform: scale(0.96); }
+    .action-tile:disabled { opacity: 0.45; cursor: not-allowed; }
+    .action-tile .tile-icon { width: 1.35rem; height: 1.35rem; }
+    .action-tile .tile-label {
+      font-size: 0.72rem; font-weight: 500; line-height: 1.3;
+      color: var(--text-2);
+    }
+    .action-tile:hover:not(:disabled) .tile-label { color: var(--accent-text); }
+
+    /* ── Tab active ───────────────────────────────────────── */
+    .tab-active { border-bottom: 2px solid var(--accent); color: var(--accent-text); font-weight: 600; }
+
+    /* ── Header ───────────────────────────────────────────── */
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      transition: background-color 0.25s ease, border-color 0.25s ease;
+    }
+
+    /* ── Tailwind utility overrides for dark mode ─────────── */
+    /* text */
+    .dark .text-gray-900 { color: var(--text-1); }
+    .dark .text-gray-800 { color: var(--text-1); }
+    .dark .text-gray-700 { color: var(--text-2); }
+    .dark .text-gray-600 { color: var(--text-2); }
+    .dark .text-gray-500 { color: var(--text-3); }
+    .dark .text-gray-400 { color: var(--text-3); }
+    .dark .text-gray-300 { color: var(--text-3); }
+    .dark .text-indigo-700 { color: var(--accent); }
+    .dark .text-indigo-600 { color: var(--accent); }
+    /* colored text — dùng màu sáng hơn trong dark */
+    .dark .text-emerald-700 { color: #4ade80; }
+    .dark .text-emerald-600 { color: #34d399; }
+    .dark .text-emerald-500 { color: #6ee7b7; }
+    .dark .text-red-700     { color: #f87171; }
+    .dark .text-red-600     { color: #f87171; }
+    .dark .text-red-500     { color: #fca5a5; }
+    /* backgrounds */
+    .dark .bg-white      { background-color: var(--bg-card); }
+    .dark .bg-gray-50    { background-color: var(--bg-page); }
+    .dark .bg-gray-100   { background-color: var(--bg-raised); }
+    .dark .bg-gray-200   { background-color: var(--border); }
+    .dark .bg-indigo-50  { background-color: var(--accent-dim); }
+    /* colored card backgrounds */
+    .dark .bg-emerald-50 { background-color: rgba(16,185,129,0.08); }
+    .dark .bg-red-50     { background-color: rgba(239,68,68,0.08); }
+    /* borders */
+    .dark .border-gray-100   { border-color: var(--border); }
+    .dark .border-gray-200   { border-color: var(--border); }
+    .dark .border-gray-300   { border-color: var(--border); }
+    .dark .border-emerald-200 { border-color: rgba(16,185,129,0.3); }
+    .dark .border-red-200    { border-color: rgba(239,68,68,0.3); }
+    /* dividers */
+    .dark .divide-y > * + *    { border-color: var(--border); }
+    .dark .divide-gray-100 > * + * { border-color: var(--border-sub); }
+    .dark .divide-gray-50 > * + *  { border-color: var(--border-sub); }
+    /* inputs */
+    .dark input, .dark select, .dark textarea {
+      background-color: var(--bg-input);
+      border-color: var(--border);
+      color: var(--text-1);
+    }
+    .dark input::placeholder, .dark textarea::placeholder { color: var(--text-4); }
+    /* hover */
+    .dark .hover\:bg-gray-50:hover  { background-color: var(--bg-hover); }
+    .dark .hover\:bg-gray-100:hover { background-color: var(--bg-raised); }
+    .dark .hover\:bg-indigo-50:hover { background-color: var(--accent-dim); }
+    .dark .hover\:border-emerald-400:hover { border-color: #34d399; }
+    .dark .hover\:border-red-400:hover     { border-color: #f87171; }
+    .dark .hover\:border-indigo-300:hover  { border-color: var(--accent); }
+    .dark .hover\:text-gray-600:hover  { color: var(--text-2); }
+    .dark .hover\:text-gray-900:hover  { color: var(--text-1); }
+    /* nav buttons */
+    .dark nav button { color: var(--text-2); }
+    .dark nav button:hover { background-color: var(--bg-hover); color: var(--text-1); }
+    .dark nav button.bg-indigo-50 { background-color: var(--accent-dim); }
+    .dark nav button.text-indigo-700 { color: var(--accent); }
+    /* tables */
+    .dark table thead { background-color: var(--bg-page); }
+    .dark table thead th { color: var(--text-3); }
+    .dark table tbody tr { border-color: var(--border-sub); }
+    .dark table tbody tr:hover { background-color: var(--bg-hover); }
+    .dark table tbody td { color: var(--text-2); }
+    /* ticker dropdown */
+    .dark .ticker-dropdown { background-color: var(--bg-card); border-color: var(--border); }
+    .dark .ticker-dropdown > div { color: var(--text-1); }
+    .dark .ticker-dropdown > div:hover,
+    .dark .ticker-dropdown > div.bg-indigo-50 { background-color: var(--accent-dim); color: var(--text-1); }
+    /* log panel */
+    .dark .bg-gray-900 { background-color: #09090b; }
+    /* modal */
+    .dark .bg-black\/40 { background-color: rgba(0,0,0,0.65); }
+    /* scanner stock cards */
+    .dark .border-green-400 { border-color: #16a34a; }
+    .dark .border-red-400   { border-color: #dc2626; }
+    /* action icon buttons */
+    .dark .hover\:bg-blue-50:hover     { background-color: rgba(59,130,246,0.12); }
+    .dark .hover\:border-blue-300:hover { border-color: rgba(59,130,246,0.4); }
+    .dark .hover\:bg-purple-50:hover   { background-color: rgba(168,85,247,0.12); }
+    .dark .hover\:border-purple-300:hover { border-color: rgba(168,85,247,0.4); }
+    .dark .hover\:bg-emerald-50:hover  { background-color: rgba(16,185,129,0.1); }
+    .dark .hover\:border-emerald-300:hover { border-color: rgba(16,185,129,0.3); }
+    .dark .text-blue-500   { color: #60a5fa; }
+    .dark .text-purple-500 { color: #c084fc; }
+    .dark .text-emerald-500 { color: #34d399; }
   </style>
 </head>
 <body class="min-h-screen">
@@ -56,14 +301,85 @@
         </button>
       </template>
     </nav>
-    <button @click="refreshAll()" :disabled="loading"
-      class="btn-secondary text-xs" title="Refresh">
-      <svg :class="loading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-      </svg>
-    </button>
+    <div class="flex items-center gap-2">
+      <button @click="refreshAll()" :disabled="loading"
+        class="btn-secondary text-xs" title="Refresh">
+        <svg :class="loading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+      </button>
+      <button @click="toggleDark()" class="btn-secondary text-xs" :title="darkMode ? 'Chế độ sáng' : 'Chế độ tối'">
+        <svg x-show="!darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+        </svg>
+        <svg x-show="darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+      </button>
+      <!-- Auth button -->
+      <template x-if="isAdmin">
+        <button @click="logout()" class="btn-secondary text-xs flex items-center gap-1.5" title="Đăng xuất">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+          <span class="hidden sm:inline text-emerald-600 font-medium">Admin</span>
+        </button>
+      </template>
+      <template x-if="!isAdmin">
+        <button @click="loginModal.show = true" class="btn-primary text-xs flex items-center gap-1.5" title="Đăng nhập Admin">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+          </svg>
+          <span class="hidden sm:inline">Đăng nhập</span>
+        </button>
+      </template>
+    </div>
   </div>
 </header>
+
+<!-- ═══ LOGIN MODAL ═══ -->
+<div x-show="loginModal.show" x-cloak
+  class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+  @keydown.escape.window="loginModal.show = false">
+  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="loginModal.show = false"></div>
+  <div class="relative card w-full max-w-sm p-8 z-10">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-lg font-bold text-gray-900">Đăng nhập Admin</h2>
+        <p class="text-xs text-gray-500">Để thực hiện các thao tác thủ công</p>
+      </div>
+    </div>
+    <form @submit.prevent="doLogin()" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập</label>
+        <input x-model="loginModal.username" type="text" autocomplete="username"
+          class="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style="background:var(--bg-input);border-color:var(--border);color:var(--text-1)"
+          placeholder="admin" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
+        <input x-model="loginModal.password" type="password" autocomplete="current-password"
+          class="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style="background:var(--bg-input);border-color:var(--border);color:var(--text-1)"
+          placeholder="••••••••" required>
+      </div>
+      <div x-show="loginModal.error" class="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2" x-text="loginModal.error"></div>
+      <button type="submit" :disabled="loginModal.loading"
+        class="w-full btn-primary py-2.5 text-sm font-semibold justify-center">
+        <svg x-show="loginModal.loading" class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span x-text="loginModal.loading ? 'Đang xác thực...' : 'Đăng nhập'"></span>
+      </button>
+    </form>
+  </div>
+</div>
 
 <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
 
@@ -72,31 +388,31 @@
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <div class="card">
-        <p class="text-xs text-gray-500 mb-1">Vị thế đang mở</p>
-        <p class="text-2xl font-bold text-gray-900" x-text="openPositions.length"></p>
-        <p class="text-xs text-gray-400 mt-1">cổ phiếu</p>
+        <p class="text-xs text-gray-500 mb-2">Vị thế đang mở</p>
+        <p class="text-3xl font-bold text-gray-900 my-1" x-text="openPositions.length"></p>
+        <p class="text-xs text-gray-400 mt-2">cổ phiếu</p>
       </div>
       <div class="card">
-        <p class="text-xs text-gray-500 mb-1">P&L trung bình</p>
-        <p class="text-2xl font-bold"
+        <p class="text-xs text-gray-500 mb-2">P&L trung bình</p>
+        <p class="text-3xl font-bold my-1"
           :class="avgPnl >= 0 ? 'text-emerald-600' : 'text-red-600'"
           x-text="(avgPnl >= 0 ? '+' : '') + avgPnl.toFixed(2) + '%'"></p>
-        <p class="text-xs text-gray-400 mt-1">tất cả vị thế</p>
+        <p class="text-xs text-gray-400 mt-2">tất cả vị thế</p>
       </div>
       <div class="card">
-        <p class="text-xs text-gray-500 mb-1">Tốt nhất</p>
+        <p class="text-xs text-gray-500 mb-2">Tốt nhất</p>
         <template x-if="bestPos">
           <div>
-            <p class="text-2xl font-bold text-emerald-600" x-text="'+' + Number(bestPos.pnlPercent).toFixed(2) + '%'"></p>
-            <p class="text-xs text-gray-500 mt-1" x-text="bestPos.ticker"></p>
+            <p class="text-3xl font-bold text-emerald-600 my-1" x-text="'+' + Number(bestPos.pnlPercent).toFixed(2) + '%'"></p>
+            <p class="text-xs text-gray-500 mt-2" x-text="bestPos.ticker"></p>
           </div>
         </template>
-        <template x-if="!bestPos"><p class="text-2xl font-bold text-gray-300">—</p></template>
+        <template x-if="!bestPos"><p class="text-3xl font-bold text-gray-300 my-1">—</p></template>
       </div>
       <div class="card">
-        <p class="text-xs text-gray-500 mb-1">Tổng đã đóng</p>
-        <p class="text-2xl font-bold text-gray-900" x-text="closedPositions.length"></p>
-        <p class="text-xs text-gray-400 mt-1">lệnh hoàn thành</p>
+        <p class="text-xs text-gray-500 mb-2">Tổng đã đóng</p>
+        <p class="text-3xl font-bold text-gray-900 my-1" x-text="closedPositions.length"></p>
+        <p class="text-xs text-gray-400 mt-2">lệnh hoàn thành</p>
       </div>
     </div>
 
@@ -107,7 +423,7 @@
           <span>📋 Vị thế đang mở</span>
           <span class="badge badge-blue" x-text="openPositions.length"></span>
         </h2>
-        <button @click="trackPositions()" :disabled="scanning" class="btn-secondary text-xs">
+        <button @click="trackPositions()" :disabled="scanning" x-show="isAdmin" class="btn-secondary text-xs">
           <svg :class="scanning ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
           </svg>
@@ -135,7 +451,6 @@
                 <th class="pb-2 font-medium text-right">R:R</th>
                 <th class="pb-2 font-medium text-right">Ngày</th>
                 <th class="pb-2 font-medium text-center">Tiến độ</th>
-                <th class="pb-2"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50">
@@ -170,9 +485,6 @@
                           :style="`width: ${Math.min(Math.abs(progressPct(pos)), 100)}%`"></div>
                       </div>
                     </div>
-                  </td>
-                  <td class="py-3 text-right">
-                    <button @click="closePosition(pos)" class="btn-danger text-xs px-2 py-1">Đóng</button>
                   </td>
                 </tr>
               </template>
@@ -238,31 +550,80 @@
       <div class="space-y-4">
         <div class="card">
           <h3 class="font-semibold text-gray-900 mb-4">⚡ Thao tác thủ công</h3>
-          <div class="space-y-3">
-            <button @click="runAction('sync')" :disabled="actionLoading.sync" class="btn-secondary w-full justify-center">
-              <svg :class="actionLoading.sync ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-              </svg>
-              Sync giá từ DNSE
+
+          <!-- Not logged in notice -->
+          <div x-show="!isAdmin" class="rounded-xl border-2 border-dashed border-gray-200 p-5 text-center space-y-3 mb-1">
+            <svg class="w-8 h-8 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+            <p class="text-sm text-gray-500">Đăng nhập để thực hiện<br>các thao tác thủ công</p>
+            <button @click="loginModal.show = true" class="btn-primary text-xs mx-auto">
+              Đăng nhập Admin
             </button>
-            <button @click="runAction('scan')" :disabled="actionLoading.scan" class="btn-secondary w-full justify-center">
-              <svg :class="actionLoading.scan ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </div>
+
+          <!-- Admin actions -->
+          <div x-show="isAdmin">
+            <!-- Sync group -->
+            <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Dữ liệu giá</p>
+            <div class="grid grid-cols-2 gap-2 mb-4">
+              <button @click="runAction('sync')" :disabled="actionLoading.sync || actionLoading.syncFull" class="action-tile">
+                <svg :class="actionLoading.sync ? 'spin tile-icon' : 'tile-icon'" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--accent)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="tile-label">Sync<br>1 năm</span>
+              </button>
+              <button @click="runAction('syncFull')" :disabled="actionLoading.sync || actionLoading.syncFull" class="action-tile">
+                <svg :class="actionLoading.syncFull ? 'spin tile-icon' : 'tile-icon'" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--accent)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="tile-label">Sync full<br>IPO → nay</span>
+              </button>
+            </div>
+
+            <!-- Analysis group -->
+            <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Phân tích</p>
+            <div class="grid grid-cols-3 gap-2 mb-4">
+              <button @click="runAction('scan')" :disabled="actionLoading.scan" class="action-tile">
+                <svg :class="actionLoading.scan ? 'spin tile-icon' : 'tile-icon'" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#3b82f6">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                <span class="tile-label">Quét<br>tín hiệu</span>
+              </button>
+              <button @click="trackPositions()" :disabled="scanning" class="action-tile">
+                <svg :class="scanning ? 'spin tile-icon' : 'tile-icon'" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#a855f7">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                <span class="tile-label">Theo dõi<br>vị thế</span>
+              </button>
+              <button @click="loadSignalSummary()" :disabled="actionLoading.summary" class="action-tile">
+                <svg class="tile-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#10b981">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="tile-label">Refresh<br>signals</span>
+              </button>
+            </div>
+
+            <!-- History analysis -->
+            <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Lịch sử</p>
+            <button @click="runAnalyzeHistoryAll()" :disabled="actionLoading.analyzeHistoryAll" class="action-tile w-full flex-row justify-start gap-3 mb-4" style="flex-direction:row">
+              <svg :class="actionLoading.analyzeHistoryAll ? 'spin tile-icon' : 'tile-icon'" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#f59e0b;flex-shrink:0">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
-              Quét tín hiệu
+              <span class="tile-label text-left" x-text="actionLoading.analyzeHistoryAll ? 'Đang phân tích lịch sử...' : 'Phân tích lịch sử toàn watchlist (2025→)'"></span>
             </button>
-            <button @click="runAction('recommend')" :disabled="actionLoading.recommend" class="btn-primary w-full justify-center">
+
+            <!-- Primary CTA -->
+            <button @click="runAction('recommend')" :disabled="actionLoading.recommend"
+              class="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-60"
+              style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 60%, #4338ca 100%); color: #fff; box-shadow: 0 2px 8px rgba(79,70,229,0.4), 0 0 0 1px rgba(79,70,229,0.2);"
+              onmouseover="if(!this.disabled){this.style.background='linear-gradient(135deg,#818cf8 0%,#6366f1 60%,#4f46e5 100%)';this.style.boxShadow='0 4px 16px rgba(79,70,229,0.5), 0 0 0 1px rgba(99,102,241,0.3)';this.style.transform='translateY(-1px)'}"
+              onmouseout="if(!this.disabled){this.style.background='linear-gradient(135deg,#6366f1 0%,#4f46e5 60%,#4338ca 100%)';this.style.boxShadow='0 2px 8px rgba(79,70,229,0.4), 0 0 0 1px rgba(79,70,229,0.2)';this.style.transform=''}">
               <svg :class="actionLoading.recommend ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
               </svg>
-              Khuyến nghị + Telegram
-            </button>
-            <button @click="trackPositions()" :disabled="scanning" class="btn-secondary w-full justify-center">
-              <svg :class="scanning ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-              </svg>
-              Theo dõi vị thế
+              <span x-text="actionLoading.recommend ? 'Đang phân tích...' : '⚡ Khuyến nghị + Telegram'"></span>
             </button>
           </div>
         </div>
@@ -409,7 +770,7 @@
 
   <!-- ═══ SIGNALS TAB ═══ -->
   <div x-show="tab === 'signals'" x-cloak
-    @tab-changed.window="if ($event.detail === 'signals' && signalTicker && !barData.length) loadSignals()">
+    @tab-changed.window="if ($event.detail === 'signals' && signalTicker && !barData.length) loadSignals(); if ($event.detail === 'watchlist' && !wlItems.length) loadWlItems()">
     <div class="card">
       <div class="flex flex-wrap items-center gap-3 mb-5">
         <h2 class="font-semibold text-gray-900">🔍 Tín hiệu kỹ thuật</h2>
@@ -462,11 +823,17 @@
         </div>
 
         <button @click="loadSignals()" :disabled="!signalTicker" class="btn-primary text-xs">Xem tín hiệu</button>
-        <button @click="runAnalyze()" :disabled="actionLoading.analyze || !signalTicker" class="btn-secondary text-xs">
+        <button x-show="isAdmin" @click="runAnalyze()" :disabled="actionLoading.analyze || !signalTicker" class="btn-secondary text-xs">
           <svg :class="actionLoading.analyze ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
           </svg>
           Phân tích ngay
+        </button>
+        <button x-show="isAdmin" @click="runAnalyzeHistory()" :disabled="actionLoading.analyzeHistory || !signalTicker" class="btn-secondary text-xs">
+          <svg :class="actionLoading.analyzeHistory ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Lịch sử
         </button>
       </div>
 
@@ -481,7 +848,7 @@
             <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="background:#ef5350"></span> Giảm</span>
           </div>
         </div>
-        <div x-ref="chartContainer" class="w-full rounded-xl overflow-hidden border border-gray-100" style="height:500px"></div>
+        <div x-ref="chartContainer" class="w-full rounded-xl overflow-hidden border border-gray-100" :class="darkMode ? 'border-slate-700' : 'border-gray-100'" style="height:500px"></div>
 
         <!-- RSI sub-chart -->
         <div class="mt-1">
@@ -498,7 +865,7 @@
                 x-text="indicators.rsi >= 70 ? '— Overbought ⚠' : indicators.rsi <= 30 ? '— Oversold 💡' : ''"></span>
             </span>
           </div>
-          <div x-ref="rsiContainer" class="w-full rounded-lg overflow-hidden border border-gray-100" style="height:120px"></div>
+          <div x-ref="rsiContainer" class="w-full rounded-lg overflow-hidden border border-gray-100" :class="darkMode ? 'border-slate-700' : 'border-gray-100'" style="height:120px"></div>
         </div>
 
         <!-- MACD sub-chart -->
@@ -515,7 +882,7 @@
               </span>
             </span>
           </div>
-          <div x-ref="macdContainer" class="w-full rounded-lg overflow-hidden border border-gray-100" style="height:120px"></div>
+          <div x-ref="macdContainer" class="w-full rounded-lg overflow-hidden border border-gray-100" :class="darkMode ? 'border-slate-700' : 'border-gray-100'" style="height:120px"></div>
         </div>
       </div>
 
@@ -561,6 +928,54 @@
               </div>
             </div>
           </template>
+        </div>
+      </template>
+
+      <!-- Historical Signal Stats Panel -->
+      <template x-if="signalStats && signalStats.total > 0">
+        <div class="mb-5 p-4 rounded-xl border" style="border-color:var(--border);background:var(--bg-raised)">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
+              Thống kê tín hiệu lịch sử
+            </h3>
+            <button x-show="isAdmin" @click="runAnalyzeHistory()" :disabled="actionLoading.analyzeHistory" class="btn-secondary text-xs">
+              <svg :class="actionLoading.analyzeHistory ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              <span x-text="actionLoading.analyzeHistory ? 'Đang phân tích...' : 'Cập nhật lịch sử'"></span>
+            </button>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+            <div class="text-center p-2 rounded-lg bg-white" style="box-shadow:var(--shadow-card)">
+              <div class="text-xl font-bold text-gray-900" x-text="signalStats.total"></div>
+              <div class="text-xs text-gray-500">Tổng tín hiệu</div>
+            </div>
+            <div class="text-center p-2 rounded-lg bg-white" style="box-shadow:var(--shadow-card)">
+              <div class="text-xl font-bold text-emerald-600" x-text="signalStats.bullish"></div>
+              <div class="text-xs text-gray-500">🟢 Tăng</div>
+            </div>
+            <div class="text-center p-2 rounded-lg bg-white" style="box-shadow:var(--shadow-card)">
+              <div class="text-xl font-bold text-red-500" x-text="signalStats.bearish"></div>
+              <div class="text-xs text-gray-500">🔴 Giảm</div>
+            </div>
+            <div class="text-center p-2 rounded-lg bg-white" style="box-shadow:var(--shadow-card)">
+              <div class="text-xl font-bold text-indigo-500" x-text="signalStats.tradingDays"></div>
+              <div class="text-xs text-gray-500">Ngày có tín hiệu</div>
+            </div>
+          </div>
+          <div class="text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wide">Top tín hiệu xuất hiện nhiều nhất</div>
+          <div class="flex flex-wrap gap-1.5">
+            <template x-for="[type, count] in signalStats.topTypes" :key="type">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
+                style="background:var(--accent-dim);color:var(--accent-text)">
+                <span x-text="type.replace(/_/g,' ')"></span>
+                <span class="font-bold" x-text="'×' + count"></span>
+              </span>
+            </template>
+          </div>
         </div>
       </template>
 
@@ -647,12 +1062,20 @@
         </div>
 
         <button @click="loadStockData()" :disabled="!priceTicker" class="btn-primary text-xs">Xem lịch sử</button>
-        <button @click="syncTicker()" :disabled="actionLoading.syncOne || !priceTicker" class="btn-secondary text-xs">
-          <svg :class="actionLoading.syncOne ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-          </svg>
-          Sync từ DNSE
-        </button>
+        <div x-show="isAdmin" class="flex flex-wrap gap-2 items-center">
+          <button @click="syncTicker(false)" :disabled="actionLoading.syncOne || actionLoading.syncOneFull || !priceTicker" class="btn-secondary text-xs">
+            <svg :class="actionLoading.syncOne ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Sync 1 năm
+          </button>
+          <button @click="syncTicker(true)" :disabled="actionLoading.syncOne || actionLoading.syncOneFull || !priceTicker" class="btn-secondary text-xs">
+            <svg :class="actionLoading.syncOneFull ? 'spin' : ''" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Sync full IPO
+          </button>
+        </div>
       </div>
 
       <!-- Latest price card -->
@@ -716,26 +1139,139 @@
     </div>
   </div>
 
-</main>
+  <!-- ═══ WATCHLIST TAB ═══ -->
+  <div x-show="tab === 'watchlist'" x-cloak @tab-changed.window="if ($event.detail === 'watchlist') loadWlItems()">
+    <div class="card mb-4">
+      <!-- Header + actions -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-gray-900">⭐ Quản lý Watchlist</h2>
+          <p class="text-sm text-gray-500 mt-0.5">
+            <span x-text="wlItems.filter(i=>i.active).length"></span> active /
+            <span x-text="wlItems.length"></span> tổng
+          </p>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <button x-show="isAdmin" @click="wlCheckLiquidity()" :disabled="wlCheckingLiquidity" class="btn-secondary text-xs">
+            <svg :class="wlCheckingLiquidity ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Kiểm tra thanh khoản
+          </button>
+          <button x-show="isAdmin" @click="wlAddForm.show = true" class="btn-primary text-xs">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Thêm mã
+          </button>
+          <button x-show="!isAdmin" @click="loginModal.show = true" class="btn-secondary text-xs opacity-60">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+            Đăng nhập để chỉnh sửa
+          </button>
+        </div>
+      </div>
 
-<!-- Close Position Modal -->
-<div x-show="closeModal.show" x-cloak
-  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6" @click.stop>
-    <h3 class="font-bold text-gray-900 mb-1">Đóng vị thế</h3>
-    <p class="text-sm text-gray-500 mb-4">
-      Đóng <strong x-text="closeModal.pos?.ticker"></strong> —
-      vào @ <span x-text="closeModal.pos ? fmt(closeModal.pos.entryPrice) : ''"></span>
-    </p>
-    <label class="block text-sm text-gray-600 mb-1">Giá đóng (để trống = giá mới nhất)</label>
-    <input x-model="closeModal.price" type="number" placeholder="Để trống = giá DNSE"
-      class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
-    <div class="flex gap-3">
-      <button @click="confirmClose()" class="btn-danger flex-1 justify-center">✓ Xác nhận đóng</button>
-      <button @click="closeModal.show = false" class="btn-secondary flex-1 justify-center">Huỷ</button>
+      <!-- Add form -->
+      <div x-show="wlAddForm.show" x-cloak class="border border-gray-200 rounded-xl p-4 mb-4 bg-gray-50">
+        <h3 class="font-semibold text-gray-800 mb-3">Thêm mã mới</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Mã CK *</label>
+            <input x-model="wlAddForm.ticker" type="text" placeholder="VD: HPG" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm uppercase"/>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Tên công ty</label>
+            <input x-model="wlAddForm.name" type="text" placeholder="Hoà Phát Group" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Ngành</label>
+            <input x-model="wlAddForm.sector" type="text" placeholder="Thép" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button @click="wlAdd()" class="btn-primary text-xs">Thêm</button>
+          <button @click="wlAddForm.show = false" class="btn-secondary text-xs">Huỷ</button>
+        </div>
+      </div>
+
+      <!-- Filter + Search -->
+      <div class="flex flex-col sm:flex-row gap-3 mb-4">
+        <div class="flex gap-1 p-1 bg-gray-100 rounded-lg">
+          <button @click="wlFilter='all'"      :class="wlFilter==='all'      ? 'bg-white shadow text-gray-900 font-semibold' : 'text-gray-500'" class="px-3 py-1 rounded-md text-xs transition-all">Tất cả</button>
+          <button @click="wlFilter='active'"   :class="wlFilter==='active'   ? 'bg-white shadow text-emerald-700 font-semibold' : 'text-gray-500'" class="px-3 py-1 rounded-md text-xs transition-all">✓ Active</button>
+          <button @click="wlFilter='inactive'" :class="wlFilter==='inactive' ? 'bg-white shadow text-red-700 font-semibold' : 'text-gray-500'" class="px-3 py-1 rounded-md text-xs transition-all">✗ Inactive</button>
+        </div>
+        <input x-model="wlSearch" type="text" placeholder="Tìm mã, tên, ngành..." class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
+      </div>
+
+      <!-- Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-xs text-gray-500 border-b border-gray-100">
+              <th class="text-left py-2 pr-3 font-medium">Mã</th>
+              <th class="text-left py-2 pr-3 font-medium hidden sm:table-cell">Tên</th>
+              <th class="text-left py-2 pr-3 font-medium hidden md:table-cell">Ngành</th>
+              <th class="text-right py-2 pr-3 font-medium">Avg Vol (30d)</th>
+              <th class="text-right py-2 pr-3 font-medium hidden sm:table-cell">Ngày GD</th>
+              <th class="text-right py-2 pr-3 font-medium hidden md:table-cell">Checked</th>
+              <th class="text-center py-2 font-medium">Trạng thái</th>
+              <th class="py-2"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <template x-for="item in filteredWlItems" :key="item.id">
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="py-2 pr-3">
+                  <button @click="viewSignals(item.ticker); tab='signals'; $dispatch('tab-changed','signals')" class="font-bold text-indigo-600 hover:text-indigo-800 hover:underline" x-text="item.ticker"></button>
+                </td>
+                <td class="py-2 pr-3 text-gray-600 hidden sm:table-cell max-w-[140px] truncate" x-text="item.name"></td>
+                <td class="py-2 pr-3 hidden md:table-cell">
+                  <span class="badge badge-gray text-xs" x-text="item.sector"></span>
+                </td>
+                <td class="py-2 pr-3 text-right font-mono text-xs" :class="item.avgVolume >= 100000 ? 'text-emerald-600' : 'text-red-500'">
+                  <span x-text="item.avgVolume ? (item.avgVolume/1000).toFixed(0)+'k' : '—'"></span>
+                </td>
+                <td class="py-2 pr-3 text-right text-xs hidden sm:table-cell" :class="item.tradingDays >= 18 ? 'text-emerald-600' : 'text-red-500'">
+                  <span x-text="item.tradingDays != null ? item.tradingDays+'/30' : '—'"></span>
+                </td>
+                <td class="py-2 pr-3 text-right text-xs text-gray-400 hidden md:table-cell" x-text="item.lastChecked ? new Date(item.lastChecked).toLocaleDateString('vi-VN') : '—'"></td>
+                <td class="py-2 text-center">
+                  <template x-if="item.active">
+                    <span class="badge badge-green text-xs">Active</span>
+                  </template>
+                  <template x-if="!item.active">
+                    <div>
+                      <span class="badge badge-red text-xs">Inactive</span>
+                      <div class="text-xs text-gray-400 mt-0.5 max-w-[120px] truncate" x-text="item.deactivateReason"></div>
+                    </div>
+                  </template>
+                </td>
+                <td class="py-2 pl-2">
+                  <div class="flex gap-1 justify-end" x-show="isAdmin">
+                    <template x-if="!item.active">
+                      <button @click="wlActivate(item.ticker)" class="btn-secondary text-xs px-2 py-1" title="Bật lại">✓</button>
+                    </template>
+                    <template x-if="item.active">
+                      <button @click="wlDeactivate(item.ticker)" class="btn-secondary text-xs px-2 py-1" title="Tắt">✗</button>
+                    </template>
+                    <button @click="wlDelete(item.id, item.ticker)" class="btn-danger text-xs px-2 py-1" title="Xoá">🗑</button>
+                  </div>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="filteredWlItems.length === 0">
+              <td colspan="8" class="py-8 text-center text-gray-400 text-sm">Không có mã nào</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-</div>
+
+</main>
 
 <!-- Toast -->
 <div x-show="toast.show" x-cloak x-transition
@@ -754,6 +1290,7 @@ function app() {
       { id: 'scanner',   label: 'Scanner',   icon: '🔍' },
       { id: 'signals',   label: 'Tín hiệu',  icon: '⚡' },
       { id: 'stocks',    label: 'Cổ phiếu',  icon: '📈' },
+      { id: 'watchlist', label: 'Watchlist', icon: '⭐' },
     ],
     loading: false,
     scanning: false,
@@ -764,6 +1301,8 @@ function app() {
     searchTicker: '',
     signals: [],
     signalTicker: '',
+    allChartSignals: [],   // tất cả tín hiệu lịch sử (cho chart markers)
+    signalStats: null,     // { total, bullish, bearish, topTypes }
     currentRec: null,
     priceHistory: [],
     latestBar: null,
@@ -773,12 +1312,102 @@ function app() {
     rsiChart: null,
     macdChart: null,
     indicators: { rsi: null, macd: null, macdSignal: null, macdHist: null },
-    actionLoading: { sync: false, scan: false, recommend: false, analyze: false, syncOne: false },
+    actionLoading: { sync: false, syncFull: false, scan: false, recommend: false, analyze: false, syncOne: false, syncOneFull: false, analyzeHistory: false, analyzeHistoryAll: false },
     actionLog: [],
     toast: { show: false, msg: '', type: 'success' },
-    closeModal: { show: false, pos: null, price: '' },
+    // ── Watchlist management ──────────────────────────────────────────────
+    wlItems: [],          // toàn bộ (kể inactive)
+    wlFilter: 'all',      // 'all' | 'active' | 'inactive'
+    wlSearch: '',
+    wlAddForm: { show: false, ticker: '', name: '', sector: '' },
+    wlCheckingLiquidity: false,
+    darkMode: localStorage.getItem('darkMode') === 'true',
+
+    // ── Auth ────────────────────────────────────────────────────────────
+    isAdmin: false,
+    loginModal: { show: false, username: '', password: '', error: '', loading: false },
+
+    async doLogin() {
+      this.loginModal.loading = true;
+      this.loginModal.error = '';
+      try {
+        const res = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: this.loginModal.username, password: this.loginModal.password }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          this.loginModal.error = err?.message || 'Sai tên đăng nhập hoặc mật khẩu';
+          return;
+        }
+        const data = await res.json();
+        localStorage.setItem('adminToken', data.accessToken);
+        this.isAdmin = true;
+        this.loginModal = { show: false, username: '', password: '', error: '', loading: false };
+        this.showToast('Đăng nhập thành công', 'success');
+      } catch (e) {
+        this.loginModal.error = 'Không thể kết nối đến server';
+      } finally {
+        this.loginModal.loading = false;
+      }
+    },
+
+    logout() {
+      localStorage.removeItem('adminToken');
+      this.isAdmin = false;
+      this.showToast('Đã đăng xuất', 'info');
+    },
+
+    // Wrapper for authenticated fetch — shows login modal on 401
+    async authFetch(url, options = {}) {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(url, {
+        ...options,
+        headers: { ...options.headers, Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        this.isAdmin = false;
+        localStorage.removeItem('adminToken');
+        this.loginModal.show = true;
+        this.loginModal.error = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+        throw new Error('Unauthorized');
+      }
+      return res;
+    },
+
+    toggleDark() {
+      this.darkMode = !this.darkMode;
+      localStorage.setItem('darkMode', this.darkMode);
+      this.updateChartTheme();
+    },
+
+    updateChartTheme() {
+      const dark = this.darkMode;
+      const chartBg    = dark ? '#09090b' : '#ffffff';
+      const textColor  = dark ? '#71717a' : '#64748b';
+      const gridColor  = dark ? '#27272a' : '#f1f5f9';
+      const borderColor= dark ? '#3f3f46' : '#e2e8f0';
+      const opts = {
+        layout: { background: { color: chartBg }, textColor },
+        grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+        timeScale: { borderColor },
+      };
+      if (this.lwChart)   this.lwChart.applyOptions(opts);
+      if (this.rsiChart)  this.rsiChart.applyOptions(opts);
+      if (this.macdChart) this.macdChart.applyOptions(opts);
+    },
 
     async init() {
+      // Verify stored token
+      const token = localStorage.getItem('adminToken');
+      if (token) {
+        try {
+          const res = await fetch('/auth/me', { headers: { Authorization: `Bearer ${token}` } });
+          this.isAdmin = res.ok;
+          if (!res.ok) localStorage.removeItem('adminToken');
+        } catch { this.isAdmin = false; }
+      }
       await this.refreshAll();
       await this.loadWatchlist();
     },
@@ -835,17 +1464,78 @@ function app() {
       this.signals = Array.isArray(sigs) ? sigs.slice(0, 20) : [];
       this.currentRec = rec;
       this.barData = Array.isArray(bars) ? bars.slice(-180) : [];
+
+      // Load tất cả tín hiệu lịch sử cho chart markers (riêng để không block)
+      this.loadChartSignals(t);
       this.$nextTick(() => this.renderChart(t));
+    },
+
+    async loadChartSignals(ticker) {
+      const t = (ticker || this.signalTicker).toUpperCase();
+      const from = this.barData.length > 0 ? this.barData[0].tradingDate : '2025-01-01';
+      const sigs = await fetch(`/signals/${t}/chart?from=${from}`).then(r => r.json()).catch(() => []);
+      this.allChartSignals = Array.isArray(sigs) ? sigs : [];
+
+      // Tính thống kê
+      const bullish = this.allChartSignals.filter(s => s.direction === 'BULLISH');
+      const bearish = this.allChartSignals.filter(s => s.direction === 'BEARISH');
+      const typeCounts = {};
+      this.allChartSignals.forEach(s => { typeCounts[s.type] = (typeCounts[s.type] || 0) + 1; });
+      const topTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      this.signalStats = {
+        total: this.allChartSignals.length,
+        bullish: bullish.length,
+        bearish: bearish.length,
+        tradingDays: new Set(this.allChartSignals.map(s => s.tradingDate)).size,
+        topTypes,
+      };
+
+      // Re-render chart với markers đầy đủ
+      if (this.barData.length) this.$nextTick(() => this.renderChart(t));
     },
 
     async runAnalyze() {
       if (!this.signalTicker) return;
       this.actionLoading.analyze = true;
       const t = this.signalTicker.toUpperCase();
-      await fetch(`/signals/${t}/analyze`, { method: 'POST' });
+      await this.authFetch(`/signals/${t}/analyze`, { method: 'POST' });
       await this.loadSignals();
       this.actionLoading.analyze = false;
       this.showToast('Phân tích xong ' + t, 'success');
+    },
+
+    async runAnalyzeHistory() {
+      if (!this.signalTicker) return;
+      this.actionLoading.analyzeHistory = true;
+      const t = this.signalTicker.toUpperCase();
+      this.log('info', `▶ Phân tích lịch sử ${t}...`);
+      try {
+        const res = await this.authFetch(`/queue/analyze-history/${t}?from=2025-01-01`, { method: 'POST' }).then(r => r.json());
+        if (res?.jobId) {
+          this.log('info', `⏳ Job #${res.jobId} đang xử lý...`);
+          await this.pollJob(res.jobId, `Lịch sử ${t}`, async () => {
+            await this.loadChartSignals(t);
+          });
+        }
+      } catch (e) {
+        if (e.message !== 'Unauthorized') this.log('error', `✗ ${e.message}`);
+      }
+      this.actionLoading.analyzeHistory = false;
+    },
+
+    async runAnalyzeHistoryAll() {
+      this.actionLoading.analyzeHistoryAll = true;
+      this.log('info', '▶ Phân tích lịch sử toàn watchlist...');
+      try {
+        const res = await this.authFetch('/queue/analyze-history?from=2025-01-01', { method: 'POST' }).then(r => r.json());
+        if (res?.jobId) {
+          this.log('info', `⏳ Job #${res.jobId} đã vào hàng chờ...`);
+          await this.pollJob(res.jobId, 'Phân tích lịch sử');
+        }
+      } catch (e) {
+        if (e.message !== 'Unauthorized') this.log('error', `✗ ${e.message}`);
+      }
+      this.actionLoading.analyzeHistoryAll = false;
     },
 
     renderChart(ticker) {
@@ -859,15 +1549,19 @@ function app() {
       if (this.rsiChart)  { this.rsiChart.remove();  this.rsiChart  = null; }
       if (this.macdChart) { this.macdChart.remove();  this.macdChart = null; }
 
-      // ── Shared chart options ──────────────────────────────────────────────
+      // ── Shared chart options (respects dark mode) ────────────────────────
+      const dark = this.darkMode;
       const baseLayout = {
-        background: { color: '#ffffff' },
-        textColor: '#374151',
+        background: { color: dark ? '#09090b' : '#ffffff' },
+        textColor: dark ? '#71717a' : '#64748b',
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: 11,
       };
-      const baseGrid   = { vertLines: { color: '#f3f4f6' }, horzLines: { color: '#f3f4f6' } };
-      const baseTS     = { borderColor: '#e5e7eb', timeVisible: false, fixLeftEdge: false, fixRightEdge: false, rightOffset: 0 };
+      const baseGrid   = {
+        vertLines: { color: dark ? '#27272a' : '#f1f5f9' },
+        horzLines: { color: dark ? '#27272a' : '#f1f5f9' },
+      };
+      const baseTS     = { borderColor: dark ? '#3f3f46' : '#e2e8f0', timeVisible: false, fixLeftEdge: false, fixRightEdge: false, rightOffset: 0 };
 
       // ── Main candlestick chart ────────────────────────────────────────────
       const chart = LightweightCharts.createChart(container, {
@@ -920,17 +1614,79 @@ function app() {
       addEma(ema50, 49, '#f97316', 'EMA50');
 
       // Signal markers
+      // Lịch sử: chỉ mark điểm mua MẠNH (score ≥ 3.5) + cooldown 10 nến tránh liên tục
+      // Hiện tại: thêm 1 tín hiệu bán quan trọng nhất nếu có
+      const SIG_WEIGHTS = {
+        RESISTANCE_BREAKOUT: 5, EMA_GOLDEN_CROSS: 3.5, EMA_BOUNCE: 3,
+        BASE_FORMING: 2, MACD_BULLISH_CROSS: 2, RSI_OVERSOLD: 2,
+        BULLISH_ENGULFING: 1.5, HAMMER: 1.5, BB_BREAKOUT_DOWN: 1.5,
+        EMA_BULLISH_STACK: 2.5, RSI_MOMENTUM_UP: 2.5, VOLUME_SURGE: 1,
+      };
+      const BUY_PRIORITY = [
+        'RESISTANCE_BREAKOUT', 'EMA_GOLDEN_CROSS', 'EMA_BOUNCE',
+        'BASE_FORMING', 'MACD_BULLISH_CROSS', 'RSI_OVERSOLD',
+      ];
+      const SELL_PRIORITY = [
+        'RSI_BEARISH_DIVERGENCE', 'FAILED_BREAKOUT', 'VOLUME_CLIMAX_TOP',
+        'DISTRIBUTION_BAR', 'MACD_BEARISH_DIVERGENCE', 'EMA_DEATH_CROSS',
+      ];
+      const MIN_BUY_SCORE = 3.5;  // tổng điểm tối thiểu để mark điểm mua
+      const BUY_COOLDOWN = 10;    // tối thiểu 10 nến giữa 2 điểm mua
+
+      const latestDate = this.barData.length > 0
+        ? this.barData[this.barData.length - 1].tradingDate
+        : null;
+      const sigSource = this.allChartSignals.length > 0 ? this.allChartSignals : this.signals;
+
+      // Nhóm theo ngày
       const sigMap = {};
-      this.signals.forEach(s => {
+      sigSource.forEach(s => {
         if (!s.tradingDate || s.tradingDate === 'N/A') return;
         if (!sigMap[s.tradingDate]) sigMap[s.tradingDate] = { bull: [], bear: [] };
-        if (s.direction === 'BULLISH') sigMap[s.tradingDate].bull.push(s.type.replace(/_/g,' '));
-        else if (s.direction === 'BEARISH') sigMap[s.tradingDate].bear.push(s.type.replace(/_/g,' '));
+        if (s.direction === 'BULLISH') sigMap[s.tradingDate].bull.push(s.type);
+        else if (s.direction === 'BEARISH') sigMap[s.tradingDate].bear.push(s.type);
       });
+
+      // Sắp xếp dates theo thứ tự thời gian để áp cooldown đúng
+      const sortedDates = Object.keys(sigMap).sort();
+      // Map date → index trong barData để tính khoảng cách nến
+      const dateToIdx = {};
+      this.barData.forEach((b, i) => { dateToIdx[b.tradingDate] = i; });
+
       const markers = [];
-      for (const [date, { bull, bear }] of Object.entries(sigMap)) {
-        if (bull.length) markers.push({ time: date, position: 'belowBar', color: '#10b981', shape: 'arrowUp',   text: bull.join(' · '), size: 1.2 });
-        if (bear.length) markers.push({ time: date, position: 'aboveBar', color: '#ef4444', shape: 'arrowDown', text: bear.join(' · '), size: 1.2 });
+      let lastBuyBarIdx = -BUY_COOLDOWN; // reset cooldown
+
+      for (const date of sortedDates) {
+        const { bull, bear } = sigMap[date];
+        const isCurrentDay = !latestDate || date >= latestDate;
+        const barIdx = dateToIdx[date] ?? -1;
+
+        // ── Điểm mua ─────────────────────────────────────────────────────
+        if (bull.length) {
+          // Tính tổng điểm bullish
+          const bullScore = bull.reduce((s, t) => s + (SIG_WEIGHTS[t] ?? 0), 0);
+          const topBuy = BUY_PRIORITY.find(t => bull.includes(t)) ?? bull[0];
+          const topScore = SIG_WEIGHTS[topBuy] ?? 0;
+          const sinceLastBuy = barIdx >= 0 ? barIdx - lastBuyBarIdx : BUY_COOLDOWN;
+
+          // Chỉ mark nếu: điểm đủ mạnh VÀ đã qua cooldown
+          if ((bullScore >= MIN_BUY_SCORE || topScore >= 3.5) && sinceLastBuy >= BUY_COOLDOWN) {
+            markers.push({
+              time: date, position: 'belowBar', color: '#10b981',
+              shape: 'arrowUp', text: topBuy.replace(/_/g,' '), size: 1.0,
+            });
+            if (barIdx >= 0) lastBuyBarIdx = barIdx;
+          }
+        }
+
+        // ── Tín hiệu bán (chỉ ngày hiện tại) ────────────────────────────
+        if (isCurrentDay && bear.length) {
+          const topSell = SELL_PRIORITY.find(t => bear.includes(t)) ?? bear[0];
+          markers.push({
+            time: date, position: 'aboveBar', color: '#ef4444',
+            shape: 'arrowDown', text: topSell.replace(/_/g,' '), size: 1.0,
+          });
+        }
       }
       if (markers.length) candleSeries.setMarkers(markers.sort((a,b) => a.time > b.time ? 1 : -1));
 
@@ -1098,19 +1854,24 @@ function app() {
       this.latestBar = latest;
     },
 
-    async syncTicker() {
+    async syncTicker(fullHistory = false) {
       if (!this.priceTicker) return;
-      this.actionLoading.syncOne = true;
+      const key = fullHistory ? 'syncOneFull' : 'syncOne';
+      this.actionLoading[key] = true;
       const t = this.priceTicker.toUpperCase();
-      const r = await fetch(`/stocks/${t}/sync`, { method: 'POST' }).then(r => r.json()).catch(() => null);
-      await this.loadStockData();
-      this.actionLoading.syncOne = false;
-      this.showToast(`Sync ${t}: ${r} records mới`, 'success');
+      const q = fullHistory ? '?full=true' : '';
+      const label = fullHistory ? `Sync full ${t}` : `Sync ${t}`;
+      const res = await this.authFetch(`/queue/sync/${t}${q}`, { method: 'POST' }).then(r => r.json()).catch(() => null);
+      if (res?.jobId) {
+        this.log('info', `⏳ ${label} job #${res.jobId}...`);
+        await this.pollJob(res.jobId, label, async () => await this.loadStockData());
+      }
+      this.actionLoading[key] = false;
     },
 
     async trackPositions() {
       this.scanning = true;
-      await fetch('/positions/track', { method: 'POST' });
+      await this.authFetch('/positions/track', { method: 'POST' });
       await this.loadOpenPositions();
       this.scanning = false;
       this.showToast('Cập nhật vị thế xong', 'success');
@@ -1118,36 +1879,138 @@ function app() {
 
     async runAction(action) {
       this.actionLoading[action] = true;
-      const endpointMap = { sync: '/scanner/sync', scan: '/scanner/scan', recommend: '/scanner/recommend' };
-      const labelMap = { sync: 'Sync giá', scan: 'Quét tín hiệu', recommend: 'Khuyến nghị + Telegram' };
+      const endpointMap = {
+        sync: '/queue/sync',
+        syncFull: '/queue/sync?full=true',
+        scan: '/queue/scan',
+        recommend: '/scanner/recommend',  // nhẹ, giữ đồng bộ
+      };
+      const labelMap = {
+        sync: 'Sync giá (1 năm)',
+        syncFull: 'Sync full (IPO → nay)',
+        scan: 'Quét tín hiệu',
+        recommend: 'Khuyến nghị + Telegram',
+      };
       try {
-        this.log('info', `▶ Bắt đầu: ${labelMap[action]}...`);
-        await fetch(endpointMap[action], { method: 'POST' });
-        this.log('success', `✓ Hoàn thành: ${labelMap[action]}`);
-        this.showToast(`${labelMap[action]} xong!`, 'success');
-        if (action === 'recommend') await this.refreshAll();
-        if (action === 'scan' || action === 'recommend') await this.loadSignalSummary();
+        this.log('info', `▶ ${labelMap[action]}...`);
+        const res = await this.authFetch(endpointMap[action], { method: 'POST' }).then(r => r.json());
+
+        if (res?.jobId) {
+          // Tác vụ nặng → poll tiến độ từ queue
+          this.log('info', `⏳ Job #${res.jobId} đã vào hàng chờ, đang xử lý...`);
+          await this.pollJob(res.jobId, labelMap[action]);
+          if (action === 'scan') await this.loadSignalSummary();
+        } else {
+          // Tác vụ nhẹ (recommend) → chờ trực tiếp
+          this.log('success', `✓ ${labelMap[action]} xong`);
+          this.showToast(`${labelMap[action]} xong!`, 'success');
+          if (action === 'recommend') await this.refreshAll();
+          if (action === 'scan' || action === 'recommend') await this.loadSignalSummary();
+        }
       } catch (e) {
-        this.log('error', `✗ Lỗi: ${e.message}`);
-        this.showToast('Có lỗi xảy ra', 'error');
+        if (e.message !== 'Unauthorized') {
+          this.log('error', `✗ Lỗi: ${e.message}`);
+          this.showToast('Có lỗi xảy ra', 'error');
+        }
       }
       this.actionLoading[action] = false;
     },
 
-    closePosition(pos) {
-      this.closeModal = { show: true, pos, price: '' };
+    // Poll job cho đến khi completed/failed, cập nhật log mỗi 2s
+    async pollJob(jobId, label, onDone) {
+      let lastPercent = -1;
+      while (true) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const job = await fetch(`/queue/jobs/${jobId}`).then(r => r.json());
+          if (!job) break;
+
+          const p = job.progress || {};
+          const pct = p.percent ?? 0;
+          if (pct !== lastPercent) {
+            const ticker = p.current ? ` [${p.current}]` : '';
+            this.log('info', `  ${pct}%${ticker} (${p.done ?? 0}/${p.total ?? '?'})`);
+            lastPercent = pct;
+          }
+
+          if (job.state === 'completed') {
+            const r = job.result || {};
+            const summary = Object.entries(r).map(([k,v]) => `${k}=${v}`).join(', ');
+            this.log('success', `✓ ${label} hoàn thành — ${summary}`);
+            this.showToast(`${label} xong!`, 'success');
+            if (onDone) onDone(job);
+            break;
+          }
+          if (job.state === 'failed') {
+            this.log('error', `✗ ${label} thất bại: ${job.failReason}`);
+            this.showToast(`${label} lỗi`, 'error');
+            break;
+          }
+        } catch { break; }
+      }
     },
 
-    async confirmClose() {
-      const pos = this.closeModal.pos;
-      if (!pos) return;
-      const url = this.closeModal.price
-        ? `/positions/${pos.id}?price=${this.closeModal.price}`
-        : `/positions/${pos.id}`;
-      await fetch(url, { method: 'DELETE' });
-      this.closeModal.show = false;
-      await this.refreshAll();
-      this.showToast(`Đã đóng vị thế ${pos.ticker}`, 'success');
+    // ── Watchlist management ─────────────────────────────────────────────
+    async loadWlItems() {
+      const r = await fetch('/watchlist').then(r => r.json()).catch(() => []);
+      this.wlItems = Array.isArray(r) ? r : [];
+    },
+
+    get filteredWlItems() {
+      return this.wlItems.filter(i => {
+        const matchFilter = this.wlFilter === 'all' ? true
+          : this.wlFilter === 'active' ? i.active : !i.active;
+        const q = this.wlSearch.toLowerCase();
+        const matchSearch = !q || i.ticker.toLowerCase().includes(q) || i.name.toLowerCase().includes(q) || i.sector.toLowerCase().includes(q);
+        return matchFilter && matchSearch;
+      });
+    },
+
+    async wlAdd() {
+      const { ticker, name, sector } = this.wlAddForm;
+      if (!ticker) return;
+      await this.authFetch('/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker, name, sector }),
+      });
+      this.wlAddForm = { show: false, ticker: '', name: '', sector: '' };
+      await this.loadWlItems();
+      this.showToast(`Đã thêm ${ticker.toUpperCase()}`, 'success');
+    },
+
+    async wlActivate(ticker) {
+      await this.authFetch(`/watchlist/${ticker}/activate`, { method: 'PUT' });
+      await this.loadWlItems();
+      this.showToast(`Đã bật lại ${ticker}`, 'success');
+    },
+
+    async wlDeactivate(ticker) {
+      await this.authFetch(`/watchlist/${ticker}/deactivate`, { method: 'PUT' });
+      await this.loadWlItems();
+      this.showToast(`Đã tắt ${ticker}`, 'info');
+    },
+
+    async wlDelete(id, ticker) {
+      if (!confirm(`Xoá hẳn ${ticker} khỏi watchlist?`)) return;
+      await this.authFetch(`/watchlist/${id}`, { method: 'DELETE' });
+      await this.loadWlItems();
+      this.showToast(`Đã xoá ${ticker}`, 'success');
+    },
+
+    async wlCheckLiquidity() {
+      this.wlCheckingLiquidity = true;
+      this.log('info', '▶ Đang kiểm tra thanh khoản watchlist...');
+      try {
+        const r = await this.authFetch('/watchlist/check-liquidity', { method: 'POST' }).then(r => r.json());
+        await this.loadWlItems();
+        const msg = `✓ Đã check ${r.checked} mã — deactivated: ${r.deactivated.length}, reactivated: ${r.reactivated.length}`;
+        this.log('success', msg);
+        this.showToast(msg, 'success');
+      } catch (e) {
+        if (e.message !== 'Unauthorized') this.log('error', `✗ ${e.message}`);
+      }
+      this.wlCheckingLiquidity = false;
     },
 
     log(type, msg) {

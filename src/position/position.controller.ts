@@ -7,7 +7,9 @@ import {
   Post,
   Query,
   ParseFloatPipe,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PositionService } from './position.service';
 
 @Controller('positions')
@@ -33,13 +35,14 @@ export class PositionController {
   }
 
   // POST /positions/track — cập nhật giá + check target/stop thủ công
+  @UseGuards(JwtAuthGuard)
   @Post('track')
   track() {
     return this.positionService.trackAll();
   }
 
   // DELETE /positions/:id — đóng vị thế thủ công
-  // DELETE /positions/:id?price=65000
+  @UseGuards(JwtAuthGuard)
   @Delete(':id')
   closeManual(
     @Param('id', ParseIntPipe) id: number,

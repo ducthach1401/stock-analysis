@@ -63,17 +63,18 @@ export enum SignalDirection {
   NEUTRAL = 'NEUTRAL', // Chưa rõ
 }
 
+// UNIQUE (ticker, tradingDate, type) cover prefix (ticker) và (ticker, tradingDate)
+// Index riêng cho getSignalsSummary: GROUP BY ticker, WHERE ticker IN (...)
 @Entity('signals')
 @Unique(['ticker', 'tradingDate', 'type'])
+@Index('idx_sig_ticker_date', ['ticker', 'tradingDate'])
 export class Signal {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index()
   @Column({ length: 10 })
   ticker: string;
 
-  @Index()
   @Column({ type: 'date' })
   tradingDate: string;
 

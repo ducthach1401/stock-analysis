@@ -13,18 +13,19 @@ export enum PositionStatus {
 }
 
 export enum CloseReason {
-  TARGET_HIT = 'TARGET_HIT', // Đạt mục tiêu lợi nhuận
-  STOP_LOSS = 'STOP_LOSS', // Chạm cắt lỗ
-  DISTRIBUTION = 'DISTRIBUTION', // Xuất hiện tín hiệu phân phối đỉnh
-  MANUAL = 'MANUAL', // Đóng thủ công
+  TARGET_HIT = 'TARGET_HIT',
+  STOP_LOSS = 'STOP_LOSS',
+  DISTRIBUTION = 'DISTRIBUTION',
+  MANUAL = 'MANUAL',
 }
 
+// Index (ticker, status) tối ưu query: findOne({ ticker, status: OPEN })
 @Entity('positions')
+@Index('idx_pos_ticker_status', ['ticker', 'status'])
 export class Position {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index()
   @Column({ length: 10 })
   ticker: string;
 
@@ -46,7 +47,6 @@ export class Position {
   @Column({ type: 'decimal', precision: 5, scale: 2 })
   riskReward: number;
 
-  @Index()
   @Column({ type: 'enum', enum: PositionStatus, default: PositionStatus.OPEN })
   status: PositionStatus;
 

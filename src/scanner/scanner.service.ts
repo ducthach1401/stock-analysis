@@ -6,7 +6,7 @@ import { SignalService } from '../signal/signal.service';
 import { StockService } from '../stock/stock.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { PositionService } from '../position/position.service';
-import { TICKERS, WATCHLIST } from './watchlist';
+import { WatchlistService } from '../watchlist/watchlist.service';
 
 @Injectable()
 export class ScannerService {
@@ -19,6 +19,7 @@ export class ScannerService {
     private readonly telegramService: TelegramService,
     private readonly recommendationService: RecommendationService,
     private readonly positionService: PositionService,
+    private readonly watchlistService: WatchlistService,
   ) {}
 
   // ─── Cron jobs ────────────────────────────────────────────────────────
@@ -68,19 +69,22 @@ export class ScannerService {
 
   // ─── Manual triggers ─────────────────────────────────────────────────
 
-  async syncAll(): Promise<Record<string, number>> {
+  async syncAll(from?: string): Promise<Record<string, number>> {
     if (this.isRunning) {
       this.logger.warn('Scanner đang chạy, bỏ qua lần này');
       return {};
     }
     this.isRunning = true;
+    const tickers = await this.watchlistService.getActiveTickers();
     const result: Record<string, number> = {};
+    const fromLabel = from ?? 'mặc định (1 năm)';
 
     try {
-      for (const ticker of TICKERS) {
+      this.logger.log(`Bắt đầu sync ${tickers.length} mã từ ${fromLabel}...`);
+      for (const ticker of tickers) {
         try {
-          result[ticker] = await this.stockService.syncHistory(ticker);
-          await delay(300); // tránh rate limit DNSE
+          result[ticker] = await this.stockService.syncHistory(ticker, from);
+          await delay(300);
         } catch (e) {
           this.logger.error(`Sync lỗi ${ticker}: ${(e as Error).message}`);
           result[ticker] = -1;
@@ -91,7 +95,7 @@ export class ScannerService {
         .filter((v) => v > 0)
         .reduce((a, b) => a + b, 0);
       this.logger.log(
-        `✅ Sync xong: ${total} records mới từ ${TICKERS.length} mã`,
+        `✅ Sync xong: ${total} records mới từ ${tickers.length} mã (from=${fromLabel})`,
       );
     } finally {
       this.isRunning = false;
@@ -101,6 +105,7 @@ export class ScannerService {
   }
 
   async scanAll(): Promise<void> {
+    const watchlist = await this.watchlistService.findActive();
     const allSignals: Array<{
       ticker: string;
       name: string;
@@ -109,7 +114,7 @@ export class ScannerService {
       bearish: string[];
     }> = [];
 
-    for (const stock of WATCHLIST) {
+    for (const stock of watchlist) {
       try {
         const signals = await this.signalService.analyze(stock.ticker);
         const bullish = signals
@@ -133,11 +138,12 @@ export class ScannerService {
       return;
     }
 
-    await this.sendDailySummary(allSignals);
+    await this.sendDailySummary(allSignals, watchlist.length);
   }
 
   async intradayAlertAll(): Promise<void> {
-    for (const ticker of TICKERS) {
+    const tickers = await this.watchlistService.getActiveTickers();
+    for (const ticker of tickers) {
       try {
         await this.stockService.checkAndAlert(ticker, 3);
         await delay(300);
@@ -147,25 +153,30 @@ export class ScannerService {
     }
   }
 
-  // Quét toàn bộ watchlist — gửi Telegram khi MUA hoặc phát hiện phân phối đỉnh
   async recommendAll(): Promise<void> {
+    const watchlist = await this.watchlistService.findActive();
     const date = new Date().toLocaleDateString('vi-VN', {
       timeZone: 'Asia/Ho_Chi_Minh',
     });
 
     const buys: string[] = [];
     const distributions: string[] = [];
-    const distributionTickers: string[] = []; // truyền sang trackAll
+    const distributionTickers: string[] = [];
 
-    for (const stock of WATCHLIST) {
+    for (const stock of watchlist) {
       try {
         const result = await this.recommendationService.recommend(stock.ticker);
         const pt = result.priceTarget;
         const rec = result.recommendation;
 
         if (rec === 'STRONG_BUY' || rec === 'BUY') {
-          // Gửi chi tiết lên Telegram (chỉ khi chưa có vị thế mở)
-          const isNew = await this.positionService.openPosition(result);
+          // Lớp bảo vệ: chỉ mở vị thế mới khi tín hiệu đủ mạnh (HIGH confidence)
+          // BUY thường có thể là noise; STRONG_BUY hoặc HIGH confidence mới đáng tin
+          const strongEnough =
+            rec === 'STRONG_BUY' || result.confidence === 'HIGH';
+          const isNew = strongEnough
+            ? await this.positionService.openPosition(result)
+            : false;
           if (isNew) {
             await this.recommendationService.recommendAndNotify(stock.ticker);
           }
@@ -173,7 +184,11 @@ export class ScannerService {
             ? ` | ${(pt.currentPrice / 1000).toFixed(1)}k → ${(pt.targetPrice / 1000).toFixed(1)}k (+${pt.upside.toFixed(0)}%)`
             : '';
           const star = result.confidence === 'HIGH' ? ' ⭐' : '';
-          const newTag = isNew ? '' : ' <i>(đang theo dõi)</i>';
+          const newTag = isNew
+            ? ''
+            : strongEnough
+              ? ' <i>(đang theo dõi)</i>'
+              : ' <i>(tín hiệu yếu, không mở lệnh)</i>';
           buys.push(`  • <b>${stock.ticker}</b>${star}${priceStr}${newTag}`);
         } else if (rec === 'STRONG_SELL' || rec === 'SELL') {
           distributionTickers.push(stock.ticker);
@@ -197,7 +212,6 @@ export class ScannerService {
       }
     }
 
-    // Nếu có distribution ticker → cập nhật các vị thế đang mở ngay lập tức
     if (distributionTickers.length) {
       await this.positionService.trackAll(distributionTickers);
     }
@@ -205,7 +219,7 @@ export class ScannerService {
     const hasAlert = buys.length > 0 || distributions.length > 0;
     if (hasAlert) {
       let summary = `📊 <b>Tổng hợp tín hiệu</b> — ${date}\n`;
-      summary += `<i>Quét ${TICKERS.length} mã VNIndex</i>\n`;
+      summary += `<i>Quét ${watchlist.length} mã VNIndex</i>\n`;
       summary += '─'.repeat(30) + '\n\n';
 
       if (buys.length) {
@@ -235,6 +249,7 @@ export class ScannerService {
       bullish: string[];
       bearish: string[];
     }>,
+    totalScanned: number,
   ): Promise<void> {
     const bullishStocks = results.filter((r) => r.bullish.length > 0);
     const bearishStocks = results.filter((r) => r.bearish.length > 0);
@@ -243,7 +258,7 @@ export class ScannerService {
     });
 
     let msg = `📊 <b>Báo cáo tín hiệu đảo chiều</b> — ${date}\n`;
-    msg += `<i>Quét ${TICKERS.length} mã | ${results.length} mã có tín hiệu</i>\n`;
+    msg += `<i>Quét ${totalScanned} mã | ${results.length} mã có tín hiệu</i>\n`;
     msg += '─'.repeat(30) + '\n\n';
 
     if (bullishStocks.length) {
@@ -263,6 +278,34 @@ export class ScannerService {
 
     await this.telegramService.sendMessage({ text: msg });
     this.logger.log('✅ Đã gửi báo cáo tín hiệu lên Telegram');
+  }
+
+  // Phân tích lịch sử toàn bộ watchlist
+  async analyzeHistoryAll(
+    from?: string,
+  ): Promise<{ ticker: string; analyzed: number; saved: number }[]> {
+    const tickers = await this.watchlistService.getActiveTickers();
+    const results: { ticker: string; analyzed: number; saved: number }[] = [];
+    const fromLabel = from ?? '2025-01-01';
+
+    this.logger.log(`Bắt đầu analyzeHistory ${tickers.length} mã từ ${fromLabel}...`);
+    for (const ticker of tickers) {
+      try {
+        const r = await this.signalService.analyzeAllHistory(ticker, from);
+        results.push({ ticker, ...r });
+        await delay(50); // nhẹ để không block CPU
+      } catch (e) {
+        this.logger.error(`analyzeHistory lỗi ${ticker}: ${(e as Error).message}`);
+        results.push({ ticker, analyzed: 0, saved: 0 });
+      }
+    }
+
+    const totalSaved = results.reduce((s, r) => s + r.saved, 0);
+    const totalAnalyzed = results.reduce((s, r) => s + r.analyzed, 0);
+    this.logger.log(
+      `✅ analyzeHistory xong: ${totalAnalyzed} ngày-mã, ${totalSaved} tín hiệu mới`,
+    );
+    return results;
   }
 }
 

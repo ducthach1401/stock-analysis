@@ -15,6 +15,12 @@ import { SignalType } from '../signal/entities/signal.entity';
 export class PositionService {
   private readonly logger = new Logger(PositionService.name);
 
+  // ── Bảo vệ chống tín hiệu nhiễu ──────────────────────────────────────────
+  /** Số ngày nắm giữ tối thiểu trước khi đóng do phân phối đỉnh */
+  private readonly MIN_HOLD_DAYS_BEFORE_DISTRIBUTION = 5;
+  /** Số ngày cooldown sau khi đóng lệnh, không được mở lại cùng mã */
+  private readonly COOLDOWN_DAYS_AFTER_CLOSE = 5;
+
   constructor(
     @InjectRepository(Position)
     private readonly positionRepo: Repository<Position>,
@@ -26,7 +32,10 @@ export class PositionService {
 
   /**
    * Mở vị thế khi có tín hiệu MUA.
-   * Trả về false nếu đã có vị thế OPEN cho mã này (không mở trùng).
+   * Bảo vệ:
+   *  - Không mở nếu đã có vị thế OPEN cho mã này
+   *  - Không mở trong cooldown N ngày sau khi vừa đóng lệnh cùng mã
+   * Trả về false nếu bị block, true nếu mở thành công.
    */
   async openPosition(result: RecommendationResult): Promise<boolean> {
     const ticker = result.ticker.toUpperCase();
@@ -40,6 +49,24 @@ export class PositionService {
     if (existing) {
       this.logger.debug(
         `${ticker}: đã có vị thế mở từ ${existing.entryDate}, bỏ qua`,
+      );
+      return false;
+    }
+
+    // Kiểm tra cooldown — không mở lại ngay sau khi vừa đóng
+    const cooldownDate = new Date();
+    cooldownDate.setDate(cooldownDate.getDate() - this.COOLDOWN_DAYS_AFTER_CLOSE);
+    const cooldownStr = cooldownDate.toLocaleDateString('sv-SE', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+    });
+    const recentlyClosed = await this.positionRepo.findOne({
+      where: { ticker, status: PositionStatus.CLOSED },
+      order: { closeDate: 'DESC' },
+    });
+    if (recentlyClosed?.closeDate && recentlyClosed.closeDate >= cooldownStr) {
+      this.logger.warn(
+        `${ticker}: cooldown — vừa đóng lệnh ngày ${recentlyClosed.closeDate}` +
+          ` (< ${this.COOLDOWN_DAYS_AFTER_CLOSE} ngày), bỏ qua tín hiệu mua mới`,
       );
       return false;
     }
@@ -160,6 +187,21 @@ export class PositionService {
         }
 
         if (hasDistribution) {
+          // Bảo vệ: không đóng do phân phối nếu vị thế quá mới
+          if (daysHeld < this.MIN_HOLD_DAYS_BEFORE_DISTRIBUTION) {
+            this.logger.warn(
+              `${pos.ticker}: phân phối nhưng mới ${daysHeld} ngày` +
+                ` (cần ≥ ${this.MIN_HOLD_DAYS_BEFORE_DISTRIBUTION}), giữ vị thế`,
+            );
+            // Vẫn cập nhật giá nhưng không đóng
+            await this.positionRepo.save(pos);
+            updates.push(
+              `  ⚠️ <b>${pos.ticker}</b>: ${fmt(currentPrice)} (${pnlStr}) | ` +
+                `Mua ${fmt(entry)} — <i>Phân phối, chưa đủ ${this.MIN_HOLD_DAYS_BEFORE_DISTRIBUTION}N</i>`,
+            );
+            continue;
+          }
+
           await this.closePosition(
             pos,
             currentPrice,
@@ -173,7 +215,7 @@ export class PositionService {
             pnlPct,
           );
           this.logger.log(
-            `⚠️ ${pos.ticker} xuất hiện phân phối. Đóng vị thế ${pnlPct.toFixed(2)}%`,
+            `⚠️ ${pos.ticker} xuất hiện phân phối (${daysHeld}N). Đóng vị thế ${pnlPct.toFixed(2)}%`,
           );
           continue;
         }

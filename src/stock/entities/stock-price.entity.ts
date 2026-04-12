@@ -7,17 +7,18 @@ import {
   Unique,
 } from 'typeorm';
 
+// Composite UNIQUE bao phủ queries: WHERE ticker = X ORDER BY tradingDate DESC
+// Đây cũng là index chính cho INSERT IGNORE bulk
 @Entity('stock_prices')
 @Unique(['ticker', 'tradingDate'])
+@Index('idx_sp_ticker_date', ['ticker', 'tradingDate'])
 export class StockPrice {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index()
   @Column({ length: 10 })
   ticker: string;
 
-  @Index()
   @Column({ type: 'date' })
   tradingDate: string;
 

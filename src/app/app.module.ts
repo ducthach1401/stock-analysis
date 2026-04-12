@@ -4,11 +4,14 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
+import { AuthModule } from '../auth/auth.module';
+import { QueueModule } from '../queue/queue.module';
 import { ScannerModule } from '../scanner/scanner.module';
 import { SignalModule } from '../signal/signal.module';
 import { StockModule } from '../stock/stock.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { PositionModule } from '../position/position.module';
+import { WatchlistModule } from '../watchlist/watchlist.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -37,11 +40,14 @@ import { AppService } from './app.service';
       }),
     }),
     ScheduleModule.forRoot(),
+    AuthModule,
     TelegramModule,
     StockModule,
     SignalModule,
     PositionModule,
+    WatchlistModule,
     ScannerModule,
+    QueueModule,
   ],
   controllers: [AppController],
   providers: [AppService],

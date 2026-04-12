@@ -77,6 +77,25 @@ export class RecommendationService {
   ) {}
 
   async recommend(ticker: string): Promise<RecommendationResult> {
+    // Kiểm tra thanh khoản — bỏ qua mã giao dịch thưa
+    const liq = await this.signalService.checkLiquidity(ticker);
+    if (!liq.pass) {
+      this.logger.warn(`${ticker}: bỏ qua recommend — ${liq.reason}`);
+      return {
+        ticker,
+        tradingDate: '',
+        recommendation: Recommendation.HOLD,
+        score: 0,
+        confidence: 'LOW',
+        priceTarget: null,
+        bullishSignals: [],
+        bearishSignals: [],
+        neutralSignals: [],
+        reasoning: `Thanh khoản thấp: ${liq.reason}`,
+        action: 'Không đủ thanh khoản để phân tích',
+      };
+    }
+
     await this.signalService.analyze(ticker);
 
     // Luôn tải bars để tính priceTarget dù có hay không có tín hiệu

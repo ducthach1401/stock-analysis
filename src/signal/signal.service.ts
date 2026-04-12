@@ -68,9 +68,56 @@ export class SignalService {
     private readonly telegramService: TelegramService,
   ) {}
 
+  // ─── Kiểm tra thanh khoản tối thiểu ───────────────────────────────────────
+  // Yêu cầu: avg volume 30 ngày gần nhất > 100k VÀ ≥18/30 ngày có giao dịch
+  async checkLiquidity(ticker: string): Promise<{
+    pass: boolean;
+    avgVolume: number;
+    tradingDays: number;
+    reason?: string;
+  }> {
+    const MIN_AVG_VOLUME = 100_000;
+    const MIN_TRADING_DAYS = 18;
+
+    const rows = await this.stockPriceRepo
+      .createQueryBuilder('sp')
+      .select(['sp.volume', 'sp.tradingDate'])
+      .where('sp.ticker = :ticker', { ticker: ticker.toUpperCase() })
+      .orderBy('sp.tradingDate', 'DESC')
+      .limit(30)
+      .getMany();
+
+    if (rows.length < 10) {
+      return { pass: false, avgVolume: 0, tradingDays: rows.length, reason: 'Quá ít dữ liệu' };
+    }
+
+    const tradingDays = rows.filter((r) => Number(r.volume) > 0).length;
+    const avgVolume = rows.reduce((s, r) => s + Number(r.volume), 0) / rows.length;
+
+    if (avgVolume < MIN_AVG_VOLUME) {
+      return {
+        pass: false, avgVolume, tradingDays,
+        reason: `Avg vol ${Math.round(avgVolume / 1000)}k < ${MIN_AVG_VOLUME / 1000}k`,
+      };
+    }
+    if (tradingDays < MIN_TRADING_DAYS) {
+      return {
+        pass: false, avgVolume, tradingDays,
+        reason: `Giao dịch thưa: ${tradingDays}/30 ngày`,
+      };
+    }
+    return { pass: true, avgVolume, tradingDays };
+  }
+
   // ─── Phân tích và lưu tín hiệu cho một mã ───────────────────────────────
 
   async analyze(ticker: string): Promise<Signal[]> {
+    // Kiểm tra thanh khoản trước khi phân tích
+    const liq = await this.checkLiquidity(ticker);
+    if (!liq.pass) {
+      this.logger.warn(`${ticker}: bỏ qua — ${liq.reason}`);
+      return [];
+    }
     // Cần 130 bars: EMA100 + 30 buffer, breakout lookback 60 phiên
     const bars = await this.loadBars(ticker, 130);
     if (bars.length < 65) {
@@ -122,6 +169,94 @@ export class SignalService {
       `${ticker}: ${saved.length} tín hiệu mới (${latest.tradingDate})`,
     );
     return saved;
+  }
+
+  // ─── Phân tích toàn bộ lịch sử (sliding window) ──────────────────────────
+  // Với mỗi ngày từ `from` đến nay, chạy lại bộ detect trên slice 130 bars
+  // Kết quả lưu vào DB theo (ticker, tradingDate, type) — INSERT IGNORE
+  async analyzeAllHistory(
+    ticker: string,
+    from?: string,
+  ): Promise<{ analyzed: number; saved: number }> {
+    const MIN_BARS = 130;
+    const startDate = from ?? '2025-01-01';
+
+    // Load tất cả bars một lần duy nhất (ASC)
+    const allBars = await this.loadAllBars(ticker);
+    if (allBars.length < MIN_BARS) {
+      this.logger.warn(`${ticker}: không đủ dữ liệu lịch sử (${allBars.length} nến)`);
+      return { analyzed: 0, saved: 0 };
+    }
+
+    let analyzed = 0;
+    let saved = 0;
+
+    for (let i = MIN_BARS - 1; i < allBars.length; i++) {
+      const tradingDate = allBars[i]!.tradingDate;
+      if (tradingDate < startDate) continue;
+
+      const slice = allBars.slice(i - MIN_BARS + 1, i + 1);
+
+      const detected = [
+        ...this.detectRsi(slice),
+        ...this.detectMacd(slice),
+        ...this.detectBollingerBands(slice),
+        ...this.detectEmaCross(slice),
+        ...this.detectEmaStack(slice),
+        ...this.detectEmaBounce(slice),
+        ...this.detectBase(slice),
+        ...this.detectResistanceBreakout(slice),
+        ...this.detectSupportBreakdown(slice),
+        ...this.detectRsiBearishDivergence(slice),
+        ...this.detectMacdBearishDivergence(slice),
+        ...this.detectVolumeClimaxTop(slice),
+        ...this.detectDistributionBar(slice),
+        ...this.detectFailedBreakout(slice),
+        ...this.detectCandlestickPatterns(slice),
+        ...this.detectVolumeSurge(slice),
+      ];
+
+      if (detected.length > 0) {
+        // Raw INSERT IGNORE — tránh lỗi TypeORM "entity id not set"
+        const COLS =
+          '(`ticker`, `tradingDate`, `type`, `direction`, `value`, `description`, `notified`)';
+        const placeholders = detected.map(() => '(?,?,?,?,?,?,?)').join(',');
+        const params = detected.flatMap((s) => [
+          ticker.toUpperCase(),
+          tradingDate,
+          s.type,
+          s.direction,
+          s.value,
+          s.description,
+          true,
+        ]);
+        const result = (await this.signalRepo.query(
+          `INSERT IGNORE INTO signals ${COLS} VALUES ${placeholders}`,
+          params,
+        )) as { affectedRows?: number };
+        saved += result?.affectedRows ?? 0;
+      }
+      analyzed++;
+    }
+
+    this.logger.log(
+      `${ticker}: analyzeHistory done — ${analyzed} ngày, ${saved} tín hiệu mới`,
+    );
+    return { analyzed, saved };
+  }
+
+  // Lấy tín hiệu cho chart (tất cả, grouped by date) — không giới hạn
+  async getSignalsForChart(
+    ticker: string,
+    from?: string,
+  ): Promise<{ tradingDate: string; direction: string; type: string; description: string | null }[]> {
+    const qb = this.signalRepo
+      .createQueryBuilder('s')
+      .select(['s.tradingDate', 's.direction', 's.type', 's.description'])
+      .where('s.ticker = :ticker', { ticker: ticker.toUpperCase() });
+    if (from) qb.andWhere('s.tradingDate >= :from', { from });
+    qb.orderBy('s.tradingDate', 'ASC');
+    return qb.getMany();
   }
 
   // Phân tích và gửi Telegram ngay
@@ -708,27 +843,65 @@ export class SignalService {
   // ─── Phân phối đỉnh ──────────────────────────────────────────────────────
 
   /**
-   * RSI Bearish Divergence: giá tạo đỉnh sau cao hơn đỉnh trước
-   * nhưng RSI tạo đỉnh thấp hơn → smart money đang phân phối
+   * Kiểm tra cổ phiếu đã tăng đủ mạnh từ nền trước khi có thể "phân phối đỉnh"
+   * Điều kiện:
+   *  1. Giá đã tăng ≥ minRise (15%) từ đáy của lookback phiên gần nhất
+   *  2. Giá hiện tại ở upper 40% của range → đang thực sự ở vùng đỉnh
+   */
+  private hasUptrendToDistribute(
+    bars: OhlcvBar[],
+    lookback = 60,
+    minRise = 0.15,
+  ): boolean {
+    if (bars.length < lookback) return false;
+
+    const recentBars = bars.slice(-lookback);
+    const currClose = bars[bars.length - 1]!.close;
+    const low = Math.min(...recentBars.map((b) => b.low));
+    const high = Math.max(...recentBars.map((b) => b.high));
+
+    // Phải có uptrend ít nhất minRise từ đáy trong lookback phiên
+    const riseFromLow = (currClose - low) / low;
+    if (riseFromLow < minRise) return false;
+
+    // Giá hiện tại phải ở upper 40% của range → đang ở vùng đỉnh thực sự
+    const pricePosition = high > low ? (currClose - low) / (high - low) : 0;
+    return pricePosition >= 0.6;
+  }
+
+  /**
+   * RSI Bearish Divergence — Mô hình 2 đỉnh (Double Top) với RSI phân kỳ âm:
+   *  - Điều kiện BẮT BUỘC: giá đã tăng ≥15% từ đáy 60 phiên (có uptrend thực sự)
+   *  - Giá tạo đỉnh 2 cao hơn đỉnh 1 ít nhất 1%
+   *  - Giữa 2 đỉnh có pullback ≥3% (xác nhận đây là double top, không phải noise)
+   *  - RSI tại đỉnh 2 thấp hơn đỉnh 1 ít nhất 4 điểm → phân kỳ âm rõ ràng
    */
   private detectRsiBearishDivergence(bars: OhlcvBar[]): DetectedSignal[] {
-    if (bars.length < 30) return [];
+    if (bars.length < 40) return [];
+
+    // Điều kiện tiên quyết: phải có uptrend mạnh từ nền
+    if (!this.hasUptrendToDistribute(bars, 60, 0.15)) return [];
+
     const closes = bars.map((b) => b.close);
-    const highs = bars.map((b) => b.high);
     const rsiArr = RSI.calculate({ values: closes, period: 14 });
     if (rsiArr.length < 20) return [];
 
     const rsiOffset = bars.length - rsiArr.length;
-    // Tìm 2 đỉnh giá trong 30 phiên gần nhất
-    const lookback = bars.slice(-30);
+
+    // Tìm các đỉnh giá trong 40 phiên gần nhất (window rộng hơn để bắt double top)
+    const lookback = bars.slice(-40);
     const peaks: Array<{ idx: number; price: number; rsi: number }> = [];
 
-    for (let i = 1; i < lookback.length - 1; i++) {
+    for (let i = 2; i < lookback.length - 2; i++) {
       const bar = lookback[i]!;
-      const prev = lookback[i - 1]!;
-      const next = lookback[i + 1]!;
-      if (bar.high > prev.high && bar.high > next.high) {
-        const absIdx = bars.length - 30 + i;
+      // Đỉnh rõ ràng: cao hơn 2 nến hai bên
+      if (
+        bar.high > lookback[i - 1]!.high &&
+        bar.high > lookback[i - 2]!.high &&
+        bar.high > lookback[i + 1]!.high &&
+        bar.high > lookback[i + 2]!.high
+      ) {
+        const absIdx = bars.length - 40 + i;
         const rsiIdx = absIdx - rsiOffset;
         const rsi = rsiArr[rsiIdx];
         if (rsi !== undefined) {
@@ -741,14 +914,23 @@ export class SignalService {
     const p1 = peaks[peaks.length - 2]!;
     const p2 = peaks[peaks.length - 1]!;
 
-    // Giá đỉnh sau cao hơn nhưng RSI thấp hơn → phân phối
-    if (p2.price > p1.price * 1.01 && p2.rsi < p1.rsi - 3) {
+    // Hai đỉnh phải cách nhau ít nhất 5 phiên
+    if (p2.idx - p1.idx < 5) return [];
+
+    // Phải có pullback ≥3% giữa 2 đỉnh → xác nhận double top thật sự
+    const betweenBars = bars.slice(p1.idx, p2.idx + 1);
+    const troughBetween = Math.min(...betweenBars.map((b) => b.low));
+    const pullback = (p1.price - troughBetween) / p1.price;
+    if (pullback < 0.03) return [];
+
+    // Điều kiện chính: giá đỉnh 2 cao hơn ≥1%, RSI đỉnh 2 thấp hơn ≥4 điểm
+    if (p2.price > p1.price * 1.01 && p2.rsi < p1.rsi - 4) {
       return [
         {
           type: SignalType.RSI_BEARISH_DIVERGENCE,
           direction: SignalDirection.BEARISH,
           value: p2.rsi,
-          description: `RSI phân kỳ giảm: giá đỉnh ${(p2.price / 1000).toFixed(1)}k > ${(p1.price / 1000).toFixed(1)}k nhưng RSI ${p2.rsi.toFixed(1)} < ${p1.rsi.toFixed(1)} → phân phối đỉnh`,
+          description: `Double Top + RSI phân kỳ âm: đỉnh ${(p2.price / 1000).toFixed(1)}k > ${(p1.price / 1000).toFixed(1)}k nhưng RSI ${p2.rsi.toFixed(1)} < ${p1.rsi.toFixed(1)} (pullback ${(pullback * 100).toFixed(1)}%) → phân phối đỉnh`,
         },
       ];
     }
@@ -756,10 +938,15 @@ export class SignalService {
   }
 
   /**
-   * MACD Bearish Divergence: histogram MACD yếu dần trong khi giá vẫn tăng
+   * MACD Bearish Divergence: histogram MACD yếu dần trong khi giá vẫn ở vùng cao
+   * Điều kiện BẮT BUỘC: phải có uptrend thực sự trước đó
    */
   private detectMacdBearishDivergence(bars: OhlcvBar[]): DetectedSignal[] {
     if (bars.length < 40) return [];
+
+    // Điều kiện tiên quyết: phải có uptrend mạnh từ nền
+    if (!this.hasUptrendToDistribute(bars, 60, 0.15)) return [];
+
     const closes = bars.map((b) => b.close);
     const macdArr = MACD.calculate({
       values: closes,
@@ -802,7 +989,7 @@ export class SignalService {
     const h1 = histPeaks[histPeaks.length - 2]!;
     const h2 = histPeaks[histPeaks.length - 1]!;
 
-    // Histogram đỉnh sau yếu hơn trong khi giá vẫn tăng
+    // Histogram đỉnh sau yếu hơn đáng kể (30%) trong khi giá vẫn tăng
     const recentHighs = bars.slice(-15).map((b) => b.high);
     const priceAtH1 = recentHighs[h1.idx] ?? 0;
     const priceAtH2 = recentHighs[h2.idx] ?? 0;
@@ -813,7 +1000,7 @@ export class SignalService {
           type: SignalType.MACD_BEARISH_DIVERGENCE,
           direction: SignalDirection.BEARISH,
           value: h2.val,
-          description: `MACD phân kỳ giảm: momentum suy yếu (histogram ${h2.val.toFixed(0)} < ${h1.val.toFixed(0)}) dù giá không giảm → lực mua cạn`,
+          description: `MACD phân kỳ giảm tại đỉnh: momentum suy yếu (hist ${h2.val.toFixed(0)} < ${h1.val.toFixed(0)}) dù giá không giảm → lực mua cạn ở vùng đỉnh`,
         },
       ];
     }
@@ -823,9 +1010,14 @@ export class SignalService {
   /**
    * Volume Climax Top: khối lượng đột biến ≥ 3x ở vùng đỉnh
    * nhưng đóng cửa yếu (dưới nửa dưới của range) → smart money xả hàng
+   * Điều kiện BẮT BUỘC: phải có uptrend thực sự trước đó
    */
   private detectVolumeClimaxTop(bars: OhlcvBar[]): DetectedSignal[] {
     if (bars.length < 21) return [];
+
+    // Điều kiện tiên quyết: phải có uptrend mạnh từ nền
+    if (!this.hasUptrendToDistribute(bars, 60, 0.15)) return [];
+
     const curr = bars[bars.length - 1]!;
     const prevBars = bars.slice(-21, -1);
     const avgVol =
@@ -835,9 +1027,10 @@ export class SignalService {
     // Volume climax: ≥ 3x average
     if (curr.volume < avgVol * 3) return [];
 
-    // Giá ở vùng cao (trong 20% đỉnh của 20 phiên)
-    const recentHigh = Math.max(...prevBars.map((b) => b.high));
-    const recentLow = Math.min(...prevBars.map((b) => b.low));
+    // Giá ở vùng cao (trong 40% đỉnh của 60 phiên)
+    const longerBars = bars.slice(-60);
+    const recentHigh = Math.max(...longerBars.map((b) => b.high));
+    const recentLow = Math.min(...longerBars.map((b) => b.low));
     const pricePosition =
       recentHigh > recentLow
         ? (curr.close - recentLow) / (recentHigh - recentLow)
@@ -855,7 +1048,7 @@ export class SignalService {
           type: SignalType.VOLUME_CLIMAX_TOP,
           direction: SignalDirection.BEARISH,
           value: curr.volume / avgVol,
-          description: `Climax volume đỉnh: KL=${(curr.volume / avgVol).toFixed(1)}x, đóng cửa yếu (${(closePosition * 100).toFixed(0)}% range) → dấu hiệu xả hàng`,
+          description: `Climax volume tại đỉnh: KL=${(curr.volume / avgVol).toFixed(1)}x, đóng cửa yếu (${(closePosition * 100).toFixed(0)}% range) → smart money xả hàng`,
         },
       ];
     }
@@ -865,9 +1058,14 @@ export class SignalService {
   /**
    * Distribution Bar (Wyckoff): nến biên độ rộng ở đỉnh,
    * close gần low, volume cao → phiên phân phối điển hình
+   * Điều kiện BẮT BUỘC: phải có uptrend thực sự trước đó
    */
   private detectDistributionBar(bars: OhlcvBar[]): DetectedSignal[] {
     if (bars.length < 21) return [];
+
+    // Điều kiện tiên quyết: phải có uptrend mạnh từ nền
+    if (!this.hasUptrendToDistribute(bars, 60, 0.15)) return [];
+
     const curr = bars[bars.length - 1]!;
     const prevBars = bars.slice(-21, -1);
 
@@ -895,7 +1093,7 @@ export class SignalService {
           type: SignalType.DISTRIBUTION_BAR,
           direction: SignalDirection.BEARISH,
           value: closePosition,
-          description: `Nến phân phối: biên độ rộng (${(range / avgRange).toFixed(1)}x), đóng gần đáy (${(closePosition * 100).toFixed(0)}%), KL=${(curr.volume / avgVol).toFixed(1)}x → Wyckoff distribution`,
+          description: `Nến phân phối Wyckoff tại đỉnh: biên độ ${(range / avgRange).toFixed(1)}x, đóng gần đáy (${(closePosition * 100).toFixed(0)}%), KL=${(curr.volume / avgVol).toFixed(1)}x → xả hàng`,
         },
       ];
     }
@@ -905,9 +1103,14 @@ export class SignalService {
   /**
    * Failed Breakout (Bull Trap): intraday vượt đỉnh nhưng đóng cửa dưới đỉnh cũ
    * + nến đỏ → bẫy tăng, áp lực bán mạnh ở vùng kháng cự
+   * Điều kiện BẮT BUỘC: phải có uptrend trước đó mới có "đỉnh" để breakout thất bại
    */
   private detectFailedBreakout(bars: OhlcvBar[]): DetectedSignal[] {
     if (bars.length < 22) return [];
+
+    // Điều kiện tiên quyết: phải có uptrend — mới có "đỉnh" thực để bull trap
+    if (!this.hasUptrendToDistribute(bars, 60, 0.10)) return []; // 10% là đủ cho bull trap
+
     const curr = bars[bars.length - 1]!;
     const prevBars = bars.slice(-22, -1);
     const resistance = Math.max(...prevBars.map((b) => b.high));
@@ -924,7 +1127,7 @@ export class SignalService {
           type: SignalType.FAILED_BREAKOUT,
           direction: SignalDirection.BEARISH,
           value: curr.high,
-          description: `Bull trap: vượt kháng cự ${(resistance / 1000).toFixed(1)}k nhưng đóng cửa tụt ${failPct.toFixed(1)}% → lực bán áp đảo vùng đỉnh`,
+          description: `Bull trap tại đỉnh: vượt kháng cự ${(resistance / 1000).toFixed(1)}k nhưng đóng cửa tụt ${failPct.toFixed(1)}% → lực bán áp đảo vùng đỉnh`,
         },
       ];
     }
@@ -1047,6 +1250,24 @@ export class SignalService {
 
     // Đảo ngược về ASC để indicators tính đúng thứ tự thời gian
     return rows.reverse().map((r) => ({
+      open: Number(r.open),
+      high: Number(r.high),
+      low: Number(r.low),
+      close: Number(r.close),
+      volume: Number(r.volume),
+      tradingDate: r.tradingDate,
+    }));
+  }
+
+  // Load toàn bộ bars theo ASC — dùng cho analyzeAllHistory
+  private async loadAllBars(ticker: string): Promise<OhlcvBar[]> {
+    const rows = await this.stockPriceRepo
+      .createQueryBuilder('sp')
+      .where('sp.ticker = :ticker', { ticker: ticker.toUpperCase() })
+      .orderBy('sp.tradingDate', 'ASC')
+      .getMany();
+
+    return rows.map((r) => ({
       open: Number(r.open),
       high: Number(r.high),
       low: Number(r.low),

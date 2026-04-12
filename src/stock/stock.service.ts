@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TelegramService } from '../telegram/telegram.service';
 import { StockPriceResponseDto } from './dto/stock-query.dto';
-import { DnseService } from './dnse.service';
+import { DNSE_EARLIEST_FROM, DnseService } from './dnse.service';
 import { StockPrice } from './entities/stock-price.entity';
 
 @Injectable()
@@ -31,12 +31,25 @@ export class StockService {
     return this.dnseService.fetchOhlc(ticker, fromDate, toDate);
   }
 
+  /** Lịch sử tối đa từ DNSE (từ ~2000 / ngày IPO trên hệ thống) đến `to`. */
+  async fetchFullHistory(
+    ticker: string,
+    to?: string,
+  ): Promise<StockPriceResponseDto[]> {
+    const toDate = to ? new Date(to) : new Date();
+    return this.dnseService.fetchOhlcFullHistory(
+      ticker,
+      DNSE_EARLIEST_FROM,
+      toDate,
+    );
+  }
+
   // Lấy giá phiên gần nhất (thay thế intraday khi không có auth DNSE)
   async fetchLatestBar(ticker: string): Promise<StockPriceResponseDto | null> {
     return this.dnseService.fetchLatestBar(ticker);
   }
 
-  // Sync lịch sử vào MySQL (upsert theo ticker + tradingDate)
+  // Sync lịch sử vào MySQL (INSERT IGNORE theo ticker + tradingDate)
   async syncHistory(
     ticker: string,
     from?: string,
@@ -44,16 +57,52 @@ export class StockService {
   ): Promise<number> {
     this.logger.log(`Syncing history for ${ticker}...`);
     const bars = await this.fetchHistory(ticker, from, to);
+    return this.persistPriceBars(ticker, bars);
+  }
 
+  /**
+   * Sync toàn bộ năm có trên DNSE (từ mốc 2000-01-01 → nay).
+   * Dữ liệu thực tế bắt đầu từ ngày mã niêm yết; INSERT IGNORE giữ bản ghi cũ.
+   */
+  async syncHistoryFull(ticker: string, to?: string): Promise<number> {
+    const toLabel = to ?? 'nay';
+    this.logger.log(
+      `Syncing FULL history for ${ticker} (từ ${DNSE_EARLIEST_FROM.toISOString().slice(0, 10)} → ${toLabel})...`,
+    );
+    const bars = await this.fetchFullHistory(ticker, to);
+    return this.persistPriceBars(ticker, bars);
+  }
+
+  private async persistPriceBars(
+    ticker: string,
+    bars: StockPriceResponseDto[],
+  ): Promise<number> {
+    if (!bars.length) return 0;
+
+    const COLS =
+      '(`ticker`, `tradingDate`, `open`, `high`, `low`, `close`, `volume`, `foreignBuyVolume`, `foreignSellVolume`)';
     let saved = 0;
-    for (const bar of bars) {
-      const exists = await this.stockPriceRepo.findOne({
-        where: { ticker: bar.ticker, tradingDate: bar.tradingDate },
-      });
-      if (!exists) {
-        await this.stockPriceRepo.save(this.stockPriceRepo.create(bar));
-        saved++;
-      }
+    const CHUNK = 50;
+
+    for (let i = 0; i < bars.length; i += CHUNK) {
+      const chunk = bars.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '(?,?,?,?,?,?,?,?,?)').join(',');
+      const params = chunk.flatMap((b) => [
+        b.ticker,
+        b.tradingDate,
+        b.open,
+        b.high,
+        b.low,
+        b.close,
+        b.volume,
+        b.foreignBuyVolume,
+        b.foreignSellVolume,
+      ]);
+      const result: { affectedRows?: number } = await this.stockPriceRepo.query(
+        `INSERT IGNORE INTO stock_prices ${COLS} VALUES ${placeholders}`,
+        params,
+      );
+      saved += result?.affectedRows ?? 0;
     }
 
     this.logger.log(`Saved ${saved}/${bars.length} new records for ${ticker}`);

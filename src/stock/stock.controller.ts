@@ -6,7 +6,9 @@ import {
   ParseFloatPipe,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StockService } from './stock.service';
 
 @Controller('stocks')
@@ -19,7 +21,10 @@ export class StockController {
     @Param('ticker') ticker: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('full') full?: string,
   ) {
+    if (full === '1' || full === 'true')
+      return this.stockService.fetchFullHistory(ticker, to);
     return this.stockService.fetchHistory(ticker, from, to);
   }
 
@@ -40,18 +45,21 @@ export class StockController {
   }
 
   // POST /stocks/:ticker/sync?from=2024-01-01
+  @UseGuards(JwtAuthGuard)
   @Post(':ticker/sync')
   syncHistory(
     @Param('ticker') ticker: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('full') full?: string,
   ) {
+    if (full === '1' || full === 'true')
+      return this.stockService.syncHistoryFull(ticker, to);
     return this.stockService.syncHistory(ticker, from, to);
   }
 
   // POST /stocks/:ticker/seed?bars=120 — tạo dữ liệu mẫu để test
-  // POST /stocks/:ticker/seed?bars=120&price=62
-  // price: giá hiện tại thực tế (nghìn đồng, vd: 62 = 62,000đ)
+  @UseGuards(JwtAuthGuard)
   @Post(':ticker/seed')
   seedTestData(
     @Param('ticker') ticker: string,
@@ -66,6 +74,7 @@ export class StockController {
   }
 
   // POST /stocks/:ticker/alert?threshold=3
+  @UseGuards(JwtAuthGuard)
   @Post(':ticker/alert')
   checkAndAlert(
     @Param('ticker') ticker: string,
