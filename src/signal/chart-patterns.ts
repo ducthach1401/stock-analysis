@@ -132,9 +132,7 @@ function macdHistSeries(closes: number[]): number[] {
     SimpleMASignal: false,
   });
   return m.map((x) =>
-    x.MACD !== undefined && x.signal !== undefined
-      ? x.MACD - x.signal
-      : NaN,
+    x.MACD !== undefined && x.signal !== undefined ? x.MACD - x.signal : NaN,
   );
 }
 
@@ -177,9 +175,7 @@ function detectDoubleTopForming(
       const mid = Math.max(p1, p2);
       if (Math.abs(p1 - p2) / mid > tol) continue;
 
-      const loBetween = Math.min(
-        ...bars.slice(i1, i2 + 1).map((x) => x.low),
-      );
+      const loBetween = Math.min(...bars.slice(i1, i2 + 1).map((x) => x.low));
       const peakAvg = (p1 + p2) / 2;
       const neckDepth = (peakAvg - loBetween) / peakAvg;
       if (neckDepth < 0.045) continue;
@@ -211,8 +207,7 @@ function detectDoubleTopForming(
         level('Neckline (đáy giữa)', bars[neckIdx].low, bars, neckIdx),
       ];
 
-      const summary =
-        `Mô hình 2 đỉnh (M) khá rõ: hai đỉnh gần ${fmtK(peakAvg)}, đáy giữa ~${fmtK(loBetween)} — giá trên neckline; theo dõi phá vỡ đáy giữa.${extra} ${volNote}`;
+      const summary = `Mô hình 2 đỉnh (M) khá rõ: hai đỉnh gần ${fmtK(peakAvg)}, đáy giữa ~${fmtK(loBetween)} — giá trên neckline; theo dõi phá vỡ đáy giữa.${extra} ${volNote}`;
 
       return { summary, levels };
     }
@@ -245,9 +240,7 @@ function detectDoubleBottomForming(
       const midP = Math.max(p1, p2);
       if (Math.abs(p1 - p2) / midP > tol) continue;
 
-      const hiBetween = Math.max(
-        ...bars.slice(i1, i2 + 1).map((x) => x.high),
-      );
+      const hiBetween = Math.max(...bars.slice(i1, i2 + 1).map((x) => x.high));
       const botAvg = (p1 + p2) / 2;
       const neckRally = (hiBetween - botAvg) / botAvg;
       if (neckRally < 0.045) continue;
@@ -278,8 +271,7 @@ function detectDoubleBottomForming(
         level('Neckline (đỉnh giữa)', bars[neckIdx].high, bars, neckIdx),
       ];
 
-      const summary =
-        `Mô hình 2 đáy (W) khá rõ: hai đáy quanh ${fmtK(botAvg)}, đỉnh giữa ~${fmtK(hiBetween)} — chờ bứt lên neckline.${extra} ${volNote}`;
+      const summary = `Mô hình 2 đáy (W) khá rõ: hai đáy quanh ${fmtK(botAvg)}, đỉnh giữa ~${fmtK(hiBetween)} — chờ bứt lên neckline.${extra} ${volNote}`;
 
       return { summary, levels };
     }
@@ -365,8 +357,7 @@ function detectCupHandleForming(
     level('Đỉnh vùng tay cầm', recentHigh, bars, recentHighIdx),
   ];
 
-  const summary =
-    `Mô hình cốc–tay cầm khá rõ: đáy cốc ~${fmtK(cupLow)}, mép ~${fmtK(rimRecover)}; tay cầm ~${(handlePullback * 100).toFixed(1)}%, KL tay cầm thấp hơn giai đoạn hồi.${mExtra} ${volNote}`;
+  const summary = `Mô hình cốc–tay cầm khá rõ: đáy cốc ~${fmtK(cupLow)}, mép ~${fmtK(rimRecover)}; tay cầm ~${(handlePullback * 100).toFixed(1)}%, KL tay cầm thấp hơn giai đoạn hồi.${mExtra} ${volNote}`;
 
   return { summary, levels };
 }
@@ -392,7 +383,8 @@ export function buildPatternAnalysis(bars: OhlcvBar[]): PatternAnalysis | null {
       volNote =
         'KL 20 phiên thấp hơn trung bình 60 phiên — thanh khoản đang tĩnh.';
     } else if (r > 1.35) {
-      volNote = 'KL 20 phiên cao hơn trung bình 60 phiên — cần xem kèm hướng giá.';
+      volNote =
+        'KL 20 phiên cao hơn trung bình 60 phiên — cần xem kèm hướng giá.';
     } else {
       volNote = 'KL gần đây tương đương trung bình.';
     }

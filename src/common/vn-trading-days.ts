@@ -28,10 +28,7 @@ export function tradingSessionsAfterEntryDate(
   return count;
 }
 
-export function canSellAfterT2(
-  entryDate: string,
-  exitDate: string,
-): boolean {
+export function canSellAfterT2(entryDate: string, exitDate: string): boolean {
   return (
     tradingSessionsAfterEntryDate(entryDate, exitDate) >=
     MIN_TRADING_SESSIONS_AFTER_ENTRY

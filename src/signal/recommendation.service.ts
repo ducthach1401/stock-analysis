@@ -304,7 +304,9 @@ export class RecommendationService {
 
   // ─── Telegram ────────────────────────────────────────────────────────
 
-  private formatPatternLevelsForTelegram(levels: PatternLevel[] | null): string {
+  private formatPatternLevelsForTelegram(
+    levels: PatternLevel[] | null,
+  ): string {
     if (!levels?.length) return '';
     const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN');
     return (

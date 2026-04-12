@@ -80,7 +80,8 @@ export class PositionService {
     if (!allowsFirstPositionEntry(result)) {
       return {
         outcome: 'NONE',
-        detail: 'chưa đủ nền/break để mở (cần tín hiệu mua mạnh + BASE/EMA stack/BB squeeze hoặc break kháng cự)',
+        detail:
+          'chưa đủ nền/break để mở (cần tín hiệu mua mạnh + BASE/EMA stack/BB squeeze hoặc break kháng cự)',
       };
     }
     const ticker = result.ticker.toUpperCase();
@@ -178,7 +179,10 @@ export class PositionService {
     if (!allowsAverageDown(result, entryAvg, legs.length)) {
       const px = pt.currentPrice;
       if (px >= entryAvg) {
-        return { outcome: 'NONE', detail: 'chưa lỗ so với giá TB — không TB thêm' };
+        return {
+          outcome: 'NONE',
+          detail: 'chưa lỗ so với giá TB — không TB thêm',
+        };
       }
       return {
         outcome: 'NONE',
@@ -243,9 +247,7 @@ export class PositionService {
   private async loadBarsAsc(
     ticker: string,
     limit: number,
-  ): Promise<
-    { open: number; high: number; low: number; close: number }[]
-  > {
+  ): Promise<{ open: number; high: number; low: number; close: number }[]> {
     const rows = await this.stockPriceRepo
       .createQueryBuilder('sp')
       .where('sp.ticker = :ticker', { ticker })
@@ -515,7 +517,9 @@ export class PositionService {
   // ─── Query ───────────────────────────────────────────────────────────────
 
   /** Giá mua lệnh đầu (hiển thị cạnh ngày Đầu); `entryPrice` vẫn là giá TB. */
-  private enrichPosition(pos: Position): Position & { firstEntryPrice: number } {
+  private enrichPosition(
+    pos: Position,
+  ): Position & { firstEntryPrice: number } {
     const entry = Number(pos.entryPrice);
     const legs = pos.averageDownLegs ?? [];
     const firstEntryPrice =
@@ -535,9 +539,7 @@ export class PositionService {
     return rows.map((p) => this.enrichPosition(p));
   }
 
-  async getAllPositions(): Promise<
-    (Position & { firstEntryPrice: number })[]
-  > {
+  async getAllPositions(): Promise<(Position & { firstEntryPrice: number })[]> {
     const rows = await this.positionRepo.find({ order: { createdAt: 'DESC' } });
     return rows.map((p) => this.enrichPosition(p));
   }

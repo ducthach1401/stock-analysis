@@ -1,5 +1,12 @@
-import { Recommendation, RecommendationResult } from '../signal/dto/recommendation.dto';
-import { Signal, SignalDirection, SignalType } from '../signal/entities/signal.entity';
+import {
+  Recommendation,
+  RecommendationResult,
+} from '../signal/dto/recommendation.dto';
+import {
+  Signal,
+  SignalDirection,
+  SignalType,
+} from '../signal/entities/signal.entity';
 
 /** Tối đa số lần mua thêm (trung bình giá) cho một vị thế. */
 export const MAX_AVERAGE_DOWN_LEGS = 10;
@@ -57,8 +64,7 @@ export function firstLegPriceFromWeightedAverage(
   const n = averageDownLegs.length;
   for (let i = n; i >= 1; i--) {
     const legPrice = Number(averageDownLegs[i - 1].price);
-    const unitsBefore =
-      BASE_POSITION_UNITS + (i - 1) * UNITS_PER_AVERAGE_LEG;
+    const unitsBefore = BASE_POSITION_UNITS + (i - 1) * UNITS_PER_AVERAGE_LEG;
     e =
       (e * (unitsBefore + UNITS_PER_AVERAGE_LEG) -
         legPrice * UNITS_PER_AVERAGE_LEG) /
@@ -208,12 +214,8 @@ export function allowsAverageDown(
   }
 
   const t = typesFromResult(r);
-  const hasStructure =
-    hasGoodBaseFromTypes(t) || hasRecoveryFromTypes(t);
-  return allowsAverageDownRecommendation(
-    r.recommendation,
-    hasStructure,
-  );
+  const hasStructure = hasGoodBaseFromTypes(t) || hasRecoveryFromTypes(t);
+  return allowsAverageDownRecommendation(r.recommendation, hasStructure);
 }
 
 /** Cùng `allowsAverageDown` nhưng giá thị trường = đóng cửa phiên (backtest). */
@@ -233,7 +235,6 @@ export function allowsAverageDownFromSignals(
   }
 
   const t = bullishTypesFromSignals(signals);
-  const hasStructure =
-    hasGoodBaseFromTypes(t) || hasRecoveryFromTypes(t);
+  const hasStructure = hasGoodBaseFromTypes(t) || hasRecoveryFromTypes(t);
   return allowsAverageDownRecommendation(rec, hasStructure);
 }

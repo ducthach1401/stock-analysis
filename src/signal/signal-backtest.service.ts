@@ -31,7 +31,10 @@ import {
 } from './recommendation.service';
 
 /** Giả lập T+2: ít nhất 2 phiên (nến) sau ngày mua mới được bán. */
-function canExitAfterT2(entryBarIndex: number, currentBarIndex: number): boolean {
+function canExitAfterT2(
+  entryBarIndex: number,
+  currentBarIndex: number,
+): boolean {
   return currentBarIndex - entryBarIndex >= MIN_TRADING_SESSIONS_AFTER_ENTRY;
 }
 
@@ -204,8 +207,7 @@ export class SignalBacktestService {
           peakPnlPct > PROFIT_RUN_PCT && curPnlPct <= floorPnlPct;
 
         if (hitProfitFloor) {
-          const pnlPercent =
-            ((close - pos.entryPrice) / pos.entryPrice) * 100;
+          const pnlPercent = ((close - pos.entryPrice) / pos.entryPrice) * 100;
           closed.push({
             entryDate: pos.entryDate,
             entryPrice: pos.entryPrice,
@@ -236,8 +238,7 @@ export class SignalBacktestService {
           curPnlPct < PROFIT_RUN_PCT &&
           close >= pos.takeProfitTarget
         ) {
-          const pnlPercent =
-            ((close - pos.entryPrice) / pos.entryPrice) * 100;
+          const pnlPercent = ((close - pos.entryPrice) / pos.entryPrice) * 100;
           const tp = pos.takeProfitTarget;
           closed.push({
             entryDate: pos.entryDate,
@@ -277,10 +278,7 @@ export class SignalBacktestService {
               close,
             ),
           );
-          const { takeProfitTarget } = targetsForWeightedEntry(
-            history,
-            newAvg,
-          );
+          const { takeProfitTarget } = targetsForWeightedEntry(history, newAvg);
           if (takeProfitTarget != null) {
             pos.entryPrice = newAvg;
             pos.takeProfitTarget = takeProfitTarget;
@@ -342,8 +340,7 @@ export class SignalBacktestService {
 
     const sumPnl = closed.reduce((s, x) => s + x.pnlPercent, 0);
     const compound =
-      (closed.reduce((acc, x) => acc * (1 + x.pnlPercent / 100), 1) - 1) *
-      100;
+      (closed.reduce((acc, x) => acc * (1 + x.pnlPercent / 100), 1) - 1) * 100;
     const winCount = closed.filter((x) => x.pnlPercent > 0).length;
 
     const run = this.runRepo.create({
@@ -427,7 +424,9 @@ export class SignalBacktestService {
       const ep = Number(t.entryPrice);
       const legs = t.averageDownLegs ?? [];
       const firstEntryPrice =
-        legs.length > 0 ? Math.round(firstLegPriceFromWeightedAverage(ep, legs)) : ep;
+        legs.length > 0
+          ? Math.round(firstLegPriceFromWeightedAverage(ep, legs))
+          : ep;
       return { ...t, firstEntryPrice };
     });
     return { ...run, trades } as BacktestRun & {

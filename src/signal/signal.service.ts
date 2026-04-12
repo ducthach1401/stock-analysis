@@ -285,9 +285,8 @@ export class SignalService {
     );
 
     try {
-      const { SignalBacktestService } = await import(
-        './signal-backtest.service'
-      );
+      const { SignalBacktestService } =
+        await import('./signal-backtest.service');
       const backtest = this.moduleRef.get(SignalBacktestService, {
         strict: false,
       });
@@ -364,9 +363,12 @@ export class SignalService {
       `<b>Phiên ${sessionDate}: ${unnotified.length} tín hiệu</b>\n\n${lines}`,
     );
 
-    await this.signalRepo.update(unnotified.map((s) => s.id), {
-      notified: true,
-    });
+    await this.signalRepo.update(
+      unnotified.map((s) => s.id),
+      {
+        notified: true,
+      },
+    );
   }
 
   // Lấy tín hiệu đã lưu
