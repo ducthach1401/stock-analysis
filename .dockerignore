@@ -1,0 +1,42 @@
+# Dependencies (cài lại trong image)
+node_modules
+
+# Build output (build lại trong stage builder)
+dist
+build
+
+# Git — không cần trong image, giảm context rất nhiều
+.git
+.gitignore
+
+# Env (compose nạp lúc chạy)
+.env
+.env.*
+!.env.example
+
+# Log / tạm
+logs
+*.log
+.tmp
+.temp
+coverage
+.nyc_output
+
+# Test (tsconfig.build đã exclude; khỏi gửi context)
+test
+**/*spec.ts
+
+# IDE & công cụ local
+.cursor
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compose / script deploy — không COPY trong Dockerfile
+docker-compose*.yml
+deploy*.sh

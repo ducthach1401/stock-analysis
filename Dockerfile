@@ -22,11 +22,12 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production && yarn cache clean
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
 COPY ecosystem.config.js ./
 
 RUN mkdir -p logs
 
-# EXPOSE dùng ARG (build-time). docker-compose truyền PORT từ .env qua build.args; app vẫn đọc PORT lúc chạy.
+ARG PORT=3000
 EXPOSE ${PORT}
 
 CMD ["pm2-runtime", "ecosystem.config.js", "--env", "production"]
