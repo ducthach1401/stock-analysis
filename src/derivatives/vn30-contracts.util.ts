@@ -13,7 +13,10 @@ export type Vn30FuturesContractMeta = {
  * Thứ Năm thứ ba của tháng (chuẩn tham chiếu kỳ hạn VN30 thường gặp).
  * So sánh ngày theo chuỗi YYYY-MM-DD (Asia/Ho_Chi_Minh).
  */
-export function thirdThursdayOfMonthYmd(year: number, month: number): string | null {
+export function thirdThursdayOfMonthYmd(
+  year: number,
+  month: number,
+): string | null {
   let thCount = 0;
   for (let dom = 1; dom <= 31; dom++) {
     const iso = `${year}-${String(month).padStart(2, '0')}-${String(dom).padStart(2, '0')}`;
@@ -71,6 +74,9 @@ export function listUpcomingVn30FuturesContracts(
 export function nearestVn30FuturesContract(
   todayYmd?: string,
 ): Vn30FuturesContractMeta | null {
-  const list = listUpcomingVn30FuturesContracts(1, todayYmd ?? vnCalendarTodayYmd());
+  const list = listUpcomingVn30FuturesContracts(
+    1,
+    todayYmd ?? vnCalendarTodayYmd(),
+  );
   return list[0] ?? null;
 }

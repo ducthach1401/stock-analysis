@@ -12,8 +12,7 @@ export function hoChiMinhTimeParts(d = new Date()): {
     hour12: false,
   });
   const parts = fmt.formatToParts(d);
-  const get = (type: string) =>
-    parts.find((p) => p.type === type)?.value ?? '';
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
   const wdStr = get('weekday');
   const wdMap: Record<string, number> = {
     Sun: 0,

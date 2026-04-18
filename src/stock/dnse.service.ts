@@ -127,8 +127,7 @@ export class DnseService {
       const hourly = await this.fetchIndexOhlcRaw(sym, '1H', from, to);
       return this.aggregate1HTo4H(hourly);
     }
-    const apiRes =
-      u === '1D' ? '1D' : u === '1H' || u === '60' ? '1H' : res;
+    const apiRes = u === '1D' ? '1D' : u === '1H' || u === '60' ? '1H' : res;
     return this.fetchIndexOhlcRaw(sym, apiRes, from, to);
   }
 

@@ -56,11 +56,17 @@ export class IntradayBreakoutNotifyService {
   }
 
   private intradayEnabled(): boolean {
-    return this.config.get<string>('TELEGRAM_INTRADAY_BREAKOUT_ENABLED', 'true') !== 'false';
+    return (
+      this.config.get<string>('TELEGRAM_INTRADAY_BREAKOUT_ENABLED', 'true') !==
+      'false'
+    );
   }
 
   private closeConfirmEnabled(): boolean {
-    return this.config.get<string>('TELEGRAM_BREAKOUT_CLOSE_CONFIRM', 'true') !== 'false';
+    return (
+      this.config.get<string>('TELEGRAM_BREAKOUT_CLOSE_CONFIRM', 'true') !==
+      'false'
+    );
   }
 
   private poolSize(): number {
@@ -72,7 +78,9 @@ export class IntradayBreakoutNotifyService {
   }
 
   private fmtK(n: number): string {
-    return (n / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + 'k';
+    return (
+      (n / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + 'k'
+    );
   }
 
   private async loadBarsAsc(
@@ -91,20 +99,16 @@ export class IntradayBreakoutNotifyService {
       order: { tradingDate: 'DESC' },
       take,
     });
-    return rows
-      .reverse()
-      .map((r) => ({
-        high: Number(r.high),
-        low: Number(r.low),
-        close: Number(r.close),
-        tradingDate: r.tradingDate,
-      }));
+    return rows.reverse().map((r) => ({
+      high: Number(r.high),
+      low: Number(r.low),
+      close: Number(r.close),
+      tradingDate: r.tradingDate,
+    }));
   }
 
   /** Max high của 60 phiên trước nến cuối (cùng detectResistanceBreakout). */
-  private resistanceFromBars(
-    bars: Array<{ high: number }>,
-  ): number | null {
+  private resistanceFromBars(bars: Array<{ high: number }>): number | null {
     if (bars.length < 62) return null;
     const prev60 = bars.slice(-61, -1);
     return Math.max(...prev60.map((b) => b.high));
@@ -206,7 +210,9 @@ export class IntradayBreakoutNotifyService {
     });
 
     st.intradayStrengthSent = true;
-    this.logger.log(`${upper}: đã gửi Telegram break intraday (giữ ≥${Math.round(hold / 60000)} phút)`);
+    this.logger.log(
+      `${upper}: đã gửi Telegram break intraday (giữ ≥${Math.round(hold / 60000)} phút)`,
+    );
   }
 
   /**

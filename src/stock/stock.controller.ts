@@ -50,7 +50,12 @@ export class StockController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    return this.stockService.fetchIntradayIndexOhlc(ticker, resolution, from, to);
+    return this.stockService.fetchIntradayIndexOhlc(
+      ticker,
+      resolution,
+      from,
+      to,
+    );
   }
 
   // GET /stocks/:ticker/stored?from=&to=&limit=500&before=YYYY-MM-DD

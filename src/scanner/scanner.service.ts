@@ -99,9 +99,7 @@ export class ScannerService {
     const max = 2;
     const head = types.slice(0, max);
     const rest = types.length - head.length;
-    return rest > 0
-      ? `${head.join(', ')} <i>+${rest}</i>`
-      : head.join(', ');
+    return rest > 0 ? `${head.join(', ')} <i>+${rest}</i>` : head.join(', ');
   }
 
   // ─── Cron jobs ────────────────────────────────────────────────────────
@@ -167,7 +165,10 @@ export class ScannerService {
    */
   @Cron('*/5 9-14 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
   async scheduledDerivativesVn30FiveMinScan() {
-    if (this.config.get<string>('DERIVATIVES_VN30_FIVE_MIN_SCAN', 'true') === 'false') {
+    if (
+      this.config.get<string>('DERIVATIVES_VN30_FIVE_MIN_SCAN', 'true') ===
+      'false'
+    ) {
       return;
     }
     if (!isVnCashMarketSessionOpen()) return;
@@ -176,9 +177,7 @@ export class ScannerService {
       await this.signalService.analyze('VN30');
       this.logger.log('⏰ [Cron] Phái sinh VN30: sync phiên + analyze');
     } catch (e) {
-      this.logger.warn(
-        `[Cron] Phái sinh VN30: ${(e as Error).message}`,
-      );
+      this.logger.warn(`[Cron] Phái sinh VN30: ${(e as Error).message}`);
     }
   }
 
@@ -398,16 +397,11 @@ export class ScannerService {
           rec === Recommendation.STRONG_SELL ||
           rec === Recommendation.SELL
         ) {
-          const priceStr = pt
-            ? ` ${(pt.currentPrice / 1000).toFixed(1)}k`
-            : '';
+          const priceStr = pt ? ` ${(pt.currentPrice / 1000).toFixed(1)}k` : '';
           const star = result.confidence === 'HIGH' ? ' ⭐' : '';
           const topSignal =
             result.bearishSignals[0]?.type.replace(/_/g, ' ') ?? '';
-          if (
-            allowDailyTradeSignals &&
-            !isMarketIndexTicker(stock.ticker)
-          ) {
+          if (allowDailyTradeSignals && !isMarketIndexTicker(stock.ticker)) {
             distRows.push({
               rank,
               conf,

@@ -70,7 +70,8 @@ export class PositionService {
     if (!isVnAfterMarketCloseForDailySignals()) {
       return {
         outcome: 'NONE',
-        detail: 'chờ sau đóng cửa — nến ngày chưa xác nhận (khuyến nghị chỉ sau ATC)',
+        detail:
+          'chờ sau đóng cửa — nến ngày chưa xác nhận (khuyến nghị chỉ sau ATC)',
       };
     }
     const existing = await this.positionRepo.findOne({
