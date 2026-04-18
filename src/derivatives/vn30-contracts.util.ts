@@ -47,9 +47,12 @@ export function listUpcomingVn30FuturesContracts(
   max = 8,
   todayYmd: string = vnCalendarTodayYmd(),
 ): Vn30FuturesContractMeta[] {
-  const parts = todayYmd.split('-').map(Number);
-  const y0 = parts[0]!;
-  const m0 = parts[1]!;
+  const segs = todayYmd.split('-');
+  const y0 = Number(segs[0]);
+  const m0 = Number(segs[1]);
+  if (!Number.isFinite(y0) || !Number.isFinite(m0)) {
+    return [];
+  }
   let y = y0;
   let m = m0;
   const out: Vn30FuturesContractMeta[] = [];
