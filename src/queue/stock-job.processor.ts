@@ -103,9 +103,14 @@ export class StockJobProcessor extends WorkerHost {
   }
 
   private async handleSyncTicker(
-    job: Job<{ ticker: string; from?: string; full?: boolean }>,
+    job: Job<{
+      ticker: string;
+      from?: string;
+      full?: boolean;
+      windowDays?: number;
+    }>,
   ): Promise<{ saved: number; mode?: string }> {
-    const { ticker, from, full } = job.data;
+    const { ticker, from, full, windowDays } = job.data;
     let saved: number;
     let mode: string | undefined;
     if (full) {
@@ -113,6 +118,22 @@ export class StockJobProcessor extends WorkerHost {
       mode = 'full';
       await this.runSignalsAfterSync(ticker, from, {
         isFullPriceSync: true,
+        savedBarCount: saved,
+      });
+    } else if (
+      windowDays != null &&
+      Number.isFinite(Number(windowDays)) &&
+      Number(windowDays) > 0
+    ) {
+      const r = await this.stockService.syncHistoryCalendarWindow(
+        ticker,
+        Number(windowDays),
+      );
+      saved = r.saved;
+      mode = 'calendar_window';
+      await this.runSignalsAfterSync(ticker, r.from, {
+        isFullPriceSync: false,
+        smartMode: mode,
         savedBarCount: saved,
       });
     } else {

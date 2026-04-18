@@ -15,6 +15,7 @@ import { StockModule } from '../stock/stock.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { PositionModule } from '../position/position.module';
 import { WatchlistModule } from '../watchlist/watchlist.module';
+import { DerivativesModule } from '../derivatives/derivatives.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -72,6 +73,7 @@ import { AppService } from './app.service';
     WatchlistModule,
     ScannerModule,
     QueueModule,
+    DerivativesModule,
   ],
   controllers: [AppController],
   providers: [

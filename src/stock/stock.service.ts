@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { vnCalendarTodayYmd } from '../common/vn-trading-days';
+import { isMarketIndexTicker } from '../scanner/watchlist';
 import { TelegramService } from '../telegram/telegram.service';
+import { IntradayIndexBarDto } from './dto/intraday-bar.dto';
 import { StockPriceResponseDto } from './dto/stock-query.dto';
 import { DNSE_EARLIEST_FROM, DnseService } from './dnse.service';
 import { StockPrice } from './entities/stock-price.entity';
@@ -208,6 +211,48 @@ export class StockService {
     return this.dnseService.fetchLatestBar(ticker);
   }
 
+  /** Khung được phép cho GET intraday-index (Entrade; 4H = gộp từ 1H trên server). */
+  private static readonly INDEX_CHART_RESOLUTIONS = new Set([
+    '5',
+    '15',
+    '1H',
+    '4H',
+    '1D',
+  ]);
+
+  /**
+   * Nến chỉ số VN30/VNINDEX — Entrade: 5m, 15m, 1H, 4H (gộp 1H), 1D. Không lưu DB.
+   */
+  async fetchIntradayIndexOhlc(
+    ticker: string,
+    resolution?: string,
+    from?: string,
+    to?: string,
+  ): Promise<IntradayIndexBarDto[]> {
+    const upper = ticker.toUpperCase();
+    if (!isMarketIndexTicker(upper)) {
+      throw new BadRequestException(
+        'intraday-index chỉ hỗ trợ VNINDEX hoặc VN30',
+      );
+    }
+    const raw = (resolution || '5').trim();
+    const resU = raw.toUpperCase();
+    const res = StockService.INDEX_CHART_RESOLUTIONS.has(resU) ? resU : '5';
+
+    const toD = to ? new Date(to) : new Date();
+    /** Khi client không gửi `from`, mặc định ~1 tháng — khớp chart phái sinh / đồng bộ windowDays=31. */
+    let defaultDays = 31;
+    if (res === '1H') defaultDays = 45;
+    else if (res === '4H') defaultDays = 120;
+    else if (res === '1D') defaultDays = 800;
+
+    const fromD = from
+      ? new Date(from)
+      : new Date(toD.getTime() - defaultDays * 24 * 60 * 60 * 1000);
+
+    return this.dnseService.fetchIntradayIndexOhlc(upper, res, fromD, toD);
+  }
+
   // Sync lịch sử vào MySQL (INSERT IGNORE theo ticker + tradingDate)
   async syncHistory(
     ticker: string,
@@ -220,16 +265,52 @@ export class StockService {
   }
 
   /**
-   * Sync toàn bộ năm có trên DNSE (từ mốc 2000-01-01 → nay).
-   * Dữ liệu thực tế bắt đầu từ ngày mã niêm yết; INSERT IGNORE giữ bản ghi cũ.
+   * Đồng bộ nến **ngày** trong cửa sổ lịch [to − calendarDays, to] (vd. 31 ≈ một tháng).
+   * Dùng cho VN30 / tham chiếu phái sinh: bổ sung DB không cần full IPO.
+   */
+  async syncHistoryCalendarWindow(
+    ticker: string,
+    calendarDays: number,
+    toYmd?: string,
+  ): Promise<{ saved: number; from: string; to: string }> {
+    const t = ticker.toUpperCase();
+    const to = toYmd ?? vnCalendarTodayYmd();
+    const d = Math.min(Math.max(Math.floor(calendarDays), 1), 400);
+    const from = this.subtractCalendarDays(to, d);
+    this.logger.log(`${t}: sync cửa sổ lịch ${from} → ${to} (${d} ngày)`);
+    const saved = await this.syncHistory(t, from, to);
+    return { saved, from, to };
+  }
+
+  /**
+   * Cron trong phiên: chỉ fetch nến **ngày giao dịch VN hiện tại** (không overlap 7 ngày).
+   * Dùng `ON DUPLICATE KEY UPDATE` để cập nhật OHLC/KL khi nến ngày đã có trong DB.
+   * Điều chỉnh cổ tức / sync đầy đủ vẫn do `syncHistorySmart` (vd. 15:30).
+   */
+  async syncIntradaySessionBar(
+    ticker: string,
+    to?: string,
+  ): Promise<{ saved: number }> {
+    const t = ticker.toUpperCase();
+    const today = vnCalendarTodayYmd();
+    const bars = await this.fetchHistory(t, today, to);
+    const saved = await this.persistPriceBarsUpsert(t, bars);
+    return { saved };
+  }
+
+  /**
+   * Sync full IPO → nay: **xóa toàn bộ nến local** rồi tải lại từ DNSE (từ mốc sớm → `to`).
+   * Trước đây dùng INSERT IGNORE trên dữ liệu cũ — các phiên đã có không được ghi đè, nên “full” trông như sync nông.
    */
   async syncHistoryFull(ticker: string, to?: string): Promise<number> {
+    const t = ticker.toUpperCase();
     const toLabel = to ?? 'nay';
     this.logger.log(
-      `Syncing FULL history for ${ticker} (từ ${DNSE_EARLIEST_FROM.toISOString().slice(0, 10)} → ${toLabel})...`,
+      `Syncing FULL history for ${t} (xóa DB → từ ${DNSE_EARLIEST_FROM.toISOString().slice(0, 10)} → ${toLabel})...`,
     );
-    const bars = await this.fetchFullHistory(ticker, to);
-    const saved = await this.persistPriceBars(ticker, bars);
+    await this.deleteAllPricesForTicker(t);
+    const bars = await this.fetchFullHistory(t, to);
+    const saved = await this.persistPriceBars(t, bars);
     return saved;
   }
 
@@ -267,6 +348,48 @@ export class StockService {
 
     this.logger.log(`Saved ${saved}/${bars.length} new records for ${ticker}`);
     return saved;
+  }
+
+  /** Ghi / cập nhật nến (khớp UNIQUE ticker+tradingDate) — dùng trong phiên. */
+  private async persistPriceBarsUpsert(
+    ticker: string,
+    bars: StockPriceResponseDto[],
+  ): Promise<number> {
+    if (!bars.length) return 0;
+
+    const COLS =
+      '(`ticker`, `tradingDate`, `open`, `high`, `low`, `close`, `volume`, `foreignBuyVolume`, `foreignSellVolume`)';
+    let touched = 0;
+
+    for (const b of bars) {
+      const params = [
+        b.ticker,
+        b.tradingDate,
+        b.open,
+        b.high,
+        b.low,
+        b.close,
+        b.volume,
+        b.foreignBuyVolume,
+        b.foreignSellVolume,
+      ];
+      await this.stockPriceRepo.query(
+        `INSERT INTO stock_prices ${COLS} VALUES (?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+           \`open\`=VALUES(\`open\`),
+           \`high\`=VALUES(\`high\`),
+           \`low\`=VALUES(\`low\`),
+           \`close\`=VALUES(\`close\`),
+           \`volume\`=VALUES(\`volume\`),
+           \`foreignBuyVolume\`=VALUES(\`foreignBuyVolume\`),
+           \`foreignSellVolume\`=VALUES(\`foreignSellVolume\`)`,
+        params,
+      );
+      touched++;
+    }
+
+    this.logger.debug(`Intraday upsert ${touched} nến cho ${ticker}`);
+    return touched;
   }
 
   // Kiểm tra biến động so với phiên trước và gửi cảnh báo Telegram

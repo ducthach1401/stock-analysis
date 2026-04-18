@@ -71,7 +71,7 @@ Tóm tắt quy tắc đang cài trong code (`src/position/`, `src/position/avera
 - Job: sync toàn watchlist / một mã, quét tín hiệu, phân tích lịch sử (toàn danh sách hoặc một mã).
 - Theo dõi tiến độ job qua API (`/queue/jobs/:id`).
 
-### Giao diện web (`public/index.html`)
+### Giao diện web (`public/index.html` + `public/css/app.css`, `public/js/*.js`)
 - **Chiến lược**: mô tả quy tắc vị thế / TB / backtest (đồng bộ với README).
 - **Dashboard**: tóm tắt tín hiệu watchlist, lịch cron, log thao tác; admin có thể **phân tích lịch sử toàn watchlist** (job BullMQ).
 - **Tín hiệu**: biểu đồ nến (Lightweight Charts), RSI, MACD, khuyến nghị, thống kê tín hiệu lịch sử; admin: **Phân tích ngay** (phiên hiện tại), **Tín hiệu quá khứ** / **Cập nhật lịch sử** (backfill qua queue, mặc định từ đủ 130 nến → nay). **Backtest** chạy giả lập trên **toàn bộ nến đã lưu**; bảng xếp hạng trang chủ dùng compound từ các lệnh **đóng trong 12 tháng gần nhất** (theo ngày VN).

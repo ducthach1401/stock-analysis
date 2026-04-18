@@ -9,9 +9,23 @@ import { StockService } from '../stock/stock.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { PositionService } from '../position/position.service';
 import { WatchlistService } from '../watchlist/watchlist.service';
+import { IntradayBreakoutNotifyService } from './intraday-breakout-notify.service';
 import { mapPool } from '../common/map-pool';
+import {
+  parseTelegramBuyNotifyMode,
+  shouldIncludeBuyInTelegram,
+  TelegramBuyNotifyMode,
+} from '../common/telegram-buy-notify-policy';
 import { shouldRunAnalyzeAllHistoryAfterSync } from '../common/sync-analyze-policy';
-import { tickerCapLiquidityRank } from './watchlist';
+import {
+  isVnAfterMarketCloseForDailySignals,
+  isVnCashMarketSessionOpen,
+} from '../common/vn-trading-days';
+import {
+  isMarketIndexTicker,
+  MARKET_INDEX_TICKERS,
+  tickerCapLiquidityRank,
+} from './watchlist';
 
 const REC_CONF_ORDER: Record<'HIGH' | 'MEDIUM' | 'LOW', number> = {
   HIGH: 3,
@@ -32,7 +46,24 @@ export class ScannerService {
     private readonly positionService: PositionService,
     private readonly watchlistService: WatchlistService,
     private readonly config: ConfigService,
+    private readonly intradayBreakoutNotify: IntradayBreakoutNotifyService,
   ) {}
+
+  /**
+   * VNINDEX / VN30 luôn đứng đầu — cập nhật chỉ số trong phiên + phân tích nến
+   * dù hai mã có bị tắt trên watchlist hay không.
+   */
+  private mergeActiveTickersWithMarketIndices(active: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of [...Array.from(MARKET_INDEX_TICKERS), ...active]) {
+      const u = t.toUpperCase();
+      if (seen.has(u)) continue;
+      seen.add(u);
+      out.push(u);
+    }
+    return out;
+  }
 
   private syncPoolSize(): number {
     const n = parseInt(
@@ -42,13 +73,47 @@ export class ScannerService {
     return Number.isFinite(n) && n >= 1 && n <= 32 ? n : 4;
   }
 
+  /** Giới hạn dòng MUA/BÁN trong tin 16:00 — tránh loãng. */
+  private telegramRecommendCap(side: 'buy' | 'sell'): number {
+    const key =
+      side === 'buy'
+        ? 'TELEGRAM_RECOMMEND_MAX_BUYS'
+        : 'TELEGRAM_RECOMMEND_MAX_SELLS';
+    const raw = this.config.get<string>(key, '8') ?? '8';
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 1 && n <= 40 ? n : 8;
+  }
+
+  /** Báo cáo quét 15:45 — tối đa bao nhiêu mã mỗi nhóm Tăng/Giảm. */
+  private telegramDailySignalCap(): number {
+    const raw =
+      this.config.get<string>('TELEGRAM_DAILY_MAX_STOCKS_PER_SIDE', '10') ??
+      '10';
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 3 && n <= 50 ? n : 10;
+  }
+
+  /** Chỉ vài loại tín hiệu đầu + gợi ý còn lại — tin ngắn. */
+  private formatDailySignalTypes(types: string[]): string {
+    if (!types.length) return '—';
+    const max = 2;
+    const head = types.slice(0, max);
+    const rest = types.length - head.length;
+    return rest > 0
+      ? `${head.join(', ')} <i>+${rest}</i>`
+      : head.join(', ');
+  }
+
   // ─── Cron jobs ────────────────────────────────────────────────────────
 
   // Sync dữ liệu giá: T2-T6 lúc 15:30 (sau ATC 14:45, chờ DNSE cập nhật)
   @Cron('30 15 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
   async scheduledSync() {
     this.logger.log('⏰ [Cron] Bắt đầu sync dữ liệu giá...');
-    await this.syncAll();
+    const { ran } = await this.syncAll();
+    if (ran) {
+      await this.intradayBreakoutNotify.notifyDayCloseConfirmAfterSync();
+    }
   }
 
   // Quét tín hiệu + phân phối đỉnh: T2-T6 lúc 15:45
@@ -72,27 +137,102 @@ export class ScannerService {
     await this.recommendAll();
   }
 
-  // Kiểm tra biến động intraday: T2-T6 mỗi 30 phút (9:30 - 14:45)
+  /**
+   * Trong phiên: sync giá + phân tích nến/tín hiệu (~7 phút/lần, có thể đổi biểu thức cron).
+   * Khuyến nghị tự động / mở vị thế vẫn chỉ sau đóng cửa (scheduledRecommend 16:00).
+   */
+  @Cron('*/7 9-14 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
+  async scheduledIntradaySyncAnalyze() {
+    if (!isVnCashMarketSessionOpen()) return;
+    if (this.isRunning) return;
+    this.logger.log('⏰ [Cron] Sync nến ngày + phân tích trong phiên...');
+    const { ran } = await this.syncIntradayAll();
+    if (ran) {
+      await this.intradayBreakoutNotify.processWatchlistAfterSync();
+    }
+  }
+
+  // Kiểm tra biến động intraday: T2-T6 mỗi 30 phút trong giờ sàn
   @Cron('*/30 9-14 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
   async scheduledIntradayAlert() {
-    const now = new Date();
-    const hour = now.getHours();
-    const min = now.getMinutes();
-    // Chỉ chạy trong giờ giao dịch: 9:30–11:30 và 13:00–14:45
-    const inMorning = hour === 9 ? min >= 30 : hour === 10 || hour === 11;
-    const inAfternoon = hour === 13 || (hour === 14 && min <= 45);
-    if (!inMorning && !inAfternoon) return;
+    if (!isVnCashMarketSessionOpen()) return;
 
     this.logger.log('⏰ [Cron] Kiểm tra biến động intraday...');
     await this.intradayAlertAll();
   }
 
+  /**
+   * Phái sinh VN30 (tham chiếu chỉ số): mỗi 5 phút trong phiên — nến ngày hiện tại + quét tín hiệu.
+   * Tắt: DERIVATIVES_VN30_FIVE_MIN_SCAN=false
+   */
+  @Cron('*/5 9-14 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
+  async scheduledDerivativesVn30FiveMinScan() {
+    if (this.config.get<string>('DERIVATIVES_VN30_FIVE_MIN_SCAN', 'true') === 'false') {
+      return;
+    }
+    if (!isVnCashMarketSessionOpen()) return;
+    try {
+      await this.stockService.syncIntradaySessionBar('VN30');
+      await this.signalService.analyze('VN30');
+      this.logger.log('⏰ [Cron] Phái sinh VN30: sync phiên + analyze');
+    } catch (e) {
+      this.logger.warn(
+        `[Cron] Phái sinh VN30: ${(e as Error).message}`,
+      );
+    }
+  }
+
   // ─── Manual triggers ─────────────────────────────────────────────────
 
-  async syncAll(from?: string): Promise<Record<string, number>> {
+  /**
+   * Trong phiên: chỉ đồng bộ **nến ngày hiện tại** (API nhẹ), rồi `analyze` — không `analyzeAllHistory`.
+   */
+  async syncIntradayAll(): Promise<{
+    result: Record<string, number>;
+    ran: boolean;
+  }> {
+    if (this.isRunning) {
+      this.logger.warn('Scanner đang chạy, bỏ qua sync intraday');
+      return { result: {}, ran: false };
+    }
+    this.isRunning = true;
+    const active = await this.watchlistService.getActiveTickers();
+    const tickers = this.mergeActiveTickersWithMarketIndices(active);
+    const result: Record<string, number> = {};
+
+    try {
+      const pool = this.syncPoolSize();
+      this.logger.log(
+        `Bắt đầu sync intraday (chỉ nến ngày VN, luôn gồm VNINDEX/VN30) — ${tickers.length} mã, song song ≤${pool}...`,
+      );
+      await mapPool(tickers, pool, async (ticker) => {
+        try {
+          const r = await this.stockService.syncIntradaySessionBar(ticker);
+          result[ticker] = r.saved;
+          await this.signalService.analyze(ticker);
+        } catch (e) {
+          this.logger.error(
+            `Sync intraday lỗi ${ticker}: ${(e as Error).message}`,
+          );
+          result[ticker] = -1;
+        }
+      });
+
+      const ok = Object.values(result).filter((v) => v >= 0).length;
+      this.logger.log(`✅ Sync intraday xong: ${ok}/${tickers.length} mã`);
+    } finally {
+      this.isRunning = false;
+    }
+
+    return { result, ran: true };
+  }
+
+  async syncAll(
+    from?: string,
+  ): Promise<{ result: Record<string, number>; ran: boolean }> {
     if (this.isRunning) {
       this.logger.warn('Scanner đang chạy, bỏ qua lần này');
-      return {};
+      return { result: {}, ran: false };
     }
     this.isRunning = true;
     const tickers = await this.watchlistService.getActiveTickers();
@@ -140,7 +280,7 @@ export class ScannerService {
       this.isRunning = false;
     }
 
-    return result;
+    return { result, ran: true };
   }
 
   async scanAll(): Promise<void> {
@@ -200,6 +340,15 @@ export class ScannerService {
     const date = new Date().toLocaleDateString('vi-VN', {
       timeZone: 'Asia/Ho_Chi_Minh',
     });
+    const buyNotifyMode: TelegramBuyNotifyMode = parseTelegramBuyNotifyMode(
+      this.config.get<string>('TELEGRAM_BUY_NOTIFY_MODE'),
+    );
+    const allowDailyTradeSignals = isVnAfterMarketCloseForDailySignals();
+    if (!allowDailyTradeSignals) {
+      this.logger.log(
+        'Khuyến nghị: chưa sau đóng cửa (nến ngày chưa xác nhận) — bỏ qua Telegram MUA/BÁN và mở vị thế',
+      );
+    }
 
     const buyRows: { rank: number; conf: number; line: string }[] = [];
     const distRows: { rank: number; conf: number; line: string }[] = [];
@@ -213,50 +362,58 @@ export class ScannerService {
         const conf = REC_CONF_ORDER[result.confidence] ?? 0;
 
         if (rec === Recommendation.STRONG_BUY || rec === Recommendation.BUY) {
-          const scale = await this.positionService.openOrScaleIn(result);
+          let scale: Awaited<
+            ReturnType<PositionService['openOrScaleIn']>
+          > | null = null;
+          if (allowDailyTradeSignals) {
+            scale = await this.positionService.openOrScaleIn(result);
+          }
+          const includeBuyTelegram = shouldIncludeBuyInTelegram(
+            buyNotifyMode,
+            result,
+          );
           const priceStr = pt
-            ? ` | ${(pt.currentPrice / 1000).toFixed(1)}k → ${(pt.targetPrice / 1000).toFixed(1)}k (+${pt.upside.toFixed(0)}%)`
+            ? ` ${(pt.currentPrice / 1000).toFixed(1)}k→${(pt.targetPrice / 1000).toFixed(1)}k +${pt.upside.toFixed(0)}%`
             : '';
           const star = result.confidence === 'HIGH' ? ' ⭐' : '';
-          let newTag = '';
-          if (scale.outcome === 'OPENED') newTag = '';
-          else if (scale.outcome === 'AVERAGED') {
-            const ep = scale.weightedEntryPrice;
-            newTag =
-              ep != null
-                ? ` <i>(TB giá — <b>giá vào mới</b> ${(ep / 1000).toFixed(1)}k)</i>`
-                : ' <i>(trung bình giá thêm)</i>';
-          } else if (scale.detail) {
-            newTag = ` <i>(${scale.detail})</i>`;
-          } else {
-            newTag = ' <i>(không hành động)</i>';
+          let shortExtra = '';
+          if (
+            scale?.outcome === 'AVERAGED' &&
+            scale.weightedEntryPrice != null
+          ) {
+            shortExtra = ` <i>TB ${(scale.weightedEntryPrice / 1000).toFixed(1)}k</i>`;
           }
-          buyRows.push({
-            rank,
-            conf,
-            line: `  • <b>${stock.ticker}</b>${star}${priceStr}${newTag}`,
-          });
+          if (
+            allowDailyTradeSignals &&
+            includeBuyTelegram &&
+            !isMarketIndexTicker(stock.ticker)
+          ) {
+            buyRows.push({
+              rank,
+              conf,
+              line: `  • <b>${stock.ticker}</b>${star}${priceStr}${shortExtra}`,
+            });
+          }
         } else if (
           rec === Recommendation.STRONG_SELL ||
           rec === Recommendation.SELL
         ) {
           const priceStr = pt
-            ? ` | ${(pt.currentPrice / 1000).toFixed(1)}k`
+            ? ` ${(pt.currentPrice / 1000).toFixed(1)}k`
             : '';
           const star = result.confidence === 'HIGH' ? ' ⭐' : '';
           const topSignal =
             result.bearishSignals[0]?.type.replace(/_/g, ' ') ?? '';
-          const sellNote =
-            rec === Recommendation.STRONG_SELL
-              ? ' <i>— Chiến lược không tự đóng vị thế theo đảo chiều</i>'
-              : ' <i>— BÁN: chỉ theo dõi</i>';
-          distRows.push({
-            rank,
-            conf,
-            line:
-              `  • <b>${stock.ticker}</b>${star}${priceStr} — ` +
-              `${topSignal || 'bearish'}${sellNote}`,
-          });
+          if (
+            allowDailyTradeSignals &&
+            !isMarketIndexTicker(stock.ticker)
+          ) {
+            distRows.push({
+              rank,
+              conf,
+              line: `  • <b>${stock.ticker}</b>${star}${priceStr} · ${topSignal || 'bearish'}`,
+            });
+          }
         }
 
         await delay(300);
@@ -272,27 +429,42 @@ export class ScannerService {
         if (a.rank !== b.rank) return a.rank - b.rank;
         return b.conf - a.conf;
       });
-    const buys = sortRecRows(buyRows).map((r) => r.line);
-    const distributions = sortRecRows(distRows).map((r) => r.line);
+    const maxB = this.telegramRecommendCap('buy');
+    const maxS = this.telegramRecommendCap('sell');
+    const sortedBuys = sortRecRows(buyRows);
+    const sortedDist = sortRecRows(distRows);
+    const buys = sortedBuys.slice(0, maxB).map((r) => r.line);
+    const distributions = sortedDist.slice(0, maxS).map((r) => r.line);
+    const moreBuys = Math.max(0, sortedBuys.length - buys.length);
+    const moreSells = Math.max(0, sortedDist.length - distributions.length);
 
     const hasAlert = buys.length > 0 || distributions.length > 0;
     if (hasAlert) {
-      let summary = `📊 <b>Tổng hợp tín hiệu</b> — ${date}\n`;
-      summary += `<i>Chỉ khuyến nghị theo phiên mới nhất · Quét ${watchlist.length} mã — ưu tiên blue-chip + thanh khoản, độ tin cậy</i>\n`;
-      summary += '─'.repeat(30) + '\n\n';
+      let summary = `📊 <b>Khuyến nghị</b> — ${date}\n`;
+      summary +=
+        buyNotifyMode === 'safe'
+          ? `<i>Phiên mới nhất · ${watchlist.length} mã · MUA: STRONG_BUY + HIGH + nền</i>\n`
+          : `<i>Phiên mới nhất · ${watchlist.length} mã</i>\n`;
+      summary += '─'.repeat(24) + '\n\n';
 
       if (buys.length) {
-        summary += `📈 <b>MUA (${buys.length} mã)</b>\n${buys.join('\n')}\n\n`;
+        summary += `📈 <b>MUA</b> (${sortedBuys.length})\n${buys.join('\n')}\n`;
+        if (moreBuys > 0) {
+          summary += `<i>… +${moreBuys} mã</i>\n`;
+        }
+        summary += '\n';
       }
       if (distributions.length) {
-        summary += `🔻 <b>ĐẢO CHIỀU / BÁN (${distributions.length} mã)</b>\n`;
-        summary +=
-          `<i><b>STRONG_SELL</b> = điểm tổng ≤ −6. ` +
-          `Hệ thống <b>không</b> tự đóng vị thế theo tín hiệu bán — chỉ mua/TB và chờ target (hoặc đóng tay).</i>\n`;
-        summary += `${distributions.join('\n')}\n\n`;
+        summary += `🔻 <b>Bán / đảo chiều</b> (${sortedDist.length})\n`;
+        summary += `<i>Không tự đóng lệnh theo tín hiệu.</i>\n`;
+        summary += `${distributions.join('\n')}\n`;
+        if (moreSells > 0) {
+          summary += `<i>… +${moreSells} mã</i>\n`;
+        }
+        summary += '\n';
       }
 
-      summary += `<i>⚠️ Phân tích kỹ thuật tự động, không phải tư vấn đầu tư chuyên nghiệp.</i>`;
+      summary += `<i>⚠️ Tự động, không phải tư vấn.</i>`;
       await this.telegramService.sendMessage({ text: summary });
       this.logger.log(
         `✅ Gửi Telegram: ${buys.length} MUA, ${distributions.length} phân phối`,
@@ -314,38 +486,47 @@ export class ScannerService {
     }>,
     totalScanned: number,
   ): Promise<void> {
-    const bullishStocks = results
+    const cap = this.telegramDailySignalCap();
+    const bullishAll = results
       .filter((r) => r.bullish.length > 0)
       .sort(
         (a, b) =>
           tickerCapLiquidityRank(a.ticker) - tickerCapLiquidityRank(b.ticker),
       );
-    const bearishStocks = results
+    const bearishAll = results
       .filter((r) => r.bearish.length > 0)
       .sort(
         (a, b) =>
           tickerCapLiquidityRank(a.ticker) - tickerCapLiquidityRank(b.ticker),
       );
+    const bullishStocks = bullishAll.slice(0, cap);
+    const bearishStocks = bearishAll.slice(0, cap);
     const date = new Date().toLocaleDateString('vi-VN', {
       timeZone: 'Asia/Ho_Chi_Minh',
     });
 
-    let msg = `📊 <b>Báo cáo tín hiệu đảo chiều</b> — ${date}\n`;
-    msg += `<i>Chỉ phiên giao dịch mới nhất (cây nến ngày đó) · Quét ${totalScanned} mã | ${results.length} mã có tín hiệu</i>\n`;
-    msg += '─'.repeat(30) + '\n\n';
+    let msg = `📊 <b>Tín hiệu phiên</b> — ${date}\n`;
+    msg += `<i>${totalScanned} mã · ${results.length} mã có tín hiệu — tối đa ${cap} mã/nhóm, 2 loại/nền</i>\n`;
+    msg += '─'.repeat(24) + '\n\n';
 
-    if (bullishStocks.length) {
-      msg += `🟢 <b>Tín hiệu TĂNG (${bullishStocks.length} mã)</b>\n`;
+    if (bullishAll.length) {
+      msg += `🟢 <b>Tăng</b> (${bullishAll.length})\n`;
       for (const s of bullishStocks) {
-        msg += `  • <b>${s.ticker}</b> (${s.sector}): ${s.bullish.join(', ')}\n`;
+        msg += `  • <b>${s.ticker}</b>: ${this.formatDailySignalTypes(s.bullish)}\n`;
+      }
+      if (bullishAll.length > bullishStocks.length) {
+        msg += `<i>… +${bullishAll.length - bullishStocks.length} mã</i>\n`;
       }
       msg += '\n';
     }
 
-    if (bearishStocks.length) {
-      msg += `🔴 <b>Tín hiệu GIẢM (${bearishStocks.length} mã)</b>\n`;
+    if (bearishAll.length) {
+      msg += `🔴 <b>Giảm</b> (${bearishAll.length})\n`;
       for (const s of bearishStocks) {
-        msg += `  • <b>${s.ticker}</b> (${s.sector}): ${s.bearish.join(', ')}\n`;
+        msg += `  • <b>${s.ticker}</b>: ${this.formatDailySignalTypes(s.bearish)}\n`;
+      }
+      if (bearishAll.length > bearishStocks.length) {
+        msg += `<i>… +${bearishAll.length - bearishStocks.length} mã</i>\n`;
       }
     }
 

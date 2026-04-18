@@ -38,18 +38,28 @@ export class QueueController {
   }
 
   // POST /queue/sync/:ticker?from=YYYY-MM-DD&full=true — sync 1 mã
+  // POST /queue/sync/VN30?windowDays=31 — chỉ nến ngày trong ~31 ngày lịch (phái sinh / bổ sung gần đây)
   @UseGuards(JwtAuthGuard)
   @Post('sync/:ticker')
   async syncTicker(
     @Param('ticker') ticker: string,
     @Query('from') from?: string,
     @Query('full') full?: string,
+    @Query('windowDays') windowDays?: string,
   ) {
     const fullSync = full === 'true' || full === '1';
+    let wd: number | undefined;
+    if (windowDays != null && windowDays !== '') {
+      const n = parseInt(windowDays, 10);
+      if (Number.isFinite(n) && n > 0) {
+        wd = Math.min(n, 400);
+      }
+    }
     const job = await this.queueService.enqueueSyncTicker(
       ticker,
       from,
       fullSync,
+      wd,
     );
     return { jobId: job.id, status: 'queued', name: job.name };
   }

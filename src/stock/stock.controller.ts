@@ -39,6 +39,20 @@ export class StockController {
     return this.stockService.fetchLatestBar(ticker);
   }
 
+  /**
+   * GET /stocks/VN30/intraday-index?resolution=5|15|1H|4H|1D&from=&to=
+   * Nến chỉ số đa khung (Entrade; 4H gộp từ 1H), không lưu DB.
+   */
+  @Get(':ticker/intraday-index')
+  getIntradayIndex(
+    @Param('ticker') ticker: string,
+    @Query('resolution') resolution?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.stockService.fetchIntradayIndexOhlc(ticker, resolution, from, to);
+  }
+
   // GET /stocks/:ticker/stored?from=&to=&limit=500&before=YYYY-MM-DD
   // limit: chỉ lấy N bản ghi mới nhất (DESC). before: tradingDate < before (tải trang cũ hơn).
   @Get(':ticker/stored')

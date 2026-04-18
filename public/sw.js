@@ -1,6 +1,15 @@
 /* global self, caches, fetch */
-const VERSION = 'stock-analysis-sw-v1';
-const PRECACHE = ['/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
+const VERSION = 'stock-analysis-sw-v32';
+const PRECACHE = [
+  '/index.html',
+  '/css/app.css',
+  '/js/config.js',
+  '/js/app.js',
+  '/js/ticker-picker.js',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

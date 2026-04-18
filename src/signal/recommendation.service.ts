@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ATR, EMA } from 'technicalindicators';
 import { Repository } from 'typeorm';
@@ -14,6 +15,12 @@ import {
 import { Signal, SignalDirection, SignalType } from './entities/signal.entity';
 import { buildPatternAnalysis } from './chart-patterns';
 import { SignalService } from './signal.service';
+import {
+  parseTelegramBuyNotifyMode,
+  shouldIncludeBuyInTelegram,
+} from '../common/telegram-buy-notify-policy';
+import { isMarketIndexTicker } from '../scanner/watchlist';
+import { isVnAfterMarketCloseForDailySignals } from '../common/vn-trading-days';
 
 const SIGNAL_WEIGHTS: Record<SignalType, number> = {
   // ── Chiến lược nền + break (trọng số cao nhất) ────────────────────
@@ -77,6 +84,7 @@ export class RecommendationService {
     private readonly stockPriceRepo: Repository<StockPrice>,
     private readonly signalService: SignalService,
     private readonly telegramService: TelegramService,
+    private readonly configService: ConfigService,
   ) {}
 
   async recommend(ticker: string): Promise<RecommendationResult> {
@@ -139,16 +147,43 @@ export class RecommendationService {
 
   async recommendAndNotify(ticker: string): Promise<RecommendationResult> {
     const result = await this.recommend(ticker);
+    const buyMode = parseTelegramBuyNotifyMode(
+      this.configService.get<string>('TELEGRAM_BUY_NOTIFY_MODE'),
+    );
+    const skipIndexTg = isMarketIndexTicker(result.ticker);
+    const allowTgAfterClose = isVnAfterMarketCloseForDailySignals();
     if (
       result.recommendation === Recommendation.BUY ||
       result.recommendation === Recommendation.STRONG_BUY
     ) {
-      await this.sendRecommendation(result);
+      if (
+        allowTgAfterClose &&
+        !skipIndexTg &&
+        shouldIncludeBuyInTelegram(buyMode, result)
+      ) {
+        await this.sendRecommendation(result);
+      } else {
+        this.logger.debug(
+          !allowTgAfterClose
+            ? `${ticker}: MUA — bỏ qua Telegram (chờ sau đóng cửa, nến ngày xác nhận)`
+            : skipIndexTg
+              ? `${ticker}: MUA — bỏ qua Telegram (chỉ số tham chiếu)`
+              : `${ticker}: MUA nhưng bỏ qua Telegram (TELEGRAM_BUY_NOTIFY_MODE=${buyMode})`,
+        );
+      }
     } else if (
       result.recommendation === Recommendation.SELL ||
       result.recommendation === Recommendation.STRONG_SELL
     ) {
-      await this.sendDistributionAlert(result);
+      if (allowTgAfterClose && !skipIndexTg) {
+        await this.sendDistributionAlert(result);
+      } else {
+        this.logger.debug(
+          !allowTgAfterClose
+            ? `${ticker}: bán — bỏ qua Telegram (chờ sau đóng cửa, nến ngày xác nhận)`
+            : `${ticker}: bán/chỉ số — bỏ qua Telegram (chỉ số tham chiếu)`,
+        );
+      }
     } else {
       this.logger.debug(
         `${ticker}: ${result.recommendation} — bỏ qua, không gửi Telegram`,

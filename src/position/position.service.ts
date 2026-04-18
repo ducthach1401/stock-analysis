@@ -24,6 +24,7 @@ import {
   Position,
   PositionStatus,
 } from './entities/position.entity';
+import { isMarketIndexTicker } from '../scanner/watchlist';
 import { SignalType } from '../signal/entities/signal.entity';
 import {
   PROFIT_RUN_PCT,
@@ -31,6 +32,7 @@ import {
 } from '../common/position-profit-run';
 import {
   canSellAfterT2,
+  isVnAfterMarketCloseForDailySignals,
   MIN_TRADING_SESSIONS_AFTER_ENTRY,
   tradingSessionsAfterEntryDate,
   vnCalendarTodayYmd,
@@ -59,6 +61,18 @@ export class PositionService {
     weightedEntryPrice?: number;
   }> {
     const ticker = result.ticker.toUpperCase();
+    if (isMarketIndexTicker(ticker)) {
+      return {
+        outcome: 'NONE',
+        detail: 'chỉ số tham chiếu — không mở vị thế tự động',
+      };
+    }
+    if (!isVnAfterMarketCloseForDailySignals()) {
+      return {
+        outcome: 'NONE',
+        detail: 'chờ sau đóng cửa — nến ngày chưa xác nhận (khuyến nghị chỉ sau ATC)',
+      };
+    }
     const existing = await this.positionRepo.findOne({
       where: { ticker, status: PositionStatus.OPEN },
     });

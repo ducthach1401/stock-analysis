@@ -16,10 +16,15 @@ export class QueueService {
     return this.queue.add(JobName.SYNC_ALL, { from, full }, this.defaultOpts());
   }
 
-  async enqueueSyncTicker(ticker: string, from?: string, full?: boolean) {
+  async enqueueSyncTicker(
+    ticker: string,
+    from?: string,
+    full?: boolean,
+    windowDays?: number,
+  ) {
     return this.queue.add(
       JobName.SYNC_TICKER,
-      { ticker, from, full },
+      { ticker, from, full, windowDays },
       this.defaultOpts(),
     );
   }

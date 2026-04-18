@@ -18,329 +18,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-  <style>
-    [x-cloak] { display: none !important; }
-
-    /* ═══════════════════════════════════════════════════════
-       Design tokens — flip toàn bộ màu chỉ bằng .dark class
-    ═══════════════════════════════════════════════════════ */
-    :root {
-      --bg-page:     #f1f5f9;
-      --bg-card:     #ffffff;
-      --bg-raised:   #f8fafc;
-      --bg-muted:    #f1f5f9;
-      --bg-input:    #ffffff;
-      --bg-hover:    #f1f5f9;
-      --border:      #e2e8f0;
-      --border-sub:  #f1f5f9;
-      --text-1:      #0f172a;
-      --text-2:      #475569;
-      --text-3:      #94a3b8;
-      --text-4:      #cbd5e1;
-      --accent:      #6366f1;
-      --accent-dim:  rgba(99,102,241,0.12);
-      --accent-text: #4f46e5;
-      --shadow-card: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
-    }
-    .dark {
-      --bg-page:     #09090b;
-      --bg-card:     #18181b;
-      --bg-raised:   #27272a;
-      --bg-muted:    #27272a;
-      --bg-input:    #09090b;
-      --bg-hover:    #27272a;
-      --border:      #3f3f46;
-      --border-sub:  #27272a;
-      --text-1:      #fafafa;
-      --text-2:      #a1a1aa;
-      --text-3:      #71717a;
-      --text-4:      #52525b;
-      --accent:      #818cf8;
-      --accent-dim:  rgba(129,140,248,0.15);
-      --accent-text: #a5b4fc;
-      --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
-    }
-
-    /* ── Base ─────────────────────────────────────────────── */
-    html {
-      background: var(--bg-page);
-      transition: background-color 0.25s ease;
-    }
-    body {
-      background: var(--bg-page);
-      color: var(--text-1);
-      font-family: 'Inter', system-ui, sans-serif;
-      transition: background-color 0.25s ease, color 0.2s ease;
-    }
-
-    /* ── Components ───────────────────────────────────────── */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 0.75rem;
-      padding: 1.5rem;
-      box-shadow: var(--shadow-card);
-      transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-    }
-    .btn {
-      display: inline-flex; align-items: center; gap: 0.5rem;
-      padding: 0.5rem 1.125rem; border-radius: 0.625rem;
-      font-weight: 500; font-size: 0.875rem;
-      transition: all 0.15s ease; cursor: pointer; border: none;
-      letter-spacing: 0.01em;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 60%, #4338ca 100%);
-      color: #fff;
-      box-shadow: 0 1px 3px rgba(79,70,229,0.35), 0 0 0 1px rgba(79,70,229,0.18);
-    }
-    .btn-primary:hover {
-      background: linear-gradient(135deg, #818cf8 0%, #6366f1 60%, #4f46e5 100%);
-      box-shadow: 0 4px 12px rgba(79,70,229,0.4), 0 0 0 1px rgba(99,102,241,0.3);
-      transform: translateY(-1px);
-    }
-    .btn-primary:active { transform: scale(0.97) translateY(0); box-shadow: 0 1px 4px rgba(79,70,229,0.3); }
-    .dark .btn-primary {
-      background: linear-gradient(135deg, #818cf8 0%, #6366f1 60%, #4f46e5 100%);
-      box-shadow: 0 1px 3px rgba(99,102,241,0.5), 0 0 0 1px rgba(129,140,248,0.25);
-    }
-    .dark .btn-primary:hover {
-      background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 60%, #6366f1 100%);
-      box-shadow: 0 4px 14px rgba(99,102,241,0.5), 0 0 0 1px rgba(165,180,252,0.3);
-    }
-    .btn-secondary {
-      background: var(--bg-card);
-      color: var(--text-2);
-      border: 1px solid var(--border);
-      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-    }
-    .btn-secondary:hover {
-      background: var(--bg-hover);
-      color: var(--text-1);
-      border-color: var(--accent);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-      transform: translateY(-1px);
-    }
-    .btn-secondary:active { transform: scale(0.97) translateY(0); }
-    .btn-danger {
-      background: rgba(239,68,68,0.08); color: #ef4444;
-      border: 1px solid rgba(239,68,68,0.2);
-      box-shadow: 0 1px 2px rgba(239,68,68,0.08);
-    }
-    .btn-danger:hover {
-      background: rgba(239,68,68,0.15);
-      border-color: rgba(239,68,68,0.35);
-      transform: translateY(-1px);
-    }
-    .dark .btn-danger { background: rgba(239,68,68,0.12); color: #fca5a5; border-color: rgba(239,68,68,0.2); }
-    .dark .btn-danger:hover { background: rgba(239,68,68,0.22); }
-
-    .badge {
-      display: inline-flex; align-items: center;
-      padding: 0.125rem 0.5rem; border-radius: 9999px;
-      font-size: 0.75rem; font-weight: 500;
-    }
-    .badge-green  { background: #dcfce7; color: #15803d; }
-    .badge-red    { background: #fee2e2; color: #b91c1c; }
-    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
-    .badge-yellow { background: #fef9c3; color: #a16207; }
-    .badge-gray   { background: var(--bg-muted); color: var(--text-2); border: 1px solid var(--border); }
-    .dark .badge-green  { background: rgba(21,128,61,0.2);  color: #86efac; }
-    .dark .badge-red    { background: rgba(185,28,28,0.2);  color: #fca5a5; }
-    .dark .badge-blue   { background: rgba(29,78,216,0.2);  color: #93c5fd; }
-    .dark .badge-yellow { background: rgba(161,98,7,0.2);   color: #fde68a; }
-
-    .pnl-positive { color: #16a34a; font-weight: 600; }
-    .pnl-negative { color: #dc2626; font-weight: 600; }
-    .dark .pnl-positive { color: #4ade80; }
-    .dark .pnl-negative { color: #f87171; }
-
-    .skeleton { animation: pulse 1.5s ease-in-out infinite; background: var(--bg-muted); border-radius: 0.375rem; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
-    .spin { animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .ticker-dropdown { max-height: 260px; overflow-y: auto; scrollbar-width: thin; }
-    .ticker-dropdown::-webkit-scrollbar { width: 4px; }
-    .ticker-dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    /* ── Action tile (scanner grid buttons) ───────────────── */
-    .action-tile {
-      display: flex; flex-direction: column; align-items: center; gap: 0.375rem;
-      padding: 0.75rem 0.5rem; border-radius: 0.875rem;
-      border: 1.5px solid var(--border);
-      background: var(--bg-card);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-      transition: all 0.18s ease; cursor: pointer; text-align: center;
-    }
-    .action-tile:hover:not(:disabled) {
-      border-color: var(--accent);
-      background: var(--accent-dim);
-      box-shadow: 0 4px 12px rgba(99,102,241,0.12);
-      transform: translateY(-2px);
-    }
-    .action-tile:active:not(:disabled) { transform: scale(0.96); }
-    .action-tile:disabled { opacity: 0.45; cursor: not-allowed; }
-    .action-tile .tile-icon { width: 1.35rem; height: 1.35rem; }
-    .action-tile .tile-label {
-      font-size: 0.72rem; font-weight: 500; line-height: 1.3;
-      color: var(--text-2);
-    }
-    .action-tile:hover:not(:disabled) .tile-label { color: var(--accent-text); }
-
-    /* ── Tab active ───────────────────────────────────────── */
-    .tab-active { border-bottom: 2px solid var(--accent); color: var(--accent-text); font-weight: 600; }
-
-    /* ── Header ───────────────────────────────────────────── */
-    header {
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-      transition: background-color 0.25s ease, border-color 0.25s ease;
-    }
-
-    /* ── Tailwind utility overrides for dark mode ─────────── */
-    /* text */
-    .dark .text-gray-900 { color: var(--text-1); }
-    .dark .text-gray-800 { color: var(--text-1); }
-    .dark .text-gray-700 { color: var(--text-2); }
-    .dark .text-gray-600 { color: var(--text-2); }
-    .dark .text-gray-500 { color: var(--text-3); }
-    .dark .text-gray-400 { color: var(--text-3); }
-    .dark .text-gray-300 { color: var(--text-3); }
-    .dark .text-indigo-700 { color: var(--accent); }
-    .dark .text-indigo-600 { color: var(--accent); }
-    /* colored text — dùng màu sáng hơn trong dark */
-    .dark .text-emerald-700 { color: #4ade80; }
-    .dark .text-emerald-600 { color: #34d399; }
-    .dark .text-emerald-500 { color: #6ee7b7; }
-    .dark .text-red-700     { color: #f87171; }
-    .dark .text-red-600     { color: #f87171; }
-    .dark .text-red-500     { color: #fca5a5; }
-    /* backgrounds */
-    .dark .bg-white      { background-color: var(--bg-card); }
-    .dark .bg-gray-50    { background-color: var(--bg-page); }
-    .dark .bg-gray-100   { background-color: var(--bg-raised); }
-    .dark .bg-gray-200   { background-color: var(--border); }
-    .dark .bg-indigo-50  { background-color: var(--accent-dim); }
-    /* colored card backgrounds */
-    .dark .bg-emerald-50 { background-color: rgba(16,185,129,0.08); }
-    .dark .bg-red-50     { background-color: rgba(239,68,68,0.08); }
-    /* borders */
-    .dark .border-gray-100   { border-color: var(--border); }
-    .dark .border-gray-200   { border-color: var(--border); }
-    .dark .border-gray-300   { border-color: var(--border); }
-    .dark .border-emerald-200 { border-color: rgba(16,185,129,0.3); }
-    .dark .border-red-200    { border-color: rgba(239,68,68,0.3); }
-    /* dividers */
-    .dark .divide-y > * + *    { border-color: var(--border); }
-    .dark .divide-gray-100 > * + * { border-color: var(--border-sub); }
-    .dark .divide-gray-50 > * + *  { border-color: var(--border-sub); }
-    /* inputs */
-    .dark input, .dark select, .dark textarea {
-      background-color: var(--bg-input);
-      border-color: var(--border);
-      color: var(--text-1);
-    }
-    .dark input::placeholder, .dark textarea::placeholder { color: var(--text-4); }
-    /* hover */
-    .dark .hover\:bg-gray-50:hover  { background-color: var(--bg-hover); }
-    .dark .hover\:bg-gray-100:hover { background-color: var(--bg-raised); }
-    .dark .hover\:bg-indigo-50:hover { background-color: var(--accent-dim); }
-    .dark .hover\:border-emerald-400:hover { border-color: #34d399; }
-    .dark .hover\:border-red-400:hover     { border-color: #f87171; }
-    .dark .hover\:border-indigo-300:hover  { border-color: var(--accent); }
-    .dark .hover\:text-gray-600:hover  { color: var(--text-2); }
-    .dark .hover\:text-gray-900:hover  { color: var(--text-1); }
-    /* nav buttons */
-    .dark nav button { color: var(--text-2); }
-    .dark nav button:hover { background-color: var(--bg-hover); color: var(--text-1); }
-    .dark nav button.bg-indigo-50 { background-color: var(--accent-dim); }
-    .dark nav button.text-indigo-700 { color: var(--accent); }
-    /* tables */
-    .dark table thead { background-color: var(--bg-page); }
-    .dark table thead th { color: var(--text-3); }
-    .dark table tbody tr { border-color: var(--border-sub); }
-    .dark table tbody tr:hover { background-color: var(--bg-hover); }
-    .dark table tbody td { color: var(--text-2); }
-    /* ticker dropdown */
-    .dark .ticker-dropdown { background-color: var(--bg-card); border-color: var(--border); }
-    .dark .ticker-dropdown > div { color: var(--text-1); }
-    .dark .ticker-dropdown > div:hover,
-    .dark .ticker-dropdown > div.bg-indigo-50 { background-color: var(--accent-dim); color: var(--text-1); }
-    /* log panel */
-    .dark .bg-gray-900 { background-color: #09090b; }
-    /* modal */
-    .dark .bg-black\/40 { background-color: rgba(0,0,0,0.65); }
-    /* scanner stock cards */
-    .dark .border-green-400 { border-color: #16a34a; }
-    .dark .border-red-400   { border-color: #dc2626; }
-    /* action icon buttons */
-    .dark .hover\:bg-blue-50:hover     { background-color: rgba(59,130,246,0.12); }
-    .dark .hover\:border-blue-300:hover { border-color: rgba(59,130,246,0.4); }
-    .dark .hover\:bg-purple-50:hover   { background-color: rgba(168,85,247,0.12); }
-    .dark .hover\:border-purple-300:hover { border-color: rgba(168,85,247,0.4); }
-    .dark .hover\:bg-emerald-50:hover  { background-color: rgba(16,185,129,0.1); }
-    .dark .hover\:border-emerald-300:hover { border-color: rgba(16,185,129,0.3); }
-    .dark .text-blue-500   { color: #60a5fa; }
-    .dark .text-purple-500 { color: #c084fc; }
-    .dark .text-emerald-500 { color: #34d399; }
-
-    /* ── PWA / mobile ───────────────────────────────────────── */
-    .scrollbar-hide {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .touch-manipulation { touch-action: manipulation; }
-    .safe-pb {
-      padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
-    }
-    .safe-pt {
-      padding-top: env(safe-area-inset-top, 0px);
-    }
-    /* PWA bắt buộc: chặn bấm/scroll xuyên ra app phía sau; chỉ tương tác trong .pwa-install-overlay */
-    html.pwa-gate-open body > *:not(.pwa-install-overlay) {
-      pointer-events: none !important;
-      user-select: none;
-    }
-    .pwa-install-overlay {
-      pointer-events: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    @media (max-width: 640px) {
-      .card { padding: 1rem; }
-      header nav button {
-        min-height: 2.75rem;
-        min-width: 2.75rem;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
-      }
-      .mobile-tap-target { min-height: 2.75rem; min-width: 2.75rem; }
-
-      /* Bớt chữ đậm / gần đen trên mobile (đọc dễ hơn) */
-      html:not(.dark) h1,
-      html:not(.dark) h2,
-      html:not(.dark) h3,
-      html:not(.dark) h4 {
-        font-weight: 500 !important;
-        color: #475569 !important;
-      }
-      html:not(.dark) .text-gray-900 {
-        color: #3f3f46 !important;
-      }
-      html:not(.dark) .text-gray-900.font-bold,
-      html:not(.dark) .text-gray-900.font-semibold,
-      html:not(.dark) .font-bold.text-gray-900,
-      html:not(.dark) .font-semibold.text-gray-900 {
-        font-weight: 500 !important;
-      }
-      /* Dark mode: logo / tiêu đề trắng tinh → dịu hơn */
-      html.dark header span.dark\:text-zinc-100 {
-        font-weight: 500 !important;
-        color: #d4d4d8 !important;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="/css/app.css" />
 </head>
 <body class="min-h-screen safe-pb touch-manipulation">
 
@@ -440,7 +118,7 @@
         Tiếp tục trên trình duyệt — không cài app
       </button>
       <p class="text-[11px] text-center text-zinc-500 leading-relaxed px-1">
-        Bỏ qua sẽ lưu trên thiết bị; bật lại màn cài trong <strong class="text-zinc-400">Cài đặt</strong> nếu đổi ý. Màn hình rộng &gt; 640px không hiện màn này.
+        Bỏ qua sẽ lưu trên thiết bị; bật lại màn cài: menu <strong class="text-zinc-400">☰</strong> → <strong class="text-zinc-400">Hiện lại màn cài app</strong>. Màn hình rộng &gt; 640px không hiện màn này.
       </p>
       <button type="button" @click="window.location.reload()"
         class="inline-flex items-center justify-center gap-2 w-full sm:w-auto min-w-[12rem] py-3 px-5 rounded-xl border border-zinc-600 bg-zinc-900 text-zinc-100 text-sm font-semibold touch-manipulation mobile-tap-target hover:bg-zinc-800 active:scale-[0.99]">
@@ -467,7 +145,7 @@
       <span class="badge badge-gray hidden md:inline-flex shrink-0">VNIndex</span>
     </div>
     <nav class="flex-1 min-w-0 order-2 sm:order-none w-full basis-full sm:basis-auto sm:w-auto flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide touch-pan-x pb-0.5 sm:pb-0 -mx-1 px-1 sm:mx-0 sm:px-0">
-      <template x-for="t in tabs" :key="t.id">
+      <template x-for="t in mainNavTabs()" :key="t.id">
         <button type="button" @click="setTab(t.id)"
           :class="tab === t.id ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-semibold' : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800'"
           class="px-2.5 sm:px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap">
@@ -477,27 +155,69 @@
       </template>
     </nav>
     <div class="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto order-3 sm:order-none">
-      <!-- Trên mobile các nút này nằm trong tab Cài đặt -->
-      <div class="hidden sm:flex items-center gap-1 sm:gap-2">
-        <button type="button" @click="toggleBrowserNotify()"
+      <!-- Menu ☰: Cổ phiếu, Chiến lược, Watchlist, thông báo, làm mới, giao diện -->
+      <div class="relative" @keydown.escape.window="moreMenuOpen = false">
+        <button type="button"
+          id="header-more-btn"
+          @click="moreMenuOpen = !moreMenuOpen"
+          :aria-expanded="moreMenuOpen"
+          aria-haspopup="true"
+          aria-controls="header-more-menu"
           class="btn-secondary text-xs p-2 sm:px-3 mobile-tap-target"
-          :title="browserNotify && notificationPermission === 'granted' ? 'Thông báo: bật' : 'Bật thông báo (khi tab ẩn)'">
-          <span class="text-base" x-text="browserNotify && notificationPermission === 'granted' ? '🔔' : '🔕'"></span>
-        </button>
-        <button type="button" @click="refreshAll()" :disabled="loading"
-          class="btn-secondary text-xs p-2 sm:px-3 mobile-tap-target" title="Làm mới dữ liệu">
-          <svg :class="loading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          title="Thêm — Cổ phiếu, Chiến lược, Watchlist, thông báo…">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
         </button>
-        <button type="button" @click="toggleDark()" class="btn-secondary text-xs p-2 sm:px-3 mobile-tap-target" :title="darkMode ? 'Chế độ sáng' : 'Chế độ tối'">
-          <svg x-show="!darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-          </svg>
-          <svg x-show="darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-          </svg>
-        </button>
+        <div x-show="moreMenuOpen" x-cloak x-transition
+          id="header-more-menu"
+          role="menu"
+          @click.outside="moreMenuOpen = false"
+          class="absolute right-0 top-full mt-1.5 w-[min(calc(100vw-1.5rem),17rem)] rounded-xl border border-gray-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 shadow-xl z-[60] py-1 overflow-hidden">
+          <button type="button" role="menuitem" @click="setTab('stocks')"
+            :class="tab === 'stocks' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-200' : ''"
+            class="w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-900 dark:text-zinc-100">
+            <span class="text-base" aria-hidden="true">📈</span><span>Cổ phiếu</span>
+          </button>
+          <button type="button" role="menuitem" @click="setTab('guide')"
+            :class="tab === 'guide' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-200' : ''"
+            class="w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-900 dark:text-zinc-100">
+            <span class="text-base" aria-hidden="true">📘</span><span>Chiến lược</span>
+          </button>
+          <button type="button" role="menuitem" @click="setTab('watchlist')"
+            :class="tab === 'watchlist' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-200' : ''"
+            class="w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-900 dark:text-zinc-100">
+            <span class="text-base" aria-hidden="true">⭐</span><span>Watchlist</span>
+          </button>
+          <div class="border-t border-gray-100 dark:border-zinc-700 my-1" role="separator"></div>
+          <button type="button" role="menuitem" @click="moreMenuOpen = false; toggleBrowserNotify()"
+            class="w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-900 dark:text-zinc-100">
+            <span class="text-base" x-text="browserNotify && notificationPermission === 'granted' ? '🔔' : '🔕'" aria-hidden="true"></span>
+            <span>Thông báo</span>
+          </button>
+          <button type="button" role="menuitem" @click="moreMenuOpen = false; refreshAll()" :disabled="loading"
+            class="w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-900 dark:text-zinc-100 disabled:opacity-60">
+            <svg :class="loading ? 'spin' : ''" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span x-text="loading ? 'Đang tải…' : 'Làm mới dữ liệu'"></span>
+          </button>
+          <button type="button" role="menuitem" @click="moreMenuOpen = false; toggleDark()"
+            class="w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-900 dark:text-zinc-100 border-t border-gray-100 dark:border-zinc-700">
+            <svg x-show="!darkMode" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+            <svg x-show="darkMode" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+            <span x-text="darkMode ? 'Giao diện sáng' : 'Giao diện tối'"></span>
+          </button>
+          <button type="button" role="menuitem" x-show="pwaGateSkipped" @click="moreMenuOpen = false; clearPwaGateSkip()"
+            class="w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-900 dark:text-zinc-100 border-t border-gray-100 dark:border-zinc-700">
+            <span class="text-base" aria-hidden="true">📲</span>
+            <span>Hiện lại màn cài app</span>
+          </button>
+        </div>
       </div>
       <!-- Auth button -->
       <template x-if="isAdmin">
@@ -827,6 +547,284 @@
           Chưa có dữ liệu backtest trên server. Chạy giả lập từ tab <b>Tín hiệu</b> (admin: &quot;Chạy backtest&quot;) hoặc sau khi phân tích lịch sử — sau đó làm mới trang.
         </div>
       </template>
+    </div>
+  </div>
+
+  <!-- ═══ THỊ TRƯỜNG (VN-Index & VN30) ═══ -->
+  <div x-show="tab === 'market'" x-cloak
+    @tab-changed.window="if ($event.detail === 'market') onMarketTabFocus()">
+    <div class="card">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="font-semibold text-gray-900 dark:text-zinc-100">🏛️ Thị trường</h2>
+          <p class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl">
+            Biểu đồ nến ngày, khối lượng, EMA và RSI / MACD cho <b>VN-Index</b> và <b>VN30</b> — đọc xu hướng chung. <b>Làm mới</b> tải ~400 phiên gần nhất; <b>kéo biểu đồ sang trái</b> để nạp dần nến cũ cho tới khi hết dữ liệu trên server. <span x-show="isAdmin">Admin: nút <b>Đồng bộ full IPO</b> bên phải kéo nến từ mốc IPO + phân tích.</span><span x-show="!isAdmin">Đồng bộ full IPO do admin chạy trên tab này.</span> Nến 5m/15m và phái sinh: tab <b>Phái sinh</b>.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+          <button type="button" @click="loadMarketCharts()" :disabled="marketLoading"
+            class="btn-secondary text-xs inline-flex items-center gap-1.5">
+            <svg :class="marketLoading ? 'spin w-4 h-4' : 'w-4 h-4'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Làm mới
+          </button>
+          <button type="button" x-show="isAdmin" @click="syncMarketIndicesAndReload()"
+            :disabled="marketLoading || marketSyncLoading"
+            class="btn-primary text-xs inline-flex items-center gap-1.5"
+            title="Đồng bộ full IPO: VNINDEX &amp; VN30 (có thể lâu), rồi phân tích nến — hàng đợi">
+            <svg :class="marketSyncLoading ? 'spin w-4 h-4' : 'w-4 h-4'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582M20 20v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15M4 9a8 8 0 0115.357-2M20 15a8 8 0 01-15.357 2"/>
+            </svg>
+            Đồng bộ full IPO
+          </button>
+        </div>
+      </div>
+
+      <div x-show="isAdmin && marketSyncLoading" class="text-sm text-amber-700 dark:text-amber-400/90 mb-2">
+        Đang đồng bộ <b>full IPO</b> và phân tích nến (VNINDEX → VN30, có thể lâu)…
+      </div>
+
+      <div x-show="marketLoading" class="text-sm text-indigo-600 dark:text-indigo-400 py-12 text-center">Đang tải dữ liệu chỉ số…</div>
+
+      <!-- Một cột xếp dọc — full width, nhìn rộng hơn so với 2 cột trên màn lớn -->
+      <div x-show="!marketLoading" class="flex flex-col gap-10 lg:gap-12 w-full">
+        <!-- VN-Index -->
+        <div class="rounded-xl border p-4 sm:p-5 w-full" style="border-color:var(--border);background:var(--bg-raised)">
+          <div class="flex items-baseline justify-between gap-2 mb-3 flex-wrap">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-zinc-100">VN-Index</h3>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-xs text-indigo-600 dark:text-indigo-400" x-show="marketOlderLoadingVni">Đang tải thêm…</span>
+              <span class="text-xs text-gray-400 font-mono" x-show="marketBarVni.length" x-text="marketBarVni.length + ' phiên'"></span>
+            </div>
+          </div>
+          <div x-show="!marketBarVni.length" class="text-sm text-amber-700 dark:text-amber-400/90 py-6 leading-relaxed">
+            Chưa có nến trong hệ thống. Thêm <b>VNINDEX</b> vào watchlist (hoặc chờ seed), rồi <b>Đồng bộ giá</b> từ tab Scanner.
+          </div>
+          <div x-show="marketBarVni.length" class="space-y-2">
+            <div x-ref="marketChartVni" class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700 min-h-[280px]" style="height:min(420px, 50vh)"></div>
+            <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">RSI (14)</div>
+            <div x-ref="marketRsiVni" class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700" style="height:110px"></div>
+            <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">MACD (12, 26, 9)</div>
+            <div x-ref="marketMacdVni" class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700" style="height:110px"></div>
+          </div>
+          <div class="mt-3 pt-3 border-t space-y-1.5" style="border-color:var(--border)" x-show="marketLatestVni.length">
+            <div class="text-xs font-semibold text-gray-600 dark:text-zinc-400">Phân tích nến (gần nhất)</div>
+            <template x-for="s in marketLatestVni.slice(0, 14)" :key="String(s.id ?? s.type) + '-' + s.tradingDate">
+              <div class="text-xs flex flex-wrap gap-x-2 gap-y-0.5 leading-snug" style="color:var(--text-2)">
+                <span class="font-mono text-gray-400 shrink-0" x-text="s.tradingDate"></span>
+                <span :class="s.direction === 'BULLISH' ? 'text-emerald-600 dark:text-emerald-400' : (s.direction === 'BEARISH' ? 'text-rose-600 dark:text-rose-400' : 'text-gray-500')" x-text="s.direction === 'BULLISH' ? '▲' : (s.direction === 'BEARISH' ? '▼' : '·')"></span>
+                <span class="font-medium" x-text="signalTypeLabelVi(s.type)"></span>
+                <span class="text-gray-400 dark:text-zinc-500 line-clamp-2" x-show="s.description" x-text="s.description"></span>
+              </div>
+            </template>
+          </div>
+          <p x-show="marketBarVni.length && !marketLatestVni.length" class="text-xs text-amber-700/90 dark:text-amber-400/80 mt-3 pt-2 border-t" style="border-color:var(--border)">
+            Chưa có tín hiệu trong hệ thống — admin: <b>Đồng bộ full IPO</b> (tab này) hoặc <b>Phái sinh</b> (VN30), hoặc chờ job phân tích.
+          </p>
+        </div>
+        <!-- VN30 -->
+        <div class="rounded-xl border p-4 sm:p-5 w-full" style="border-color:var(--border);background:var(--bg-raised)">
+          <div class="flex items-baseline justify-between gap-2 mb-3 flex-wrap">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-zinc-100">VN30</h3>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-xs text-indigo-600 dark:text-indigo-400" x-show="marketOlderLoadingVn30">Đang tải thêm…</span>
+              <span class="text-xs text-gray-400 font-mono" x-show="marketBarVn30.length" x-text="marketBarVn30.length + ' phiên'"></span>
+            </div>
+          </div>
+          <div x-show="!marketBarVn30.length" class="text-sm text-amber-700 dark:text-amber-400/90 py-6 leading-relaxed">
+            Chưa có nến trong hệ thống. Thêm <b>VN30</b> vào watchlist, rồi <b>Đồng bộ giá</b>.
+          </div>
+          <div x-show="marketBarVn30.length" class="space-y-2">
+            <div x-ref="marketChartVn30" class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700 min-h-[280px]" style="height:min(420px, 50vh)"></div>
+            <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">RSI (14)</div>
+            <div x-ref="marketRsiVn30" class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700" style="height:110px"></div>
+            <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">MACD (12, 26, 9)</div>
+            <div x-ref="marketMacdVn30" class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700" style="height:110px"></div>
+          </div>
+          <div class="mt-3 pt-3 border-t space-y-1.5" style="border-color:var(--border)" x-show="marketLatestVn30.length">
+            <div class="text-xs font-semibold text-gray-600 dark:text-zinc-400">Phân tích nến (gần nhất)</div>
+            <template x-for="s in marketLatestVn30.slice(0, 14)" :key="String(s.id ?? s.type) + '-' + s.tradingDate">
+              <div class="text-xs flex flex-wrap gap-x-2 gap-y-0.5 leading-snug" style="color:var(--text-2)">
+                <span class="font-mono text-gray-400 shrink-0" x-text="s.tradingDate"></span>
+                <span :class="s.direction === 'BULLISH' ? 'text-emerald-600 dark:text-emerald-400' : (s.direction === 'BEARISH' ? 'text-rose-600 dark:text-rose-400' : 'text-gray-500')" x-text="s.direction === 'BULLISH' ? '▲' : (s.direction === 'BEARISH' ? '▼' : '·')"></span>
+                <span class="font-medium" x-text="signalTypeLabelVi(s.type)"></span>
+                <span class="text-gray-400 dark:text-zinc-500 line-clamp-2" x-show="s.description" x-text="s.description"></span>
+              </div>
+            </template>
+          </div>
+          <p x-show="marketBarVn30.length && !marketLatestVn30.length" class="text-xs text-amber-700/90 dark:text-amber-400/80 mt-3 pt-2 border-t" style="border-color:var(--border)">
+            Chưa có tín hiệu trong hệ thống — admin: <b>Đồng bộ full IPO</b> hoặc <b>Phái sinh</b> (VN30), hoặc chờ job phân tích.
+          </p>
+        </div>
+      </div>
+
+      <p class="text-xs text-gray-400 dark:text-zinc-500 mt-4 border-t pt-3" style="border-color:var(--border)">
+        Trục giá: <b>điểm</b> chỉ số. Mũi tên trên nến = tín hiệu mua/bán (cùng quy tắc tab Tín hiệu; bật nhãn loại tín hiệu trên biểu đồ ở tab <b>Tín hiệu</b>). EMA / Hỗ trợ–Kháng cự: checkbox bên dưới.
+      </p>
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs mt-2 pl-0.5" style="color: var(--text-2);">
+        <span class="font-medium text-gray-500 dark:text-gray-400 shrink-0">Lớp vẽ (áp khi làm mới chart):</span>
+        <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+          <input type="checkbox" x-model="chartShowEma" @change="persistChartOverlays()" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+          <span>EMA</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+          <input type="checkbox" x-model="chartShowSR" @change="persistChartOverlays()" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+          <span>Hỗ trợ / KC</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PHÁI SINH VN30 (chỉ số tham chiếu HĐTL) ═══ -->
+  <div x-show="tab === 'derivatives'" x-cloak
+    @tab-changed.window="if ($event.detail === 'derivatives') onDerivativesTabFocus()">
+    <div class="card space-y-8">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="font-semibold text-gray-900 dark:text-zinc-100">📉 Phái sinh VN30</h2>
+          <p class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl leading-relaxed">
+            <b>Nến và tín hiệu</b> dùng chỉ số <b>VN30</b> (API Entrade không cung cấp OHLC từng mã HĐTL công khai). Mỗi khung (5m → 1H) tải <b>cùng cửa sổ ~1 tháng lịch</b> lùi từ hiện tại; <b>kéo trái</b> để nạp thêm lịch sử. <b>Trong phiên T2–T6 (9:30–11:30, 13:00–14:45)</b>, chart + tín hiệu <b>tự làm mới định kỳ</b> (5m/15m ~90s; 1H ~5 phút) — hoặc bấm <b>Làm mới</b>. Server quét <b>VN30 mỗi 5 phút</b> (nến ngày + phân tích DB). Tắt cron: <span class="font-mono">DERIVATIVES_VN30_FIVE_MIN_SCAN=false</span>.
+          </p>
+        </div>
+      </div>
+
+      <div class="rounded-xl border p-4 sm:p-5 w-full" style="border-color:var(--border);background:var(--bg-raised)">
+        <div class="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+          <div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-zinc-100">VN30 — đa khung (5m → 1H)</h3>
+            <p class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl">
+              Cùng nguồn chỉ số <b>VN30</b> (Entrade): <b>5m · 15m · 1H</b> — cùng độ dài cửa sổ <b>~1 tháng</b> (mỗi lần tải / đổi khung). <b>Kéo trái</b> nạp thêm nến cũ ngoài tháng; trục giờ <b>ICT</b>. Phân tích + <b>Giá cuối / SL / TP</b> (ATR); RSI &amp; MACD — chỉ tham khảo.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button type="button" @click="setDerivResolution('5')" :disabled="derivLoading"
+              class="text-xs px-2.5 py-1.5 rounded-lg"
+              :class="derivResolution === '5' ? 'btn-primary' : 'btn-secondary'">5m</button>
+            <button type="button" @click="setDerivResolution('15')" :disabled="derivLoading"
+              class="text-xs px-2.5 py-1.5 rounded-lg"
+              :class="derivResolution === '15' ? 'btn-primary' : 'btn-secondary'">15m</button>
+            <button type="button" @click="setDerivResolution('1H')" :disabled="derivLoading"
+              class="text-xs px-2.5 py-1.5 rounded-lg"
+              :class="derivResolution === '1H' ? 'btn-primary' : 'btn-secondary'">1H</button>
+            <button type="button" @click="loadDerivIntraday({ reset: true })" :disabled="derivLoading" class="btn-secondary text-xs inline-flex items-center gap-1.5">
+              <svg :class="derivLoading ? 'spin w-4 h-4' : 'w-4 h-4'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              Làm mới
+            </button>
+            <button type="button" x-show="isAdmin" @click="syncIndicesOneMonthAndReload()" :disabled="derivLoading || derivSyncMonthLoading"
+              class="btn-primary text-xs inline-flex items-center gap-1.5" title="Đồng bộ nến ngày VNINDEX + VN30 ~1 tháng vào DB + phân tích tín hiệu (admin)">
+              <svg :class="derivSyncMonthLoading ? 'spin w-4 h-4' : 'w-4 h-4'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              Đồng bộ ~1 tháng
+            </button>
+          </div>
+        </div>
+        <div x-show="derivLoading" class="text-sm text-indigo-600 dark:text-indigo-400 py-8 text-center">Đang tải nến VN30…</div>
+        <div x-show="!derivLoading && !derivBars.length" class="text-sm text-amber-700 dark:text-amber-400/90 py-6 leading-relaxed">
+          Chưa có dữ liệu nến. Bấm <b>Làm mới</b> hoặc kiểm tra kết nối / API chỉ số.
+        </div>
+        <div x-show="!derivLoading && derivBars.length" class="space-y-2">
+          <div class="flex items-center justify-end gap-2 text-xs text-gray-400 font-mono px-0.5">
+            <span class="text-indigo-600 dark:text-indigo-400" x-show="derivOlderLoading">Đang tải thêm…</span>
+            <span x-show="derivBars.length" x-text="derivBars.length + ' nến'"></span>
+          </div>
+          <div x-show="derivAnalysis && !derivLoading" class="text-xs space-y-2 rounded-lg border p-3 mb-1" style="border-color:var(--border);background:var(--bg-card)">
+            <template x-if="derivAnalysis && derivAnalysis.short">
+              <p class="text-amber-800 dark:text-amber-300/90 leading-relaxed" x-text="derivAnalysis.short"></p>
+            </template>
+            <template x-if="derivAnalysis && !derivAnalysis.short">
+              <div class="space-y-2 leading-relaxed" style="color:var(--text-2)">
+                <p class="text-[11px] text-gray-500 dark:text-zinc-500">Gợi ý giá hệ thống: khối này + đường trên chart (tab <b>Phái sinh</b>, mục VN30 — đa khung).</p>
+                <p class="font-medium text-gray-700 dark:text-zinc-200">Phân tích nến &amp; điểm tham chiếu (trùng đường trên chart)</p>
+                <p x-show="derivAnalysis.candleNote" class="text-gray-600 dark:text-zinc-400" x-text="derivAnalysis.candleNote"></p>
+                <p>Giá đóng nến cuối: <b x-text="derivAnalysis.lastClose"></b> điểm · ATR(14) ≈ <b x-text="derivAnalysis.atr"></b></p>
+                <p x-show="derivAnalysis.rsiNote" x-text="derivAnalysis.rsiNote"></p>
+                <p x-show="derivAnalysis.macdNote" x-text="derivAnalysis.macdNote"></p>
+                <div class="rounded-lg p-2.5 mt-2 border"
+                  :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/10 border-emerald-500/30' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-gray-500/5 border-gray-400/30 dark:border-zinc-600')">
+                  <div class="font-semibold mb-1 flex flex-wrap items-center gap-2"
+                    :class="derivAnalysis.bias === 'long' ? 'text-emerald-800 dark:text-emerald-300' : (derivAnalysis.bias === 'short' ? 'text-rose-800 dark:text-rose-300' : 'text-gray-700 dark:text-zinc-300')">
+                    <span>Gợi ý hệ thống (một hướng):</span>
+                    <span class="font-mono px-1.5 py-0.5 rounded text-sm"
+                      :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/20' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/20' : 'bg-gray-500/15')"
+                      x-text="derivAnalysis.biasLabelVi"></span>
+                  </div>
+                  <p class="text-[11px] text-gray-600 dark:text-zinc-400 mb-2" x-text="derivAnalysis.biasHint"></p>
+                  <template x-if="derivAnalysis.bias === 'long' || derivAnalysis.bias === 'short'">
+                    <div class="text-sm space-y-0.5 font-mono tabular-nums">
+                      <div>SL gợi ý: <span x-text="derivAnalysis.sl"></span></div>
+                      <div>TP gợi ý (~1.5R): <span x-text="derivAnalysis.tp"></span></div>
+                    </div>
+                  </template>
+                  <template x-if="derivAnalysis.bias === 'neutral'">
+                    <p class="text-[11px] text-amber-800/90 dark:text-amber-300/90">Không đưa cặp SL/TP long/short — chỉ xem đường <b>Giá cuối</b> trên chart.</p>
+                  </template>
+                </div>
+                <p class="text-gray-400 dark:text-zinc-500 mt-1">SL/TP tính từ ATR×2 và tỷ lệ 1.5R — không phải tư vấn đầu tư.</p>
+              </div>
+            </template>
+          </div>
+          <div x-show="derivBars.length && !derivLoading" class="text-xs rounded-lg border p-3 space-y-2 leading-relaxed" style="border-color:var(--border);background:var(--bg-card)">
+            <p class="font-semibold text-gray-800 dark:text-zinc-100 flex items-center gap-2">
+              <span aria-hidden="true">📘</span> Chiến lược vào lệnh (phái sinh — ưu tiên xác suất)
+            </p>
+            <p class="text-gray-500 dark:text-zinc-400 text-[11px]">Cùng tinh thần tab <b>Chiến lược</b> (kiên nhẫn, có kỷ luật), áp cho VN30: <b>không đánh một chỉ báo</b>, ưu tiên <b>hội tụ</b> để giảm nhiễu — phái sinh có long/short nên <b>luôn gắn SL</b> với mức tham chiếu trên chart.</p>
+            <ul class="list-disc pl-4 text-[11px] space-y-1.5 text-gray-600 dark:text-zinc-300 marker:text-indigo-500">
+              <li><b>Khung lớn trước</b>: xu hướng ngày xem tab <b>Thị trường</b> (VN30 nến ngày); trên đây ưu tiên <b>1H</b> rồi <b>5m–15m</b>; chỉ vào khi <b>cùng hướng</b> sóng lớn (tránh bắt dao rơi ngược trend).</li>
+              <li><b>Hội tụ trước khi vào</b>: ưu tiên khi <b>tín hiệu gần nhất</b> (mục dưới) <b>cùng chiều</b> với long/short bạn định vào + RSI/MACD <b>không mâu thuẫn mạnh</b> (ví dụ long mà MACD vừa cắt xuống 0 → cân nhắc chờ).</li>
+              <li><b>Kỷ luật giá</b>: SL gần mức ô trên / đường chart; TP ~1.5R hoặc vùng Hỗ trợ–KC; <b>không gồng</b> nhiều lần cùng lúc — một lệnh, một lý do thoát.</li>
+              <li><b>Khi nào đứng ngoài</b>: tín hiệu trái chiều giữa các khung, hoặc chỉ <b>HOLD / trung lập</b> trên hệ thống — không bắt buộc phải có lệnh mỗi phiên.</li>
+            </ul>
+            <p class="text-[10px] text-gray-400 dark:text-zinc-500 pt-1 border-t" style="border-color:var(--border-sub)">Không đảm bảo win rate; rủi ro phái sinh cao. Tham chiếu thêm mục <b class="text-gray-500 dark:text-zinc-400">Chiến lược vị thế &amp; trung bình giá</b> (tab Chiến lược) cho tư duy quản trị vốn — áp dụng có chọn lọc cho HĐTL.</p>
+          </div>
+          <div x-ref="derivChartMain" class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700 min-h-[400px]" style="height:clamp(440px, min(72vh, 820px), 820px)"></div>
+          <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">RSI (14)</div>
+          <div x-ref="derivRsi" class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700" style="height:128px"></div>
+          <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">MACD (12, 26, 9)</div>
+          <div x-ref="derivMacd" class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700" style="height:128px"></div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border p-4 sm:p-5 w-full" style="border-color:var(--border);background:var(--bg-raised)">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 class="text-sm font-bold text-gray-900 dark:text-zinc-100">Tín hiệu VN30 (gần đây)</h3>
+          <button type="button" @click="loadDerivSignalsLatest()" class="btn-secondary text-xs">Làm mới tín hiệu</button>
+        </div>
+        <p class="text-xs text-gray-500 mb-2">Cập nhật khi server phân tích (gồm cron 5 phút trong phiên). <span x-show="isAdmin" class="text-gray-400 dark:text-zinc-500">Admin: <b>Đồng bộ ~1 tháng</b> nằm cạnh nút <b>Làm mới</b> phía trên chart — kéo nến <b>ngày</b> <b>VNINDEX + VN30</b> vào DB + phân tích tín hiệu; chart intraday vẫn lấy Entrade khi làm mới chart.</span></p>
+        <div x-show="derivSignalsLatest.length" class="space-y-1.5 max-h-64 overflow-y-auto">
+          <template x-for="s in derivSignalsLatest" :key="String(s.id ?? s.type) + '-' + s.tradingDate">
+            <div class="text-xs flex flex-wrap gap-x-2 gap-y-0.5 leading-snug" style="color:var(--text-2)">
+              <span class="font-mono text-gray-400 shrink-0" x-text="s.tradingDate"></span>
+              <span :class="s.direction === 'BULLISH' ? 'text-emerald-600 dark:text-emerald-400' : (s.direction === 'BEARISH' ? 'text-rose-600 dark:text-rose-400' : 'text-gray-500')" x-text="s.direction === 'BULLISH' ? '▲' : (s.direction === 'BEARISH' ? '▼' : '·')"></span>
+              <span class="font-medium" x-text="signalTypeLabelVi(s.type)"></span>
+              <span class="text-gray-400 dark:text-zinc-500 line-clamp-2" x-show="s.description" x-text="s.description"></span>
+            </div>
+          </template>
+        </div>
+        <p x-show="!derivSignalsLatest.length" class="text-xs text-amber-700/90 dark:text-amber-400/80 py-2">Chưa có tín hiệu — chạy đồng bộ + phân tích hoặc chờ phiên / cron.</p>
+      </div>
+
+      <p class="text-xs text-gray-400 dark:text-zinc-500 border-t pt-3" style="border-color:var(--border)">
+        Trục giá: <b>điểm</b> chỉ số VN30. EMA / BB–nén (5m·15m) / hỗ trợ–kháng cự: checkbox bên dưới (áp khi làm mới chart).
+      </p>
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs pl-0.5" style="color: var(--text-2);">
+        <span class="font-medium text-gray-500 dark:text-gray-400 shrink-0">Lớp vẽ:</span>
+        <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+          <input type="checkbox" x-model="chartShowEma" @change="persistChartOverlays()" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+          <span>EMA</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 cursor-pointer select-none" title="Bollinger 20/2 + chấm «Nén» khi bandwidth &lt; 8% (khớp server); chỉ khung 5m và 15m">
+          <input type="checkbox" x-model="derivShowBb" @change="persistChartOverlays()" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+          <span>BB &amp; nén <span class="text-gray-400 dark:text-zinc-500 font-normal">(5m·15m)</span></span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+          <input type="checkbox" x-model="chartShowSR" @change="persistChartOverlays()" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+          <span>Hỗ trợ / KC</span>
+        </label>
+      </div>
     </div>
   </div>
 
@@ -2005,71 +2003,6 @@
     </div>
   </div>
 
-  <!-- ═══ CÀI ĐẶT (mobile: thông báo / refresh / giao diện; từ sm trở lên cũng có trên header) ═══ -->
-  <div x-show="tab === 'settings'" x-cloak>
-    <div class="card mb-4">
-      <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
-        <span>⚙️</span> Cài đặt
-      </h2>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        Trên màn hình nhỏ, các nút này nằm đây để thanh trên gọn hơn. Từ <span class="font-medium">640px</span> trở lên vẫn dùng nhanh trên header.
-      </p>
-      <div class="space-y-3">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border" style="border-color:var(--border);background:var(--bg-raised)">
-          <div class="min-w-0">
-            <div class="font-medium text-gray-900 dark:text-gray-100">Thông báo trình duyệt</div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Khi tab ẩn, có thể hiện thông báo hệ thống (cần quyền).</p>
-          </div>
-          <button type="button" @click="toggleBrowserNotify()"
-            class="btn-secondary text-sm px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto mobile-tap-target"
-            :title="browserNotify && notificationPermission === 'granted' ? 'Đang bật' : 'Bật thông báo'">
-            <span class="text-lg" x-text="browserNotify && notificationPermission === 'granted' ? '🔔' : '🔕'"></span>
-            <span x-text="browserNotify && notificationPermission === 'granted' ? 'Đang bật' : 'Bật / tắt'"></span>
-          </button>
-        </div>
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border" style="border-color:var(--border);background:var(--bg-raised)">
-          <div class="min-w-0">
-            <div class="font-medium text-gray-900 dark:text-gray-100">Làm mới dữ liệu</div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Vị thế, backtest leaderboard, watchlist…</p>
-          </div>
-          <button type="button" @click="refreshAll()" :disabled="loading"
-            class="btn-secondary text-sm px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto mobile-tap-target disabled:opacity-60" title="Làm mới">
-            <svg :class="loading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-            <span x-text="loading ? 'Đang tải…' : 'Làm mới'"></span>
-          </button>
-        </div>
-        <div class="md:hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border" style="border-color:var(--border);background:var(--bg-raised)" x-show="pwaGateSkipped">
-          <div class="min-w-0">
-            <div class="font-medium text-gray-900 dark:text-gray-100">Màn cài app</div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Bạn đã chọn dùng trên trình duyệt. Hiện lại màn hướng dẫn cài nếu đổi ý.</p>
-          </div>
-          <button type="button" @click="clearPwaGateSkip()"
-            class="btn-secondary text-sm px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto mobile-tap-target">
-            Hiện lại màn cài app
-          </button>
-        </div>
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border" style="border-color:var(--border);background:var(--bg-raised)">
-          <div class="min-w-0">
-            <div class="font-medium text-gray-900 dark:text-gray-100">Giao diện</div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Sáng / tối — lưu trên thiết bị.</p>
-          </div>
-          <button type="button" @click="toggleDark()"
-            class="btn-secondary text-sm px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto mobile-tap-target">
-            <svg x-show="!darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-            </svg>
-            <svg x-show="darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-            </svg>
-            <span x-text="darkMode ? 'Đang tối — bật sáng' : 'Đang sáng — bật tối'"></span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
 </main>
 
 <!-- PWA: gợi ý cài (Chrome / Android / desktop) — ẩn khi đang bắt buộc full-screen trên mobile -->
@@ -2092,1991 +2025,8 @@
   <span x-text="toast.msg"></span>
 </div>
 
-<script>
-const STOCK_APP_TAB_IDS = ['dashboard', 'scanner', 'signals', 'stocks', 'guide', 'watchlist', 'settings'];
-const STOCK_SIGNAL_TICKER_KEY = 'stockAnalysisSignalTicker';
-const STOCK_PRICE_TICKER_KEY = 'stockAnalysisPriceTicker';
-
-/** Tab từ ?tab= — dùng link chia sẻ */
-function readTabFromUrl() {
-  try {
-    const t = new URLSearchParams(window.location.search).get('tab');
-    if (t && STOCK_APP_TAB_IDS.includes(t)) return t;
-  } catch {}
-  return null;
-}
-
-/** Mã từ ?ticker= — kết hợp tab Tín hiệu / Cổ phiếu */
-function readTickerFromUrl() {
-  try {
-    const raw = new URLSearchParams(window.location.search).get('ticker');
-    if (!raw) return null;
-    const u = String(raw).trim().toUpperCase();
-    if (u.length < 1 || u.length > 20) return null;
-    if (!/^[A-Z0-9]+$/.test(u)) return null;
-    return u;
-  } catch {}
-  return null;
-}
-
-function readSavedTab() {
-  try {
-    const s = sessionStorage.getItem('stockAnalysisTab');
-    if (s && STOCK_APP_TAB_IDS.includes(s)) return s;
-  } catch {}
-  return 'dashboard';
-}
-
-function readSavedTicker(key) {
-  try {
-    const s = sessionStorage.getItem(key);
-    if (!s) return '';
-    const t = String(s).trim().toUpperCase();
-    if (t.length < 1 || t.length > 20) return '';
-    if (!/^[A-Z0-9]+$/.test(t)) return '';
-    return t;
-  } catch {}
-  return '';
-}
-
-const PWA_GATE_SKIP_KEY = 'pwaMandatoryGateSkip';
-
-/** Điện thoại (viewport ≤640px) và chưa mở như PWA — màn hướng dẫn cài (trừ khi người dùng bỏ qua). */
-function computePwaMandatoryGate() {
-  if (typeof window === 'undefined') return false;
-  try {
-    if (localStorage.getItem(PWA_GATE_SKIP_KEY) === '1') return false;
-  } catch {}
-  try {
-    if (!window.matchMedia('(max-width: 640px)').matches) return false;
-  } catch {
-    return false;
-  }
-  try {
-    if (window.matchMedia('(display-mode: standalone)').matches) return false;
-    if (window.matchMedia('(display-mode: fullscreen)').matches) return false;
-  } catch {}
-  try {
-    if (window.navigator.standalone === true) return false;
-  } catch {}
-  return true;
-}
-
-function isIosTouchDevice() {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  if (/iPhone|iPad|iPod/i.test(ua)) return true;
-  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-}
-
-function isAndroidUi() {
-  if (typeof navigator === 'undefined') return false;
-  return /Android/i.test(navigator.userAgent || '');
-}
-
-/** iOS: shell trình duyệt (đều dùng WebKit). Dùng cho hướng dẫn «Thêm vào Màn hình chính». */
-function getIosBrowserKind() {
-  if (typeof navigator === 'undefined') return 'other';
-  if (!isIosTouchDevice()) return 'other';
-  const ua = navigator.userAgent || '';
-  if (/CriOS\//i.test(ua)) return 'chrome';
-  if (/FxiOS\//i.test(ua)) return 'firefox';
-  if (/EdgiOS\//i.test(ua)) return 'edge';
-  if (/OPiOS\//i.test(ua)) return 'opera';
-  return 'safari';
-}
-
-function iosBrowserTitleVi(kind) {
-  const m = {
-    safari: 'Safari',
-    chrome: 'Chrome (iOS)',
-    firefox: 'Firefox (iOS)',
-    edge: 'Edge (iOS)',
-    opera: 'Opera (iOS)',
-    other: 'Trình duyệt iOS',
-  };
-  return m[kind] || m.other;
-}
-
-/** Nhãn hiển thị tiếng Việt — BB: enum UP/DOWN theo giá vs dải, không phải hướng tín hiệu */
-const SIGNAL_LABELS_VI = {
-  RSI_OVERSOLD: 'RSI quá bán',
-  RSI_OVERBOUGHT: 'RSI quá mua',
-  RSI_MOMENTUM_UP: 'RSI momentum tăng',
-  RSI_MOMENTUM_DOWN: 'RSI momentum giảm',
-  EMA_GOLDEN_CROSS: 'EMA golden cross',
-  EMA_DEATH_CROSS: 'EMA death cross',
-  EMA_BULLISH_STACK: 'Nền tăng (EMA)',
-  EMA_BEARISH_STACK: 'Nền giảm (EMA)',
-  EMA_BOUNCE: 'Nảy EMA',
-  BASE_FORMING: 'Nền tích lũy',
-  RESISTANCE_BREAKOUT: 'Break kháng cự',
-  SUPPORT_BREAKDOWN: 'Thủng hỗ trợ',
-  MACD_BULLISH_CROSS: 'MACD cắt tăng',
-  MACD_BEARISH_CROSS: 'MACD cắt giảm',
-  BB_BREAKOUT_DOWN: 'Chạm BB dưới (oversold)',
-  BB_BREAKOUT_UP: 'Vượt BB trên (overbought)',
-  BB_SQUEEZE: 'BB squeeze',
-  HAMMER: 'Hammer',
-  SHOOTING_STAR: 'Shooting star',
-  BULLISH_ENGULFING: 'Nến xanh nuốt',
-  BEARISH_ENGULFING: 'Nến đỏ nuốt',
-  DOJI: 'Doji',
-  VOLUME_SURGE: 'KL đột biến',
-  RSI_BEARISH_DIVERGENCE: 'Phân kỳ RSI giảm',
-  MACD_BEARISH_DIVERGENCE: 'Phân kỳ MACD giảm',
-  VOLUME_CLIMAX_TOP: 'Climax đỉnh',
-  DISTRIBUTION_BAR: 'Phân phối',
-  WASHOUT_BAR: 'Washout (đáy)',
-  FAILED_BREAKOUT: 'Bull trap',
-  MA_GOLDEN_CROSS: 'MA golden (legacy)',
-  MA_DEATH_CROSS: 'MA death (legacy)',
-};
-
-function app() {
-  const urlTab = readTabFromUrl();
-  const urlTicker = readTickerFromUrl();
-  return {
-    tab: urlTab || readSavedTab(),
-    tabs: [
-      { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-      { id: 'scanner',   label: 'Scanner',   icon: '🔍' },
-      { id: 'signals',   label: 'Tín hiệu',  icon: '⚡' },
-      { id: 'stocks',    label: 'Cổ phiếu',  icon: '📈' },
-      { id: 'guide',     label: 'Chiến lược', icon: '📘' },
-      { id: 'watchlist', label: 'Watchlist', icon: '⭐' },
-      { id: 'settings',  label: 'Cài đặt',   icon: '⚙️' },
-    ],
-    loading: false,
-    scanning: false,
-    openPositions: [],
-    closedPositions: [],
-    watchlist: [],
-    signalSummary: {},
-    searchTicker: '',
-    signals: [],
-    signalTicker: urlTicker || readSavedTicker(STOCK_SIGNAL_TICKER_KEY),
-    allChartSignals: [],   // tất cả tín hiệu lịch sử (cho chart markers)
-    signalStats: null,     // { total, bullish, bearish, topTypes }
-    /** GET /signals/backtest/summary — compound 12 tháng (đóng lệnh), fullPeriod trên từng dòng */
-    backtestLeaderboard: { good: [], bad: [], total: 0 },
-    /** GET /signals/:ticker/backtest/runs */
-    backtestRuns: [],
-    /** GET /signals/:ticker/backtest/runs/:id — gồm trades */
-    backtestDetail: null,
-    /** Thứ tự mã (vốn hoá + thanh khoản) từ API — dùng sort UI */
-    signalOrderTickers: [],
-    formingSetups: { tradingDate: '', items: [] },
-    formingLoading: false,
-    /** GET /scanner/latest-signals — feed tín hiệu mới nhất (watchlist) */
-    scannerLatestSignals: [],
-    currentRec: null,
-    priceHistory: [],
-    priceHistoryHasMore: false,
-    priceHistoryLoadingMore: false,
-    chartOlderLoading: false,
-    /** Sau lazy-load nến cũ: dịch viewport để không nhảy về fitContent */
-    _chartScrollRestore: null,
-    /** Viewport logic gần nhất (main chart) — giữ khi render lại trước khi lazy-load xong */
-    chartViewport: null,
-    /** Mã tương ứng với barData hiện tại (để merge khi refresh) */
-    _barDataTicker: '',
-    latestBar: null,
-    priceTicker: urlTicker || readSavedTicker(STOCK_PRICE_TICKER_KEY),
-    barData: [],
-    lwChart: null,
-    rsiChart: null,
-    macdChart: null,
-    indicators: { rsi: null, macd: null, macdSignal: null, macdHist: null },
-    actionLoading: { sync: false, syncFull: false, scan: false, recommend: false, syncOne: false, syncOneFull: false, summary: false, analyze: false, analyzeHistory: false, analyzeHistoryAll: false, backtest: false },
-    actionLog: [],
-    toast: { show: false, msg: '', type: 'success' },
-    // ── Watchlist management ──────────────────────────────────────────────
-    wlItems: [],          // toàn bộ (kể inactive)
-    wlFilter: 'all',      // 'all' | 'active' | 'inactive'
-    wlSearch: '',
-    wlAddForm: { show: false, ticker: '', name: '', sector: '' },
-    wlCheckingLiquidity: false,
-    wlLiquidityLoading: false,
-    wlLiquidityPanel: false,
-    wlLiquidityCandidates: [],
-    wlLiquidityMeta: null,
-    wlLiquidityExcludeDb: false,
-    wlAddSubmitting: false,
-    darkMode: localStorage.getItem('darkMode') === 'true',
-    /** Bật: hiện chữ loại tín hiệu (VD RSI OVERSOLD). Tắt: chỉ mũi tên mua/bán. */
-    chartSignalLabels: localStorage.getItem('chartSignalLabels') !== 'false',
-    /** Bật/tắt lớp vẽ trên chart (localStorage, mặc định bật) */
-    chartShowEma: localStorage.getItem('chartShowEma') !== 'false',
-    chartShowSR: localStorage.getItem('chartShowSR') !== 'false',
-
-    /** PWA + thông báo trình duyệt */
-    pwaDeferredInstall: null,
-    showPwaInstallBanner: false,
-    /** Điện thoại + không standalone: màn cài (trừ khi đã bỏ qua trong localStorage) */
-    pwaMandatoryGate: computePwaMandatoryGate(),
-    /** Đồng bộ với localStorage — chỉ true sau khi người dùng bấm bỏ qua màn cài */
-    pwaGateSkipped: typeof localStorage !== 'undefined' && localStorage.getItem(PWA_GATE_SKIP_KEY) === '1',
-    /** Gợn UI hướng dẫn Safari vs Chrome / Android */
-    pwaIosUi: typeof navigator !== 'undefined' && isIosTouchDevice(),
-    pwaAndroidUi: typeof navigator !== 'undefined' && isAndroidUi(),
-    /** safari | chrome | firefox | edge | opera | other — chỉ meaningful khi pwaIosUi */
-    pwaIosBrowser: typeof navigator !== 'undefined' ? getIosBrowserKind() : 'other',
-    pwaCanWebShare: typeof navigator !== 'undefined' && typeof navigator.share === 'function',
-    browserNotify: typeof localStorage !== 'undefined' && localStorage.getItem('browserNotify') === 'true',
-    notificationPermission:
-      typeof Notification !== 'undefined' ? Notification.permission : 'denied',
-
-    // ── Auth ────────────────────────────────────────────────────────────
-    isAdmin: false,
-    loginModal: { show: false, username: '', password: '', error: '', loading: false },
-
-    async doLogin() {
-      this.loginModal.loading = true;
-      this.loginModal.error = '';
-      try {
-        const res = await fetch('/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: this.loginModal.username, password: this.loginModal.password }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          this.loginModal.error = err?.message || 'Sai tên đăng nhập hoặc mật khẩu';
-          return;
-        }
-        const data = await res.json();
-        localStorage.setItem('adminToken', data.accessToken);
-        this.isAdmin = true;
-        this.loginModal = { show: false, username: '', password: '', error: '', loading: false };
-        this.showToast('Đăng nhập thành công', 'success');
-      } catch (e) {
-        this.loginModal.error = 'Không thể kết nối đến server';
-      } finally {
-        this.loginModal.loading = false;
-      }
-    },
-
-    logout() {
-      localStorage.removeItem('adminToken');
-      this.isAdmin = false;
-      this.showToast('Đã đăng xuất', 'info');
-    },
-
-    // Wrapper for authenticated fetch — shows login modal on 401
-    async authFetch(url, options = {}) {
-      const token = localStorage.getItem('adminToken');
-      const res = await fetch(url, {
-        ...options,
-        headers: { ...options.headers, Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 401) {
-        this.isAdmin = false;
-        localStorage.removeItem('adminToken');
-        this.loginModal.show = true;
-        this.loginModal.error = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
-        throw new Error('Unauthorized');
-      }
-      return res;
-    },
-
-    setTab(id) {
-      if (!STOCK_APP_TAB_IDS.includes(id)) return;
-      this.tab = id;
-      try {
-        sessionStorage.setItem('stockAnalysisTab', id);
-      } catch {}
-      this.updateShareUrl();
-      this.$dispatch('tab-changed', id);
-    },
-
-    /** Đồng bộ ?tab= & ?ticker= trên thanh địa chỉ (deep link) */
-    updateShareUrl() {
-      try {
-        const p = new URLSearchParams();
-        p.set('tab', this.tab);
-        const t =
-          this.tab === 'signals'
-            ? this.signalTicker
-            : this.tab === 'stocks'
-              ? this.priceTicker
-              : '';
-        if (t && String(t).trim()) p.set('ticker', String(t).trim().toUpperCase());
-        const qs = p.toString();
-        const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
-        if (window.location.pathname + window.location.search !== next) {
-          history.replaceState(null, '', next);
-        }
-      } catch {}
-    },
-
-    persistSignalTicker(v) {
-      try {
-        if (v) sessionStorage.setItem(STOCK_SIGNAL_TICKER_KEY, String(v).toUpperCase());
-        else sessionStorage.removeItem(STOCK_SIGNAL_TICKER_KEY);
-      } catch {}
-    },
-    persistPriceTicker(v) {
-      try {
-        if (v) sessionStorage.setItem(STOCK_PRICE_TICKER_KEY, String(v).toUpperCase());
-        else sessionStorage.removeItem(STOCK_PRICE_TICKER_KEY);
-      } catch {}
-    },
-
-    /** Nhãn loại tín hiệu (VN) — dùng chart, scanner, tab Tín hiệu */
-    signalTypeLabelVi(type) {
-      if (type == null || type === '') return '';
-      const t = String(type).trim();
-      return SIGNAL_LABELS_VI[t] || t.replace(/_/g, ' ');
-    },
-
-    /**
-     * BEARISH trong summary không phải lúc nào cũng là “phân phối đỉnh”
-     * (có thể là EMA nền giảm, MACD cross, v.v.) — tránh nhãn gây hiểu nhầm.
-     */
-    bearishSummaryLabel(s) {
-      if (!s?.topSignal) return 'Giảm';
-      const m = {
-        DISTRIBUTION_BAR: 'Phân phối',
-        VOLUME_CLIMAX_TOP: 'Climax đỉnh',
-        FAILED_BREAKOUT: 'Bull trap',
-        RSI_BEARISH_DIVERGENCE: 'Phân kỳ RSI',
-        MACD_BEARISH_DIVERGENCE: 'Phân kỳ MACD',
-        EMA_DEATH_CROSS: 'Death cross',
-        MA_DEATH_CROSS: 'Death cross (legacy)',
-        SUPPORT_BREAKDOWN: 'Thủng hỗ trợ',
-        EMA_BEARISH_STACK: 'Nền giảm',
-        MACD_BEARISH_CROSS: 'MACD giảm',
-        RSI_MOMENTUM_DOWN: 'Momentum giảm',
-        RSI_OVERBOUGHT: 'Quá mua',
-        BEARISH_ENGULFING: 'Nến đỏ',
-        SHOOTING_STAR: 'Shooting star',
-        BB_BREAKOUT_UP: 'BB trên (overbought)',
-      };
-      return m[s.topSignal] ?? this.signalTypeLabelVi(s.topSignal).split(' ').slice(0, 2).join(' ');
-    },
-
-    toggleDark() {
-      this.darkMode = !this.darkMode;
-      localStorage.setItem('darkMode', this.darkMode);
-      try {
-        const m = document.querySelector('meta[name="theme-color"]:not([media])');
-        if (m) m.setAttribute('content', this.darkMode ? '#18181b' : '#4f46e5');
-      } catch {}
-      this.updateChartTheme();
-    },
-
-    persistChartSignalLabels() {
-      try {
-        localStorage.setItem('chartSignalLabels', this.chartSignalLabels ? 'true' : 'false');
-      } catch {}
-      this.$nextTick(() => {
-        if (this.barData.length && this.signalTicker) {
-          requestAnimationFrame(() => this.renderChart(this.signalTicker));
-        }
-      });
-    },
-
-    persistChartOverlays() {
-      try {
-        localStorage.setItem('chartShowEma', this.chartShowEma ? 'true' : 'false');
-        localStorage.setItem('chartShowSR', this.chartShowSR ? 'true' : 'false');
-      } catch {}
-      this.$nextTick(() => {
-        if (this.barData.length && this.signalTicker) {
-          requestAnimationFrame(() => this.renderChart(this.signalTicker));
-        }
-      });
-    },
-
-    updateChartTheme() {
-      const dark = this.darkMode;
-      const chartBg    = dark ? '#09090b' : '#ffffff';
-      const textColor  = dark ? '#71717a' : '#64748b';
-      const gridColor  = dark ? '#27272a' : '#f1f5f9';
-      const borderColor= dark ? '#3f3f46' : '#e2e8f0';
-      const opts = {
-        layout: { background: { color: chartBg }, textColor },
-        grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
-        timeScale: { borderColor },
-      };
-      if (this.lwChart)   this.lwChart.applyOptions(opts);
-      if (this.rsiChart)  this.rsiChart.applyOptions(opts);
-      if (this.macdChart) this.macdChart.applyOptions(opts);
-    },
-
-    async init() {
-      // Link ?tab=&ticker= đã áp vào state; lưu session cho lần sau
-      if (urlTab) {
-        try {
-          sessionStorage.setItem('stockAnalysisTab', urlTab);
-        } catch {}
-      }
-      if (urlTicker) {
-        this.persistSignalTicker(urlTicker);
-        this.persistPriceTicker(urlTicker);
-      }
-      // Verify stored token
-      const token = localStorage.getItem('adminToken');
-      if (token) {
-        try {
-          const res = await fetch('/auth/me', { headers: { Authorization: `Bearer ${token}` } });
-          this.isAdmin = res.ok;
-          if (!res.ok) localStorage.removeItem('adminToken');
-        } catch { this.isAdmin = false; }
-      }
-      this.$watch('signalTicker', (v) => {
-        this.persistSignalTicker(v);
-        if (this.tab === 'signals') this.updateShareUrl();
-      });
-      this.$watch('priceTicker', (v) => {
-        this.persistPriceTicker(v);
-        if (this.tab === 'stocks') this.updateShareUrl();
-      });
-      await this.refreshAll();
-      await this.loadWatchlist();
-      if (this.signalTicker) {
-        window.dispatchEvent(
-          new CustomEvent('signal-ticker-sync', { detail: { ticker: this.signalTicker } }),
-        );
-      }
-      // Giữ hành vi như trước: vào tab Tín hiệu / Cổ phiếu (kể cả từ ?tab=&ticker=) là tải chart + khuyến nghị, không cần bấm thêm
-      if (this.tab === 'signals' && this.signalTicker) {
-        await this.loadSignals();
-      } else if (this.tab === 'stocks' && this.priceTicker) {
-        await this.loadStockData();
-      }
-      this.$nextTick(() => {
-        this.updateShareUrl();
-        this.$dispatch('tab-changed', this.tab);
-      });
-      this.setupPwa();
-      this.$watch('pwaMandatoryGate', (on) => {
-        try {
-          document.documentElement.classList.toggle('overflow-hidden', !!on);
-          document.body.classList.toggle('overflow-hidden', !!on);
-          document.documentElement.classList.toggle('pwa-gate-open', !!on);
-        } catch {}
-      });
-      if (this.pwaMandatoryGate) {
-        try {
-          document.documentElement.classList.add('overflow-hidden');
-          document.body.classList.add('overflow-hidden');
-          document.documentElement.classList.add('pwa-gate-open');
-        } catch {}
-      }
-    },
-
-    refreshPwaMandatoryGate() {
-      try {
-        this.pwaGateSkipped = typeof localStorage !== 'undefined' && localStorage.getItem(PWA_GATE_SKIP_KEY) === '1';
-      } catch {
-        this.pwaGateSkipped = false;
-      }
-      this.pwaMandatoryGate = computePwaMandatoryGate();
-    },
-
-    skipPwaMandatoryGate() {
-      try {
-        localStorage.setItem(PWA_GATE_SKIP_KEY, '1');
-      } catch {}
-      this.pwaGateSkipped = true;
-      this.refreshPwaMandatoryGate();
-      this.showToast('Đang dùng trên trình duyệt. Hiện lại màn cài trong Cài đặt nếu cần.', 'info');
-    },
-
-    clearPwaGateSkip() {
-      try {
-        localStorage.removeItem(PWA_GATE_SKIP_KEY);
-      } catch {}
-      this.pwaGateSkipped = false;
-      this.refreshPwaMandatoryGate();
-    },
-
-    setupPwa() {
-      if (typeof window === 'undefined') return;
-      this.refreshPwaMandatoryGate();
-      const onViewportOrDisplayMode = () => this.refreshPwaMandatoryGate();
-      window.addEventListener('resize', onViewportOrDisplayMode, { passive: true });
-      try {
-        window.matchMedia('(display-mode: standalone)').addEventListener('change', onViewportOrDisplayMode);
-      } catch {}
-      if ('Notification' in window) {
-        this.notificationPermission = Notification.permission;
-      }
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
-      }
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        this.pwaDeferredInstall = e;
-        if (this.pwaMandatoryGate) {
-          this.showPwaInstallBanner = false;
-          return;
-        }
-        try {
-          if (sessionStorage.getItem('pwaInstallDismissed') === '1') return;
-        } catch {}
-        this.showPwaInstallBanner = true;
-      });
-      window.addEventListener('appinstalled', () => {
-        this.showPwaInstallBanner = false;
-        this.pwaDeferredInstall = null;
-        this.refreshPwaMandatoryGate();
-        this.showToast('Đã cài app lên thiết bị', 'success');
-      });
-    },
-
-    dismissPwaBanner() {
-      this.showPwaInstallBanner = false;
-      try {
-        sessionStorage.setItem('pwaInstallDismissed', '1');
-      } catch {}
-    },
-
-    async installPwa() {
-      const ev = this.pwaDeferredInstall;
-      if (!ev || typeof ev.prompt !== 'function') {
-        this.showToast('Dùng menu trình duyệt: «Thêm vào màn hình chính» hoặc «Cài đặt app»', 'info');
-        return;
-      }
-      ev.prompt();
-      try {
-        const { outcome } = await ev.userChoice;
-        if (outcome === 'accepted') {
-          this.showToast('Đã thêm vào màn hình chính', 'success');
-        }
-      } catch {}
-      this.pwaDeferredInstall = null;
-      this.showPwaInstallBanner = false;
-      this.refreshPwaMandatoryGate();
-    },
-
-    pwaInstallInstructionHeading() {
-      if (this.pwaIosUi) {
-        return `Hướng dẫn — ${iosBrowserTitleVi(this.pwaIosBrowser)}`;
-      }
-      if (this.pwaAndroidUi) return 'Hướng dẫn — Android (Chrome, Samsung Internet, Edge, Brave…)';
-      return 'Hướng dẫn — trình duyệt điện thoại';
-    },
-
-    async openPwaIosShareSheet() {
-      if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
-        this.showToast('Làm theo các bước trong khung dưới', 'info');
-        return;
-      }
-      try {
-        await navigator.share({
-          title: typeof document !== 'undefined' ? document.title : 'Stock Analysis',
-          text: 'Thêm Stock Analysis lên màn hình chính',
-          url: typeof window !== 'undefined' ? window.location.href : '',
-        });
-      } catch (e) {
-        if (!e || e.name !== 'AbortError') {
-          this.showToast('Không mở được bảng chia sẻ — làm theo bước bên dưới', 'info');
-        }
-      }
-    },
-
-    async toggleBrowserNotify() {
-      if (!('Notification' in window)) {
-        this.showToast('Trình duyệt không hỗ trợ thông báo', 'info');
-        return;
-      }
-      this.notificationPermission = Notification.permission;
-      if (Notification.permission === 'denied') {
-        this.showToast('Đã chặn thông báo — bật trong cài đặt trình duyệt / site', 'info');
-        return;
-      }
-      if (Notification.permission === 'granted') {
-        this.browserNotify = !this.browserNotify;
-        try {
-          if (this.browserNotify) localStorage.setItem('browserNotify', 'true');
-          else localStorage.removeItem('browserNotify');
-        } catch {}
-        this.showToast(
-          this.browserNotify ? 'Đã bật thông báo (khi tab ẩn)' : 'Đã tắt thông báo hệ thống',
-          'success',
-        );
-        return;
-      }
-      const p = await Notification.requestPermission();
-      this.notificationPermission = p;
-      if (p === 'granted') {
-        this.browserNotify = true;
-        try {
-          localStorage.setItem('browserNotify', 'true');
-        } catch {}
-        this.showToast('Đã cấp quyền — thông báo khi bạn không mở tab', 'success');
-        try {
-          new Notification('Stock Analysis', {
-            body: 'Thông báo đã bật.',
-            icon: '/icons/icon-192.png',
-          });
-        } catch {}
-      } else {
-        this.browserNotify = false;
-        try {
-          localStorage.removeItem('browserNotify');
-        } catch {}
-      }
-    },
-
-    async refreshAll() {
-      this.loading = true;
-      await Promise.all([
-        this.loadOpenPositions(),
-        this.loadClosedPositions(),
-        this.loadBacktestLeaderboard(),
-      ]);
-      this.loading = false;
-    },
-
-    async loadBacktestLeaderboard() {
-      const r = await fetch('/signals/backtest/summary?limit=10')
-        .then((res) => res.json())
-        .catch(() => null);
-      if (r && typeof r.total === 'number') {
-        this.backtestLeaderboard = {
-          good: Array.isArray(r.good) ? r.good : [],
-          bad: Array.isArray(r.bad) ? r.bad : [],
-          total: r.total,
-        };
-      } else {
-        this.backtestLeaderboard = { good: [], bad: [], total: 0 };
-      }
-    },
-
-    async loadOpenPositions() {
-      const r = await fetch('/positions/open').then(r => r.json()).catch(() => []);
-      this.openPositions = Array.isArray(r) ? r : [];
-    },
-
-    async loadClosedPositions() {
-      const r = await fetch('/positions/closed').then(r => r.json()).catch(() => []);
-      this.closedPositions = Array.isArray(r) ? r : [];
-    },
-
-    async loadWatchlist() {
-      const r = await fetch('/scanner/watchlist').then(res => res.json()).catch(() => []);
-      this.watchlist = Array.isArray(r) ? r : [];
-      window.__watchlist__ = this.watchlist;
-      await Promise.all([
-        this.loadSignalSummary(),
-        this.loadFormingSetups(),
-        this.loadScannerLatestSignals(),
-      ]);
-      await this.loadTickerPickerUniverse();
-    },
-
-    async loadTickerPickerUniverse() {
-      const r = await fetch('/watchlist/ticker-picker').then((res) => res.json()).catch(() => []);
-      window.__tickerPickerUniverse__ = Array.isArray(r) ? r : [];
-    },
-
-    async loadScannerLatestSignals() {
-      const r = await fetch('/scanner/latest-signals?limit=50')
-        .then((res) => res.json())
-        .catch(() => ({}));
-      this.scannerLatestSignals = Array.isArray(r?.signals) ? r.signals : [];
-    },
-
-    async loadFormingSetups() {
-      this.formingLoading = true;
-      try {
-        const r = await fetch('/scanner/forming-setups').then(res => res.json()).catch(() => ({}));
-        this.formingSetups = {
-          tradingDate: r?.tradingDate || '',
-          items: Array.isArray(r?.items) ? r.items : [],
-        };
-      } finally {
-        this.formingLoading = false;
-      }
-    },
-
-    async loadSignalSummary() {
-      const r = await fetch('/scanner/signals-summary').then(res => res.json()).catch(() => ({}));
-      const summary = r?.summary && typeof r.summary === 'object' ? r.summary : (r && typeof r === 'object' ? r : {});
-      const ordered = Array.isArray(r?.orderedTickers) ? r.orderedTickers : Object.keys(summary);
-      this.signalSummary = summary;
-      this.signalOrderTickers = ordered;
-      window.__signalSummary__ = this.signalSummary;
-
-      // Auto-select: ưu tiên blue-cap/thanh khoản (ordered), sau đó độ tin cậy, rồi |score|
-      if (!this.signalTicker && Object.keys(this.signalSummary).length > 0) {
-        const confVal = (c) => ({ HIGH: 3, MEDIUM: 2, LOW: 1 }[c] ?? 0);
-        const ordIdx = (t) => ordered.findIndex((x) => String(x).toUpperCase() === String(t).toUpperCase());
-        const candidates = ordered
-          .map((t) => [t, this.signalSummary[t] ?? this.signalSummary[String(t).toUpperCase()]])
-          .filter(([, s]) => s);
-        candidates.sort((a, b) => {
-          const [ta, sa] = a;
-          const [tb, sb] = b;
-          const ia = ordIdx(ta);
-          const ib = ordIdx(tb);
-          if (ia !== ib) return ia - ib;
-          const dc = confVal(sb.confidence) - confVal(sa.confidence);
-          if (dc !== 0) return dc;
-          return Math.abs(sb.score) - Math.abs(sa.score);
-        });
-        const top = candidates[0];
-        if (top) {
-          this.signalTicker = top[0];
-          window.dispatchEvent(
-            new CustomEvent('signal-ticker-sync', { detail: { ticker: top[0] } }),
-          );
-          if (this.tab === 'signals') this.loadSignals();
-        }
-      }
-    },
-
-    async loadSignals() {
-      if (!this.signalTicker) return;
-      const t = this.signalTicker.toUpperCase();
-      if (this._barDataTicker !== t) {
-        this.chartViewport = null;
-      }
-      const MAX_CHART_BARS = 400;
-      const MAX_MERGED = 900;
-      const STORED_REQ = 400;
-      const [sigs, rec, stored] = await Promise.all([
-        fetch(`/signals/${t}`).then(r => r.json()).catch(() => []),
-        fetch(`/signals/${t}/recommend`, { method: 'POST' }).then(r => r.json()).catch(() => null),
-        fetch(`/stocks/${t}/stored?limit=${STORED_REQ}`).then(r => r.json()).catch(() => []),
-      ]);
-      this.signals = Array.isArray(sigs) ? sigs.slice(0, 20) : [];
-      this.currentRec = rec;
-      let raw = Array.isArray(stored) && stored.length > 0
-        ? stored
-        : await fetch(`/stocks/${t}/history`).then(r => r.json()).catch(() => []);
-      raw = Array.isArray(raw) ? raw : [];
-      const sorted = [...raw].sort((a, b) => String(a.tradingDate).localeCompare(String(b.tradingDate)));
-      const incoming = sorted.slice(-MAX_CHART_BARS);
-      let merged = incoming;
-      if (
-        this._barDataTicker === t &&
-        this.barData.length > 0 &&
-        incoming.length > 0
-      ) {
-        const oldestIn = incoming[0].tradingDate;
-        const oldestPrev = this.barData[0].tradingDate;
-        if (String(oldestPrev) < String(oldestIn)) {
-          const m = new Map(incoming.map((b) => [b.tradingDate, b]));
-          for (const b of this.barData) {
-            if (!m.has(b.tradingDate)) m.set(b.tradingDate, b);
-          }
-          merged = [...m.values()].sort((a, b) =>
-            String(a.tradingDate).localeCompare(String(b.tradingDate)),
-          );
-          if (merged.length > MAX_MERGED) merged = merged.slice(-MAX_MERGED);
-        }
-      }
-      this.barData = merged;
-      this._barDataTicker = t;
-
-      const from = this.barData.length > 0 ? this.barData[0].tradingDate : '2000-01-01';
-      const chartSigs = await fetch(`/signals/${t}/chart?from=${from}`).then(r => r.json()).catch(() => []);
-      this._applyChartSignalsPayload(chartSigs);
-
-      await this.loadBacktestRuns();
-
-      // Một lần vẽ sau khi có cả nến + marker (tránh destroy/recreate 2 lần → lag)
-      this.$nextTick(() => requestAnimationFrame(() => this.renderChart(t)));
-    },
-
-    async loadBacktestRuns() {
-      if (!this.signalTicker) {
-        this.backtestRuns = [];
-        this.backtestDetail = null;
-        return;
-      }
-      const t = this.signalTicker.toUpperCase();
-      const runs = await fetch(`/signals/${t}/backtest/runs?take=15`).then((r) => r.json()).catch(() => []);
-      this.backtestRuns = Array.isArray(runs) ? runs : [];
-      if (this.backtestRuns.length > 0) {
-        await this.loadBacktestDetail(this.backtestRuns[0].id);
-      } else {
-        this.backtestDetail = null;
-      }
-    },
-
-    async loadBacktestDetail(runId) {
-      if (!this.signalTicker || !runId) return;
-      const t = this.signalTicker.toUpperCase();
-      const d = await fetch(`/signals/${t}/backtest/runs/${runId}`).then((r) => r.json()).catch(() => null);
-      this.backtestDetail = d && d.id ? d : null;
-    },
-
-    async runBacktestSave() {
-      if (!this.signalTicker || !this.isAdmin) return;
-      this.actionLoading.backtest = true;
-      const t = this.signalTicker.toUpperCase();
-      try {
-        await this.authFetch(`/signals/${t}/backtest/run`, { method: 'POST' });
-        await this.loadBacktestRuns();
-        this.showToast('Đã chạy backtest và lưu — ' + t, 'success');
-      } catch (e) {
-        if (e.message !== 'Unauthorized') this.showToast('Backtest lỗi: ' + (e.message || e), 'error');
-      }
-      this.actionLoading.backtest = false;
-    },
-
-    _applyChartSignalsPayload(sigs) {
-      this.allChartSignals = Array.isArray(sigs) ? sigs : [];
-      const bullish = this.allChartSignals.filter(s => s.direction === 'BULLISH');
-      const bearish = this.allChartSignals.filter(s => s.direction === 'BEARISH');
-      const typeCounts = {};
-      this.allChartSignals.forEach(s => { typeCounts[s.type] = (typeCounts[s.type] || 0) + 1; });
-      const topTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-      this.signalStats = {
-        total: this.allChartSignals.length,
-        bullish: bullish.length,
-        bearish: bearish.length,
-        tradingDays: new Set(this.allChartSignals.map(s => s.tradingDate)).size,
-        topTypes,
-      };
-    },
-
-    async loadChartSignals(ticker) {
-      const t = (ticker || this.signalTicker).toUpperCase();
-      const from = this.barData.length > 0 ? this.barData[0].tradingDate : '2000-01-01';
-      const sigs = await fetch(`/signals/${t}/chart?from=${from}`).then(r => r.json()).catch(() => []);
-      this._applyChartSignalsPayload(sigs);
-      if (this.barData.length) this.$nextTick(() => requestAnimationFrame(() => this.renderChart(t)));
-    },
-
-    /** Phân tích chỉ phiên mới nhất (nhanh) */
-    async runAnalyze() {
-      if (!this.signalTicker) return;
-      this.actionLoading.analyze = true;
-      const t = this.signalTicker.toUpperCase();
-      try {
-        await this.authFetch(`/signals/${t}/analyze`, { method: 'POST' });
-        await this.loadSignals();
-        this.showToast('Phân tích phiên hiện tại xong — ' + t, 'success');
-      } catch (e) {
-        if (e.message !== 'Unauthorized') this.log('error', `✗ ${e.message}`);
-      }
-      this.actionLoading.analyze = false;
-    },
-
-    /** Backfill tín hiệu quá khứ qua queue (toàn bộ lịch sử, mặc định từ đủ 130 nến) — một mã */
-    async runAnalyzeHistory() {
-      if (!this.signalTicker) return;
-      this.actionLoading.analyzeHistory = true;
-      const t = this.signalTicker.toUpperCase();
-      this.log('info', `▶ Phân tích lịch sử ${t} (job)...`);
-      try {
-        const res = await this.authFetch(`/queue/analyze-history/${t}`, { method: 'POST' }).then(r => r.json());
-        if (res?.jobId) {
-          await this.pollJob(res.jobId, `Lịch sử ${t}`, async () => {
-            await this.loadSignals();
-          });
-        }
-      } catch (e) {
-        if (e.message !== 'Unauthorized') this.log('error', `✗ ${e.message}`);
-      }
-      this.actionLoading.analyzeHistory = false;
-    },
-
-    /** Toàn watchlist — job nặng */
-    async runAnalyzeHistoryAll() {
-      this.actionLoading.analyzeHistoryAll = true;
-      this.log('info', '▶ Phân tích lịch sử toàn watchlist...');
-      try {
-        const res = await this.authFetch('/queue/analyze-history', { method: 'POST' }).then(r => r.json());
-        if (res?.jobId) {
-          await this.pollJob(res.jobId, 'Phân tích lịch sử toàn watchlist');
-          await this.loadSignalSummary();
-        }
-      } catch (e) {
-        if (e.message !== 'Unauthorized') this.log('error', `✗ ${e.message}`);
-      }
-      this.actionLoading.analyzeHistoryAll = false;
-    },
-
-    renderChart(ticker) {
-      const container    = this.$refs.chartContainer;
-      const rsiContainer = this.$refs.rsiContainer;
-      const macdContainer = this.$refs.macdContainer;
-      if (!container || !this.barData.length) return;
-
-      // Destroy existing charts
-      if (this.lwChart)   { this.lwChart.remove();   this.lwChart   = null; }
-      if (this.rsiChart)  { this.rsiChart.remove();  this.rsiChart  = null; }
-      if (this.macdChart) { this.macdChart.remove();  this.macdChart = null; }
-
-      // ── Shared chart options (respects dark mode) ────────────────────────
-      const dark = this.darkMode;
-      const baseLayout = {
-        background: { color: dark ? '#09090b' : '#ffffff' },
-        textColor: dark ? '#71717a' : '#64748b',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        fontSize: 11,
-      };
-      const baseGrid   = {
-        vertLines: { color: dark ? '#27272a' : '#f1f5f9' },
-        horzLines: { color: dark ? '#27272a' : '#f1f5f9' },
-      };
-      const baseTS     = { borderColor: dark ? '#3f3f46' : '#e2e8f0', timeVisible: false, fixLeftEdge: false, fixRightEdge: false, rightOffset: 0 };
-      // Cùng barSpacing trên cả 3 chart — nếu khác, RSI/MACD lệch pixel với giá
-      const syncTs = { ...baseTS, timeVisible: true, barSpacing: 8, minBarSpacing: 4 };
-
-      const n = (x) => {
-        const v = typeof x === 'number' ? x : Number(x);
-        return Number.isFinite(v) ? v : 0;
-      };
-
-      // ── Main candlestick chart ────────────────────────────────────────────
-      const chart = LightweightCharts.createChart(container, {
-        width: container.clientWidth,
-        height: 500,
-        layout: { ...baseLayout, fontSize: 12 },
-        grid: baseGrid,
-        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-        rightPriceScale: { borderColor: '#e5e7eb', scaleMargins: { top: 0.08, bottom: 0.22 }, minimumWidth: 70 },
-        timeScale: syncTs,
-        localization: { priceFormatter: (p) => n(p).toFixed(1) + 'k' },
-      });
-      this.lwChart = chart;
-
-      const candleSeries = chart.addCandlestickSeries({
-        upColor: '#26a69a', downColor: '#ef5350',
-        borderVisible: false,
-        wickUpColor: '#26a69a', wickDownColor: '#ef5350',
-      });
-      const candleData = this.barData.map(b => ({
-        time: b.tradingDate,
-        open: +(n(b.open) / 1000).toFixed(2),
-        high: +(n(b.high) / 1000).toFixed(2),
-        low:  +(n(b.low) / 1000).toFixed(2),
-        close: +(n(b.close) / 1000).toFixed(2),
-      }));
-      candleSeries.setData(candleData);
-
-      // Volume
-      const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
-      volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-      volSeries.setData(this.barData.map(b => ({
-        time: b.tradingDate, value: n(b.volume),
-        color: n(b.close) >= n(b.open) ? '#26a69a33' : '#ef535033',
-      })));
-
-      // EMA20 / EMA50
-      const closes = this.barData.map(b => n(b.close) / 1000);
-      const emaFn = (vals, p) => {
-        const k = 2/(p+1); let e = null;
-        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return +e.toFixed(3); });
-      };
-      const ema20 = emaFn(closes, 20);
-      const ema50 = emaFn(closes, 50);
-      const addEma = (values, warmup, color, title) => {
-        const s = chart.addLineSeries({ color, lineWidth: 1.5, title, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
-        s.setData(this.barData.slice(warmup).map((b, i) => ({ time: b.tradingDate, value: values[i+warmup] })));
-      };
-      if (this.chartShowEma) {
-        addEma(ema20, 19, '#3b82f6', 'EMA20');
-        addEma(ema50, 49, '#f97316', 'EMA50');
-      }
-
-      // Hỗ trợ / Kháng cự (đơn vị trục = nghìn đ, giống nến) — ưu tiên API recommend, không thì min(20L) / max(high)
-      let supK = null;
-      let resK = null;
-      const pt = this.currentRec?.priceTarget;
-      if (pt && Number.isFinite(Number(pt.support)) && Number.isFinite(Number(pt.resistance))) {
-        supK = +(n(pt.support) / 1000).toFixed(2);
-        resK = +(n(pt.resistance) / 1000).toFixed(2);
-      } else if (this.barData.length >= 20) {
-        const recent20 = this.barData.slice(-20);
-        supK = +(Math.min(...recent20.map(b => n(b.low))) / 1000).toFixed(2);
-        resK = +(Math.max(...this.barData.map(b => n(b.high))) / 1000).toFixed(2);
-      }
-      if (this.chartShowSR && supK != null && resK != null && supK > 0 && resK > 0) {
-        const dash = LightweightCharts.LineStyle.Dashed;
-        const supCol = dark ? '#4ade80' : '#16a34a';
-        const resCol = dark ? '#f87171' : '#dc2626';
-        candleSeries.createPriceLine({
-          price: supK,
-          color: supCol,
-          lineWidth: 1,
-          lineStyle: dash,
-          axisLabelVisible: true,
-          title: 'Hỗ trợ',
-        });
-        candleSeries.createPriceLine({
-          price: resK,
-          color: resCol,
-          lineWidth: 1,
-          lineStyle: dash,
-          axisLabelVisible: true,
-          title: 'Kháng cự',
-        });
-      }
-
-      // Signal markers — mặc định: mua + bán trong cả lịch sử (cooldown tránh dày đặc)
-      const SIG_WEIGHTS = {
-        RESISTANCE_BREAKOUT: 5, EMA_GOLDEN_CROSS: 3.5, EMA_BOUNCE: 3,
-        WASHOUT_BAR: 3.5,
-        BASE_FORMING: 2, MACD_BULLISH_CROSS: 2, RSI_OVERSOLD: 2,
-        BULLISH_ENGULFING: 1.5, HAMMER: 1.5, BB_BREAKOUT_DOWN: 1.5,
-        EMA_BULLISH_STACK: 2.5, RSI_MOMENTUM_UP: 2.5, VOLUME_SURGE: 1,
-      };
-      const BUY_PRIORITY = [
-        'RESISTANCE_BREAKOUT', 'WASHOUT_BAR', 'EMA_GOLDEN_CROSS', 'EMA_BOUNCE',
-        'BASE_FORMING', 'MACD_BULLISH_CROSS', 'RSI_OVERSOLD', 'BB_BREAKOUT_DOWN',
-      ];
-      // Chỉ mũi tên bán khi có tín hiệu phân phối/đỉnh (không dùng nến đơn lẻ như SHOOTING_STAR)
-      const SELL_PRIORITY = [
-        'RSI_BEARISH_DIVERGENCE', 'FAILED_BREAKOUT', 'VOLUME_CLIMAX_TOP',
-        'DISTRIBUTION_BAR', 'MACD_BEARISH_DIVERGENCE', 'EMA_DEATH_CROSS',
-        'MA_DEATH_CROSS', 'BB_BREAKOUT_UP',
-        'SUPPORT_BREAKDOWN',
-      ];
-      const MIN_BUY_SCORE = 3.5;
-      const BUY_COOLDOWN = 10;
-      const SELL_COOLDOWN = 10;
-
-      const sigSource = this.allChartSignals.length > 0 ? this.allChartSignals : this.signals;
-
-      const chartDayKey = (raw) => {
-        if (raw == null || raw === '' || raw === 'N/A') return '';
-        const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(raw).trim());
-        return m ? m[1] : '';
-      };
-
-      // Nhóm theo ngày (YYYY-MM-DD) + loại trùng type — tránh nhiều marker chồng do format ngày khác nhau
-      const sigMap = {};
-      sigSource.forEach(s => {
-        const dk = chartDayKey(s.tradingDate);
-        if (!dk) return;
-        if (!sigMap[dk]) sigMap[dk] = { bull: new Set(), bear: new Set() };
-        if (s.direction === 'BULLISH') sigMap[dk].bull.add(s.type);
-        else if (s.direction === 'BEARISH') sigMap[dk].bear.add(s.type);
-      });
-
-      // Sắp xếp dates theo thứ tự thời gian để áp cooldown đúng
-      const sortedDates = Object.keys(sigMap).sort();
-      // Map date → index trong barData để tính khoảng cách nến
-      const dateToIdx = {};
-      this.barData.forEach((b, i) => { dateToIdx[b.tradingDate] = i; });
-
-      const markers = [];
-      let lastBuyBarIdx = -BUY_COOLDOWN;
-      let lastSellBarIdx = -SELL_COOLDOWN;
-
-      for (const date of sortedDates) {
-        const bull = [...sigMap[date].bull];
-        const bear = [...sigMap[date].bear];
-        const barIdx = dateToIdx[date] ?? -1;
-
-        // ── Điểm mua ─────────────────────────────────────────────────────
-        if (bull.length) {
-          // Tính tổng điểm bullish
-          const bullScore = bull.reduce((s, t) => s + (SIG_WEIGHTS[t] ?? 0), 0);
-          const topBuy = BUY_PRIORITY.find(t => bull.includes(t)) ?? bull[0];
-          const topScore = SIG_WEIGHTS[topBuy] ?? 0;
-          const sinceLastBuy = barIdx >= 0 ? barIdx - lastBuyBarIdx : BUY_COOLDOWN;
-
-          // Chỉ mark nếu: điểm đủ mạnh VÀ đã qua cooldown
-          if ((bullScore >= MIN_BUY_SCORE || topScore >= 3.5) && sinceLastBuy >= BUY_COOLDOWN) {
-            const buyTxt = this.signalTypeLabelVi(topBuy);
-            markers.push({
-              time: date, position: 'belowBar', color: '#10b981',
-              shape: 'arrowUp',
-              text: this.chartSignalLabels ? buyTxt : '',
-              size: 1.0,
-            });
-            if (barIdx >= 0) lastBuyBarIdx = barIdx;
-          }
-        }
-
-        // ── Tín hiệu bán (lịch sử): chỉ loại phân phối/đỉnh trong SELL_PRIORITY + cooldown
-        if (bear.length) {
-          const topSell = SELL_PRIORITY.find((t) => bear.includes(t));
-          if (topSell) {
-            const sinceLastSell = barIdx >= 0 ? barIdx - lastSellBarIdx : SELL_COOLDOWN;
-            if (sinceLastSell >= SELL_COOLDOWN) {
-              const sellTxt = this.signalTypeLabelVi(topSell);
-              markers.push({
-                time: date, position: 'aboveBar', color: '#ef4444',
-                shape: 'arrowDown',
-                text: this.chartSignalLabels ? sellTxt : '',
-                size: 1.0,
-              });
-              if (barIdx >= 0) lastSellBarIdx = barIdx;
-            }
-          }
-        }
-      }
-      if (markers.length) {
-        const sorted = markers.sort((a, b) => (a.time > b.time ? 1 : -1));
-        const seenKey = new Set();
-        const deduped = [];
-        for (const m of sorted) {
-          const k = `${m.time}|${m.position}|${m.text}|${m.shape}`;
-          if (seenKey.has(k)) continue;
-          seenKey.add(k);
-          deduped.push(m);
-        }
-        candleSeries.setMarkers(deduped);
-      }
-
-      // ── RSI chart ─────────────────────────────────────────────────────────
-      const rsiValues = this.calcRSI(closes, 14);
-      if (rsiContainer) {
-        const rsiChart = LightweightCharts.createChart(rsiContainer, {
-          width: rsiContainer.clientWidth, height: 120,
-          layout: baseLayout, grid: baseGrid,
-          crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-          rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 70, autoScale: false },
-          timeScale: syncTs,
-        });
-        this.rsiChart = rsiChart;
-        rsiChart.priceScale('right').applyOptions({ minimum: 0, maximum: 100 });
-
-        const rsiSeries = rsiChart.addLineSeries({ color: '#8b5cf6', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: 'RSI' });
-        rsiSeries.setData(
-          this.barData.map((b, i) => {
-            const v = rsiValues[i];
-            if (v == null || Number.isNaN(v)) return { time: b.tradingDate };
-            return { time: b.tradingDate, value: v };
-          }),
-        );
-        // Overbought / Oversold / Mid reference lines
-        const lineStyle = LightweightCharts.LineStyle.Dashed;
-        rsiSeries.createPriceLine({ price: 70, color: '#ef4444', lineWidth: 1, lineStyle, axisLabelVisible: true,  title: '70' });
-        rsiSeries.createPriceLine({ price: 30, color: '#10b981', lineWidth: 1, lineStyle, axisLabelVisible: true,  title: '30' });
-        rsiSeries.createPriceLine({ price: 50, color: '#94a3b8', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
-
-        // Cập nhật giá trị hiện tại
-        const lastRsi = rsiValues.filter(v => v != null).at(-1);
-        this.indicators = { ...this.indicators, rsi: lastRsi ?? null };
-      }
-
-      // ── MACD chart ────────────────────────────────────────────────────────
-      const macdData = this.calcMACD(closes, 12, 26, 9);
-      if (macdContainer) {
-        const macdChart = LightweightCharts.createChart(macdContainer, {
-          width: macdContainer.clientWidth, height: 120,
-          layout: baseLayout, grid: baseGrid,
-          crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-          rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 70 },
-          timeScale: syncTs,
-        });
-        this.macdChart = macdChart;
-
-        // MACD histogram — mỗi phiên một điểm (whitespace khi chưa có hist) để khớp chỉ số logic với chart giá
-        const histSeries = macdChart.addHistogramSeries({ priceScaleId: 'right', lastValueVisible: false });
-        histSeries.setData(
-          macdData.map((d) => {
-            if (d.hist == null || Number.isNaN(d.hist)) return { time: d.time };
-            const h = d.hist;
-            return { time: d.time, value: h, color: h >= 0 ? '#26a69a88' : '#ef535088' };
-          }),
-        );
-
-        const macdLine = macdChart.addLineSeries({ color: '#3b82f6', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'MACD' });
-        macdLine.setData(
-          macdData.map((d) => (d.macd != null && !Number.isNaN(d.macd) ? { time: d.time, value: d.macd } : { time: d.time })),
-        );
-
-        const sigLine = macdChart.addLineSeries({ color: '#f97316', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'Signal' });
-        sigLine.setData(
-          macdData.map((d) => (d.signal != null && !Number.isNaN(d.signal) ? { time: d.time, value: d.signal } : { time: d.time })),
-        );
-
-        // Zero line
-        histSeries.createPriceLine({ price: 0, color: '#94a3b8', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
-
-        // Cập nhật giá trị hiện tại
-        const lastMacd = macdData.filter(d => d.signal != null).at(-1);
-        if (lastMacd) this.indicators = { ...this.indicators, macd: lastMacd.macd, macdSignal: lastMacd.signal, macdHist: lastMacd.hist };
-      }
-
-      // ── Sync time scales — ưu tiên: restore sau lazy-load → viewport đã lưu → fitContent ─
-      const scrollRestore = this._chartScrollRestore;
-      this._chartScrollRestore = null;
-      const tkr = (ticker || this.signalTicker || '').toUpperCase();
-      const nBars = this.barData.length;
-      const applyMainRange = () => {
-        if (scrollRestore && scrollRestore.added > 0) {
-          const a = scrollRestore.added;
-          chart.timeScale().setVisibleLogicalRange({
-            from: scrollRestore.from + a,
-            to: scrollRestore.to + a,
-          });
-          return;
-        }
-        const vp = this.chartViewport;
-        if (
-          vp &&
-          vp.ticker === tkr &&
-          Number.isFinite(vp.from) &&
-          Number.isFinite(vp.to) &&
-          nBars > 1
-        ) {
-          let from = Math.max(0, vp.from);
-          let to = Math.max(from + 1, vp.to);
-          from = Math.min(from, nBars - 1);
-          to = Math.min(to, nBars - 1);
-          if (to - from >= 2) {
-            chart.timeScale().setVisibleLogicalRange({ from, to });
-            return;
-          }
-        }
-        chart.timeScale().fitContent();
-      };
-      applyMainRange();
-      setTimeout(() => {
-        if (!this.lwChart) return;
-        const range = this.lwChart.timeScale().getVisibleLogicalRange();
-        const rightOffset = range ? Math.round((range.to - range.from) * 0.27) : 15;
-        [this.lwChart, this.rsiChart, this.macdChart].forEach(c => {
-          if (c) c.timeScale().applyOptions({ rightOffset });
-        });
-        const synced = this.lwChart.timeScale().getVisibleLogicalRange();
-        if (synced && tkr) {
-          this.chartViewport = { ticker: tkr, from: synced.from, to: synced.to };
-          this.rsiChart?.timeScale().setVisibleLogicalRange(synced);
-          this.macdChart?.timeScale().setVisibleLogicalRange(synced);
-        }
-      }, 60);
-
-      let syncing = false;
-      const syncAll = (source, others) => {
-        source.timeScale().subscribeVisibleLogicalRangeChange(range => {
-          if (syncing || !range) return;
-          syncing = true;
-          others.forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(range); });
-          syncing = false;
-        });
-      };
-      const sub = [this.rsiChart, this.macdChart];
-      syncAll(chart, sub);
-      if (this.rsiChart)  syncAll(this.rsiChart,  [chart, this.macdChart]);
-      if (this.macdChart) syncAll(this.macdChart, [chart, this.rsiChart]);
-
-      // Lazy load nến cũ chỉ khi đã zoom/pan (không kích hoạt khi fitContent hiển thị cả khối nến — tránh vòng lặp tải + render)
-      const tSym = (ticker || this.signalTicker || '').toUpperCase();
-      let chartPanTimer = null;
-      chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        if (!range || !tSym || !this.barData?.length) return;
-        this.chartViewport = { ticker: tSym, from: range.from, to: range.to };
-        if (this.chartOlderLoading) return;
-        const barCount = this.barData.length;
-        const span = range.to - range.from;
-        if (span >= barCount * 0.92) return;
-        if (range.from > 14) return;
-        clearTimeout(chartPanTimer);
-        chartPanTimer = setTimeout(() => this.maybeLoadOlderChartBars(tSym), 500);
-      });
-
-      // Responsive resize (debounce — tránh lag khi layout đổi)
-      let roTimer = null;
-      const ro = new ResizeObserver(() => {
-        clearTimeout(roTimer);
-        roTimer = setTimeout(() => {
-          if (this.lwChart)   this.lwChart.applyOptions({ width: container.clientWidth });
-          if (this.rsiChart)  this.rsiChart.applyOptions({ width: rsiContainer?.clientWidth ?? 0 });
-          if (this.macdChart) this.macdChart.applyOptions({ width: macdContainer?.clientWidth ?? 0 });
-        }, 120);
-      });
-      ro.observe(container);
-    },
-
-    // ── Indicator calculations ──────────────────────────────────────────────
-
-    calcRSI(closes, period = 14) {
-      if (closes.length < period + 1) return [];
-      let avgGain = 0, avgLoss = 0;
-      for (let i = 1; i <= period; i++) {
-        const d = closes[i] - closes[i-1];
-        if (d > 0) avgGain += d; else avgLoss -= d;
-      }
-      avgGain /= period; avgLoss /= period;
-      const rsi = new Array(period + 1).fill(null);
-      rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2));
-      for (let i = period + 1; i < closes.length; i++) {
-        const d = closes[i] - closes[i-1];
-        avgGain = (avgGain * (period-1) + Math.max(0,  d)) / period;
-        avgLoss = (avgLoss * (period-1) + Math.max(0, -d)) / period;
-        rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2));
-      }
-      return rsi;
-    },
-
-    calcMACD(closes, fast = 12, slow = 26, signal = 9) {
-      const emaFn = (vals, p) => {
-        const k = 2/(p+1); let e = null;
-        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return e; });
-      };
-      const ef = emaFn(closes, fast);
-      const es = emaFn(closes, slow);
-      const macdLine = closes.map((_, i) => ef[i] - es[i]);
-      const sigLine  = emaFn(macdLine.slice(slow-1), signal);
-      return closes.map((_, i) => {
-        if (i < slow - 1) return { time: this.barData[i]?.tradingDate, macd: null, signal: null, hist: null };
-        const si = i - (slow-1);
-        const m  = +macdLine[i].toFixed(4);
-        const s  = si >= signal-1 ? +sigLine[si-(signal-1)].toFixed(4) : null;
-        return { time: this.barData[i]?.tradingDate, macd: m, signal: s, hist: s != null ? +(m-s).toFixed(4) : null };
-      });
-    },
-
-    viewSignals(ticker) {
-      this.signalTicker = ticker;
-      window.dispatchEvent(
-        new CustomEvent('signal-ticker-sync', { detail: { ticker } }),
-      );
-      this.setTab('signals');
-      this.loadSignals();
-    },
-
-    /** Tên công ty từ watchlist (nếu có) — dùng tab Cổ phiếu. */
-    priceTickerDisplayName() {
-      const t = (this.priceTicker || '').toUpperCase();
-      if (!t) return '';
-      const s = this.watchlist.find((x) => x.ticker === t);
-      return s?.name ? String(s.name) : '';
-    },
-
-    async loadStockData() {
-      if (!this.priceTicker) return;
-      const t = this.priceTicker.toUpperCase();
-      const PAGE = 60;
-      const [history, latest] = await Promise.all([
-        fetch(`/stocks/${t}/stored?limit=${PAGE}`).then(r => r.json()).catch(() => []),
-        fetch(`/stocks/${t}/latest`).then(r => r.json()).catch(() => null),
-      ]);
-      this.priceHistory = Array.isArray(history) ? history : [];
-      this.priceHistoryHasMore = this.priceHistory.length >= PAGE;
-      this.latestBar = latest;
-    },
-
-    async loadMorePriceHistory() {
-      if (!this.priceTicker || !this.priceHistory.length || this.priceHistoryLoadingMore) return;
-      const t = this.priceTicker.toUpperCase();
-      const PAGE = 60;
-      const oldest = this.priceHistory[this.priceHistory.length - 1].tradingDate;
-      this.priceHistoryLoadingMore = true;
-      try {
-        const more = await fetch(
-          `/stocks/${t}/stored?before=${encodeURIComponent(oldest)}&limit=${PAGE}`,
-        ).then(r => r.json()).catch(() => []);
-        if (!Array.isArray(more) || !more.length) {
-          this.priceHistoryHasMore = false;
-          return;
-        }
-        this.priceHistory = [...this.priceHistory, ...more];
-        this.priceHistoryHasMore = more.length >= PAGE;
-      } finally {
-        this.priceHistoryLoadingMore = false;
-      }
-    },
-
-    /** Kéo chart sang trái gần mép dữ liệu → tải thêm nến cũ (tối đa ~900 nến). */
-    async maybeLoadOlderChartBars(ticker) {
-      const MAX = 900;
-      const CHUNK = 200;
-      const t = (ticker || this.signalTicker || '').toUpperCase();
-      if (!t || !this.barData.length || this.chartOlderLoading) return;
-      if (this.barData.length >= MAX) return;
-
-      const prevLen = this.barData.length;
-      let scrollSnap = null;
-      if (this.lwChart) {
-        const r = this.lwChart.timeScale().getVisibleLogicalRange();
-        if (r && Number.isFinite(r.from) && Number.isFinite(r.to)) {
-          scrollSnap = { from: r.from, to: r.to };
-        }
-      }
-
-      const oldest = this.barData[0].tradingDate;
-      this.chartOlderLoading = true;
-      try {
-        const more = await fetch(
-          `/stocks/${t}/stored?before=${encodeURIComponent(oldest)}&limit=${CHUNK}`,
-        ).then(r => r.json()).catch(() => []);
-        if (!Array.isArray(more) || !more.length) return;
-        const byDate = new Map(this.barData.map((b) => [b.tradingDate, b]));
-        for (const b of more) byDate.set(b.tradingDate, b);
-        let merged = [...byDate.values()].sort((a, b) =>
-          String(a.tradingDate).localeCompare(String(b.tradingDate)),
-        );
-        if (merged.length > MAX) merged = merged.slice(-MAX);
-        const added = merged.length - prevLen;
-        this.barData = merged;
-
-        const from = this.barData[0].tradingDate;
-        const chartSigs = await fetch(`/signals/${t}/chart?from=${from}`).then(r => r.json()).catch(() => []);
-        this._applyChartSignalsPayload(chartSigs);
-
-        if (scrollSnap && added > 0) {
-          this._chartScrollRestore = { from: scrollSnap.from, to: scrollSnap.to, added };
-          this.chartViewport = {
-            ticker: t,
-            from: scrollSnap.from + added,
-            to: scrollSnap.to + added,
-          };
-        } else {
-          this._chartScrollRestore = null;
-        }
-
-        this.$nextTick(() => {
-          requestAnimationFrame(() => this.renderChart(t));
-        });
-      } finally {
-        this.chartOlderLoading = false;
-      }
-    },
-
-    async syncTicker(fullIpo) {
-      if (!this.priceTicker) return;
-      const full = !!fullIpo;
-      if (full) this.actionLoading.syncOneFull = true;
-      else this.actionLoading.syncOne = true;
-      const t = this.priceTicker.toUpperCase();
-      const label = full ? `Full IPO ${t}` : `Đồng bộ ~1 năm / tăng dần ${t}`;
-      const q = full ? '?full=1' : '';
-      const res = await this.authFetch(`/queue/sync/${t}${q}`, { method: 'POST' }).then(r => r.json()).catch(() => null);
-      if (res?.jobId) {
-        this.log('info', `⏳ ${label} job #${res.jobId}...`);
-        await this.pollJob(res.jobId, label, async () => {
-          await this.loadStockData();
-          await this.loadSignalSummary();
-        });
-      }
-      this.actionLoading.syncOne = false;
-      this.actionLoading.syncOneFull = false;
-    },
-
-    async trackPositions() {
-      this.scanning = true;
-      await this.authFetch('/positions/track', { method: 'POST' });
-      await this.loadOpenPositions();
-      this.scanning = false;
-      this.showToast('Cập nhật vị thế xong', 'success');
-    },
-
-    async runAction(action) {
-      this.actionLoading[action] = true;
-      const endpointMap = {
-        sync: '/queue/sync',
-        syncFull: '/queue/sync?full=1',
-        scan: '/queue/scan',
-        recommend: '/scanner/recommend',  // nhẹ, giữ đồng bộ
-      };
-      const labelMap = {
-        sync: 'Đồng bộ ~1 năm / tăng dần (watchlist)',
-        syncFull: 'Đồng bộ full IPO (watchlist)',
-        scan: 'Quét tín hiệu',
-        recommend: 'Khuyến nghị + Telegram',
-      };
-      try {
-        this.log('info', `▶ ${labelMap[action]}...`);
-        const res = await this.authFetch(endpointMap[action], { method: 'POST' }).then(r => r.json());
-
-        if (res?.jobId) {
-          // Tác vụ nặng → poll tiến độ từ queue
-          this.log('info', `⏳ Job #${res.jobId} đã vào hàng chờ, đang xử lý...`);
-          await this.pollJob(res.jobId, labelMap[action]);
-          if (action === 'scan') await this.loadSignalSummary();
-          if (action === 'sync' || action === 'syncFull') await this.loadSignalSummary();
-        } else {
-          // Tác vụ nhẹ (recommend) → chờ trực tiếp
-          this.log('success', `✓ ${labelMap[action]} xong`);
-          this.showToast(`${labelMap[action]} xong!`, 'success');
-          if (action === 'recommend') await this.refreshAll();
-          if (action === 'scan' || action === 'recommend') await this.loadSignalSummary();
-        }
-      } catch (e) {
-        if (e.message !== 'Unauthorized') {
-          this.log('error', `✗ Lỗi: ${e.message}`);
-          this.showToast('Có lỗi xảy ra', 'error');
-        }
-      }
-      this.actionLoading[action] = false;
-    },
-
-    // Poll job cho đến khi completed/failed, cập nhật log mỗi 2s
-    async pollJob(jobId, label, onDone) {
-      let lastPercent = -1;
-      while (true) {
-        await new Promise(r => setTimeout(r, 2000));
-        try {
-          const job = await fetch(`/queue/jobs/${jobId}`).then(r => r.json());
-          if (!job) break;
-
-          const p = job.progress || {};
-          const pct = p.percent ?? 0;
-          if (pct !== lastPercent) {
-            const ticker = p.current ? ` [${p.current}]` : '';
-            this.log('info', `  ${pct}%${ticker} (${p.done ?? 0}/${p.total ?? '?'})`);
-            lastPercent = pct;
-          }
-
-          if (job.state === 'completed') {
-            const r = job.result || {};
-            const summary = Object.entries(r).map(([k,v]) => `${k}=${v}`).join(', ');
-            this.log('success', `✓ ${label} hoàn thành — ${summary}`);
-            this.showToast(`${label} xong!`, 'success');
-            if (onDone) onDone(job);
-            break;
-          }
-          if (job.state === 'failed') {
-            this.log('error', `✗ ${label} thất bại: ${job.failReason}`);
-            this.showToast(`${label} lỗi`, 'error');
-            break;
-          }
-        } catch { break; }
-      }
-    },
-
-    // ── Watchlist management ─────────────────────────────────────────────
-    async loadWlItems() {
-      const r = await fetch('/watchlist').then(r => r.json()).catch(() => []);
-      this.wlItems = Array.isArray(r) ? r : [];
-    },
-
-    get filteredWlItems() {
-      return this.wlItems.filter(i => {
-        const matchFilter = this.wlFilter === 'all' ? true
-          : this.wlFilter === 'active' ? i.active : !i.active;
-        const q = this.wlSearch.toLowerCase();
-        const matchSearch = !q || i.ticker.toLowerCase().includes(q) || i.name.toLowerCase().includes(q) || i.sector.toLowerCase().includes(q);
-        return matchFilter && matchSearch;
-      });
-    },
-
-    async wlAdd() {
-      const { ticker, name, sector } = this.wlAddForm;
-      if (!ticker || this.wlAddSubmitting) return;
-      this.wlAddSubmitting = true;
-      try {
-        const res = await this.authFetch('/watchlist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ticker, name, sector }),
-        });
-        const data = await res.json().catch(() => ({}));
-        this.wlAddForm = { show: false, ticker: '', name: '', sector: '' };
-        await this.loadWlItems();
-        await this.loadWatchlist();
-        const sym = String(data.ticker || ticker).toUpperCase();
-        const sync = data._sync;
-        let msg = `Đã thêm ${sym}`;
-        if (sync) {
-          if (sync.error) msg += ` — đồng bộ giá lỗi: ${sync.error}`;
-          else
-            msg += ` — đồng bộ ${sync.barsInserted ?? 0} dòng giá mới, đã phân tích`;
-        }
-        this.showToast(msg, sync?.error ? 'info' : 'success');
-      } finally {
-        this.wlAddSubmitting = false;
-      }
-    },
-
-    async wlActivate(ticker) {
-      await this.authFetch(`/watchlist/${ticker}/activate`, { method: 'PUT' });
-      await this.loadWlItems();
-      await this.loadTickerPickerUniverse();
-      this.showToast(`Đã bật lại ${ticker}`, 'success');
-    },
-
-    async wlDeactivate(ticker) {
-      await this.authFetch(`/watchlist/${ticker}/deactivate`, { method: 'PUT' });
-      await this.loadWlItems();
-      await this.loadTickerPickerUniverse();
-      this.showToast(`Đã tắt ${ticker}`, 'info');
-    },
-
-    async wlDelete(id, ticker) {
-      if (!confirm(`Xoá hẳn ${ticker} khỏi watchlist?`)) return;
-      await this.authFetch(`/watchlist/${id}`, { method: 'DELETE' });
-      await this.loadWlItems();
-      await this.loadTickerPickerUniverse();
-      this.showToast(`Đã xoá ${ticker}`, 'success');
-    },
-
-    async wlLoadLiquidityCandidates() {
-      if (!this.isAdmin) return;
-      this.wlLiquidityLoading = true;
-      try {
-        const q = this.wlLiquidityExcludeDb ? '?excludeDb=1' : '';
-        const res = await this.authFetch(`/watchlist/liquidity-candidates${q}`);
-        const data = await res.json().catch(() => ({}));
-        this.wlLiquidityCandidates = Array.isArray(data.tickers) ? data.tickers : [];
-        this.wlLiquidityMeta = data;
-        this.wlLiquidityPanel = true;
-      } catch {
-        this.showToast('Không tải danh sách ứng viên thanh khoản', 'error');
-      } finally {
-        this.wlLiquidityLoading = false;
-      }
-    },
-
-    async wlCheckLiquidity() {
-      this.wlCheckingLiquidity = true;
-      this.log('info', '▶ Đồng bộ danh sách chuẩn + kiểm tra thanh khoản...');
-      try {
-        const r = await this.authFetch('/watchlist/check-liquidity', { method: 'POST' }).then(res => res.json());
-        await this.loadWlItems();
-        await this.loadTickerPickerUniverse();
-        await this.loadSignalSummary();
-        const liq = r.liquidity ?? r;
-        const sync = r.sync;
-        const checked = liq.checked ?? 0;
-        const parts = [
-          sync ? `+${sync.inserted ?? 0} mã mới, ${sync.updated ?? 0} cập nhật tên/ngành` : null,
-          `quét ${checked} mã: tắt ${(liq.deactivated ?? []).length}, bật lại ${(liq.reactivated ?? []).length}`,
-        ].filter(Boolean);
-        const msg = `✓ ${parts.join(' — ')}`;
-        this.log('success', msg);
-        this.showToast(msg, 'success');
-      } catch (e) {
-        if (e.message !== 'Unauthorized') this.log('error', `✗ ${e.message}`);
-      }
-      this.wlCheckingLiquidity = false;
-    },
-
-    log(type, msg) {
-      const time = new Date().toLocaleTimeString('vi-VN');
-      this.actionLog.unshift({ time, type, msg });
-      if (this.actionLog.length > 30) this.actionLog.pop();
-    },
-
-    showToast(msg, type = 'success') {
-      this.toast = { show: true, msg, type };
-      setTimeout(() => {
-        this.toast.show = false;
-      }, 3000);
-      if (!this.browserNotify) return;
-      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
-      try {
-        const opts = {
-          body: msg,
-          icon: '/icons/icon-192.png',
-          badge: '/icons/icon-192.png',
-          tag: 'stock-analysis-toast',
-          renotify: true,
-        };
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready
-            .then((reg) => reg.showNotification('Stock Analysis', opts))
-            .catch(() => {
-              new Notification('Stock Analysis', opts);
-            });
-        } else {
-          new Notification('Stock Analysis', opts);
-        }
-      } catch {}
-    },
-
-    // ── Computed ─────────────────────────────────────────────────
-
-    get avgPnl() {
-      if (!this.openPositions.length) return 0;
-      const sum = this.openPositions.reduce((s, p) => s + Number(p.pnlPercent || 0), 0);
-      return sum / this.openPositions.length;
-    },
-
-    get bestPos() {
-      if (!this.openPositions.length) return null;
-      return this.openPositions.reduce((best, p) =>
-        Number(p.pnlPercent) > Number(best.pnlPercent) ? p : best
-      );
-    },
-
-    get filteredWatchlist() {
-      let list = this.watchlist;
-      if (this.searchTicker) {
-        const q = this.searchTicker.toUpperCase();
-        list = list.filter(s => s.ticker.includes(q) || s.name.toUpperCase().includes(q));
-      }
-      const order = this.signalOrderTickers?.length ? this.signalOrderTickers : this.watchlist.map(s => s.ticker);
-      const rank = (t) => {
-        const i = order.findIndex(x => String(x).toUpperCase() === String(t).toUpperCase());
-        return i === -1 ? 9999 : i;
-      };
-      const confVal = (s) => ({ HIGH: 3, MEDIUM: 2, LOW: 1 }[s?.confidence] ?? 0);
-      return [...list].sort((a, b) => {
-        const ra = rank(a.ticker);
-        const rb = rank(b.ticker);
-        if (ra !== rb) return ra - rb;
-        const sa = this.signalSummary[a.ticker];
-        const sb = this.signalSummary[b.ticker];
-        const ca = confVal(sa);
-        const cb = confVal(sb);
-        if (ca !== cb) return cb - ca;
-        const absA = sa ? Math.abs(sa.score) : -1;
-        const absB = sb ? Math.abs(sb.score) : -1;
-        return absB - absA;
-      });
-    },
-
-    progressPct(pos) {
-      const entry = Number(pos.entryPrice);
-      const target = Number(pos.targetPrice);
-      const current = Number(pos.lastPrice || entry);
-      if (target <= entry) return 0;
-      return Math.max(0, Math.round(((current - entry) / (target - entry)) * 100));
-    },
-
-    // ── Formatters ────────────────────────────────────────────────
-
-    fmt(n) {
-      if (!n) return '—';
-      const v = Number(n);
-      return (v / 1000).toFixed(1) + 'k';
-    },
-
-    backtestStrengthLabel(s) {
-      if (!s) return '—';
-      return { STRONG: 'Mạnh', MODERATE: 'Vừa' }[s] || s;
-    },
-
-    truncateText(s, max) {
-      if (s == null || s === '') return '—';
-      const t = String(s);
-      const m = max || 100;
-      return t.length <= m ? t : t.slice(0, m) + '…';
-    },
-
-    fmtK(n) {
-      if (!n) return '—';
-      return (Number(n) / 1000).toFixed(1) + 'k';
-    },
-
-    recEmoji(r) {
-      return { STRONG_BUY: '🚀', BUY: '📈', HOLD: '⏸️', SELL: '📉', STRONG_SELL: '🔥' }[r] || '—';
-    },
-
-    recLabel(r) {
-      return {
-        STRONG_BUY: 'Mua tích cực',
-        BUY: 'Mua',
-        HOLD: 'Giữ',
-        SELL: 'Bán',
-        STRONG_SELL: 'Bán tích cực',
-      }[r] || r;
-    },
-
-    /** Giá phiên (entry) = đóng cửa; “vùng mua” = không đuổi xa so với limit gợi ý + trên hỗ trợ. */
-    priceTargetPullbackDiffers(pt) {
-      if (!pt) return false;
-      const e = Number(pt.entryPrice);
-      const p = Number(pt.suggestedPullbackPrice);
-      if (!e || e <= 0 || p == null || Number.isNaN(p)) return false;
-      return Math.abs(e - p) / e > 0.005;
-    },
-
-    suggestedBuyCardLabel(mode) {
-      return (
-        {
-          support_base: 'Nền tham chiếu (mua lại)',
-          wait_base: 'Chờ về nền',
-          breakout_entry: 'Giá mua (theo break)',
-          dip_rally_ma20: 'Mua (MA20 + rút chân)',
-          dip_rally_retest: 'Mua (retest cản)',
-          wait_retest_break: 'Chờ retest sau break',
-          wait_dip_rally: 'Chờ pha hồi (EMA / retest)',
-          pullback: 'Mua limit gợi ý',
-        }[mode] || 'Mua limit gợi ý'
-      );
-    },
-
-    /** Tiêu đề ô giá mua — ưu tiên «vùng nền» khi giá đang quanh đáy 20p. */
-    suggestedBuyCardTitle(pt) {
-      if (!pt) return '';
-      if (pt.priceAtBase) return 'Vùng nền (giá mua)';
-      return this.suggestedBuyCardLabel(pt.suggestedPullbackMode);
-    },
-
-    /** Giá hiển thị chính: dải nền hoặc một mức gợi ý. */
-    suggestedBuyCardMainValue(pt) {
-      if (!pt) return '';
-      if (pt.priceAtBase && pt.baseZoneLow != null && pt.baseZoneHigh != null) {
-        return `${this.fmtK(pt.baseZoneLow)} – ${this.fmtK(pt.baseZoneHigh)} đ`;
-      }
-      return `${this.fmtK(pt.suggestedPullbackPrice ?? pt.entryPrice)} đ`;
-    },
-
-    suggestedBuyNoteTitle(mode) {
-      return (
-        {
-          support_base: 'Lý do mức «Nền tham chiếu»',
-          wait_base: 'Lý do mức «Chờ về nền»',
-          breakout_entry: 'Lý do mức «Giá mua theo break»',
-          dip_rally_ma20: 'Lý do mức «Mua sau pha MA20»',
-          dip_rally_retest: 'Lý do mức «Mua sau retest»',
-          wait_retest_break: 'Lý do mức «Chờ retest»',
-          wait_dip_rally: 'Lý do mức «Chờ pha hồi»',
-          pullback: 'Lý do mức «Mua limit gợi ý»',
-        }[mode] || 'Lý do mức «Mua limit gợi ý»'
-      );
-    },
-
-    suggestedBuyShortLabel(mode) {
-      return (
-        {
-          support_base: 'Nền tham chiếu',
-          wait_base: 'Chờ về nền',
-          breakout_entry: 'Giá mua (theo break)',
-          dip_rally_ma20: 'Mua sau pha MA20',
-          dip_rally_retest: 'Mua sau retest',
-          wait_retest_break: 'Chờ retest cản',
-          wait_dip_rally: 'Chờ pha hồi (EMA)',
-          pullback: 'Limit / chờ hồi gợi ý',
-        }[mode] || 'Giá mua gợi ý'
-      );
-    },
-
-    inBuyZone(rec) {
-      if (!rec?.priceTarget) return false;
-      if (!['BUY', 'STRONG_BUY'].includes(rec.recommendation)) return false;
-      const pt = rec.priceTarget;
-      const cur = Number(pt.currentPrice);
-      const sup = Number(pt.support);
-      const pull = Number(pt.suggestedPullbackPrice ?? pt.entryPrice);
-      if (!cur || cur <= 0) return false;
-      if (cur < sup * 0.985) return false;
-      if (!pull || pull <= 0) return false;
-      const m = pt.suggestedPullbackMode;
-      if (m === 'wait_base') {
-        return cur >= sup * 0.995 && cur <= sup * 1.03;
-      }
-      if (m === 'wait_retest_break' || m === 'wait_dip_rally') {
-        return cur >= pull * 0.985 && cur <= pull * 1.025;
-      }
-      return cur <= pull * 1.03;
-    },
-
-    confidenceClass(c) {
-      return { HIGH: 'badge-green', MEDIUM: 'badge-yellow', LOW: 'badge-gray' }[c] || 'badge-gray';
-    },
-
-    closeReasonLabel(r) {
-      return { TARGET_HIT: '🎯 Chốt TP', STOP_LOSS: '🛑 Cắt lỗ', PROFIT_FLOOR_20: '🔒 Chặn lãi', DISTRIBUTION: '🔄 Đảo chiều', MANUAL: '🤚 Thủ công' }[r] || r;
-    },
-
-    closeReasonClass(r) {
-      return { TARGET_HIT: 'badge-green', STOP_LOSS: 'badge-red', PROFIT_FLOOR_20: 'badge-green', DISTRIBUTION: 'badge-yellow', MANUAL: 'badge-gray' }[r] || 'badge-gray';
-    },
-  };
-}
-
-// ── Ticker autocomplete component ─────────────────────────────────────────────
-// Usage: x-data="tickerPicker('fieldName', callback)"
-// Reads watchlist from the parent app() via Alpine.$root context
-function tickerPicker(fieldName, onSelect) {
-  const MAX_EMPTY = 80;
-  const MAX_FILTER = 60;
-
-  return {
-    query: '',
-    open: false,
-    highlighted: -1,
-    suggestions: [],
-
-    init() {
-      this.$nextTick(() => {
-        const v = this._app?.[fieldName];
-        if (v && typeof v === 'string') this.query = v;
-      });
-    },
-    // Reference to parent app state
-    get _app() { return Alpine.store ? null : document.querySelector('[x-data="app()"]')?._x_dataStack?.[0]; },
-    /** WATCHLIST file + toàn bộ DB; fallback active scanner nếu chưa tải xong. */
-    get _universe() {
-      try {
-        const u = window.__tickerPickerUniverse__;
-        if (Array.isArray(u) && u.length) return u;
-        return window.__watchlist__ || [];
-      } catch { return []; }
-    },
-    get _signalSummary() {
-      try { return window.__signalSummary__ || {}; } catch { return {}; }
-    },
-    get signalSummary() { return this._signalSummary; },
-
-    onInput() {
-      this.open = true;
-      this.highlighted = -1;
-      const q = this.query.toUpperCase().trim();
-      const wl = this._universe;
-      const nameU = (s) => String(s.name || '').toUpperCase();
-      const secU = (s) => String(s.sector || '').toUpperCase();
-      if (!q) {
-        const withSig = wl.filter((s) => this._signalSummary[s.ticker]);
-        const without = wl.filter((s) => !this._signalSummary[s.ticker]);
-        this.suggestions = [...withSig, ...without].slice(0, MAX_EMPTY);
-      } else {
-        this.suggestions = wl
-          .filter(
-            (s) =>
-              s.ticker.startsWith(q) ||
-              nameU(s).includes(q) ||
-              secU(s).includes(q) ||
-              s.ticker.includes(q),
-          )
-          .slice(0, MAX_FILTER);
-      }
-    },
-    onBlur() { setTimeout(() => { this.open = false; }, 150); },
-    moveDown() {
-      if (!this.open) { this.onInput(); return; }
-      this.highlighted = Math.min(this.highlighted + 1, this.suggestions.length - 1);
-      this.scrollToHighlighted();
-    },
-    moveUp() {
-      this.highlighted = Math.max(this.highlighted - 1, -1);
-      this.scrollToHighlighted();
-    },
-    scrollToHighlighted() {
-      this.$nextTick(() => {
-        const el = this.$el.querySelector(`.ticker-dropdown div:nth-child(${this.highlighted + 1})`);
-        if (el) el.scrollIntoView({ block: 'nearest' });
-      });
-    },
-    selectHighlighted() {
-      if (this.highlighted >= 0 && this.suggestions[this.highlighted]) {
-        this.selectItem(this.suggestions[this.highlighted]);
-      } else if (this.suggestions.length === 1) {
-        this.selectItem(this.suggestions[0]);
-      } else {
-        const q = this.query.toUpperCase().trim();
-        const match = this._universe.find((s) => s.ticker === q);
-        if (match) this.selectItem(match);
-        else if (/^[A-Z][A-Z0-9]{1,14}$/.test(q)) this.applyRawTicker(q);
-      }
-    },
-    applyRawTicker(ticker) {
-      this.query = ticker;
-      this.open = false;
-      this.highlighted = -1;
-      const appEl = this.$el.closest('[x-data]');
-      if (appEl && appEl._x_dataStack) {
-        const parentData = appEl._x_dataStack.find((d) => fieldName in d);
-        if (parentData) parentData[fieldName] = ticker;
-      }
-      if (onSelect) onSelect();
-    },
-    selectItem(stock) {
-      this.applyRawTicker(stock.ticker);
-    },
-    clear() {
-      this.query = '';
-      this.open = false;
-      const appEl = this.$el.closest('[x-data]');
-      if (appEl && appEl._x_dataStack) {
-        const parentData = appEl._x_dataStack.find(d => fieldName in d);
-        if (parentData) parentData[fieldName] = '';
-      }
-      this.$refs.input.focus();
-    },
-  };
-}
-</script>
+  <script src="/js/config.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/ticker-picker.js"></script>
 </body>
 </html>

@@ -5,7 +5,11 @@ import { Repository } from 'typeorm';
 import { SignalService } from '../signal/signal.service';
 import { shouldRunAnalyzeAllHistoryAfterSync } from '../common/sync-analyze-policy';
 import { StockService } from '../stock/stock.service';
-import { tickerCapLiquidityRank, WATCHLIST } from '../scanner/watchlist';
+import {
+  isMarketIndexTicker,
+  tickerCapLiquidityRank,
+  WATCHLIST,
+} from '../scanner/watchlist';
 import { WatchlistItem } from './entities/watchlist-item.entity';
 
 @Injectable()
@@ -288,6 +292,10 @@ export class WatchlistService implements OnModuleInit {
         tradingDays: liq.tradingDays,
         lastChecked: new Date(),
       });
+
+      if (isMarketIndexTicker(item.ticker)) {
+        continue;
+      }
 
       if (!liq.pass && item.active) {
         await this.repo.update(item.id, {

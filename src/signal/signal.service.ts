@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { BollingerBands, EMA, MACD, RSI } from 'technicalindicators';
 import { LessThan, Repository } from 'typeorm';
 import { TelegramService } from '../telegram/telegram.service';
-import { TICKERS } from '../scanner/watchlist';
+import { isMarketIndexTicker, TICKERS } from '../scanner/watchlist';
 import { toChartTradingDateString } from '../common/chart-trading-date';
 import { StockPrice } from '../stock/entities/stock-price.entity';
 import { FormingSetupHint, TickerFormingSetups } from './dto/forming-setup.dto';
@@ -88,6 +88,24 @@ export class SignalService {
     tradingDays: number;
     reason?: string;
   }> {
+    const upper = ticker.toUpperCase();
+    // VNINDEX / VN30: không áp dụng ngưỡng cổ phiếu — luôn pass (sync intraday + analyze như mã khác)
+    if (isMarketIndexTicker(upper)) {
+      const rows = await this.stockPriceRepo
+        .createQueryBuilder('sp')
+        .select(['sp.volume', 'sp.tradingDate'])
+        .where('sp.ticker = :ticker', { ticker: upper })
+        .orderBy('sp.tradingDate', 'DESC')
+        .limit(LIQUIDITY_WINDOW_DAYS)
+        .getMany();
+      const avgVolume =
+        rows.length > 0
+          ? rows.reduce((s, r) => s + Number(r.volume), 0) / rows.length
+          : 0;
+      const tradingDays = rows.filter((r) => Number(r.volume) > 0).length;
+      return { pass: true, avgVolume, tradingDays };
+    }
+
     const rows = await this.stockPriceRepo
       .createQueryBuilder('sp')
       .select(['sp.volume', 'sp.tradingDate'])

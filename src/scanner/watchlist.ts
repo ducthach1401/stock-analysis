@@ -4,8 +4,19 @@ export interface WatchlistStock {
   sector: string;
 }
 
-// Top 100 cổ phiếu VNIndex theo vốn hoá + thanh khoản
+/** Chỉ số HOSE — đồng bộ qua Entrade `.../ohlcs/index` (khác endpoint cổ phiếu). */
+export const MARKET_INDEX_TICKERS = new Set(['VNINDEX', 'VN30']);
+
+export function isMarketIndexTicker(ticker: string): boolean {
+  return MARKET_INDEX_TICKERS.has(ticker.toUpperCase());
+}
+
+// Top 100 cổ phiếu VNIndex theo vốn hoá + thanh khoản (+ chỉ số tham chiếu đầu danh sách)
 export const WATCHLIST: WatchlistStock[] = [
+  // ── Chỉ số (API index — không phải mã cổ) ────────────────────────────────
+  { ticker: 'VNINDEX', name: 'VN-Index', sector: 'Chỉ số' },
+  { ticker: 'VN30', name: 'VN30', sector: 'Chỉ số' },
+
   // ── Ngân hàng ──────────────────────────────────────────────────────────
   { ticker: 'VCB', name: 'Vietcombank', sector: 'Ngân hàng' },
   { ticker: 'BID', name: 'BIDV', sector: 'Ngân hàng' },

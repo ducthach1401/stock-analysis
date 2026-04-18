@@ -1,3 +1,62 @@
+/** Giờ/phút/ngày trong tuần theo Asia/Ho_Chi_Minh (phiên sàn VN). */
+export function hoChiMinhTimeParts(d = new Date()): {
+  weekday: number;
+  hour: number;
+  minute: number;
+} {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  const wdStr = get('weekday');
+  const wdMap: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  const hour = parseInt(get('hour'), 10);
+  const minute = parseInt(get('minute'), 10);
+  return {
+    weekday: wdMap[wdStr] ?? 0,
+    hour: Number.isFinite(hour) ? hour : 0,
+    minute: Number.isFinite(minute) ? minute : 0,
+  };
+}
+
+/** T2–T6, phiên khớp lệnh liên tục: 9:30–11:30 và 13:00–14:45. */
+export function isVnCashMarketSessionOpen(d = new Date()): boolean {
+  const { weekday, hour, minute } = hoChiMinhTimeParts(d);
+  if (weekday === 0 || weekday === 6) return false;
+  const inMorning =
+    (hour === 9 && minute >= 30) ||
+    hour === 10 ||
+    (hour === 11 && minute <= 30);
+  const inAfternoon = hour === 13 || (hour === 14 && minute <= 45);
+  return inMorning || inAfternoon;
+}
+
+/**
+ * Khuyến nghị tự động / Telegram / mở vị thế chỉ dùng nến ngày đã đóng phiên
+ * (sau ATC 14:45 — mặc định từ 14:46 VN trở đi, T2–T6).
+ */
+export function isVnAfterMarketCloseForDailySignals(d = new Date()): boolean {
+  const { weekday, hour, minute } = hoChiMinhTimeParts(d);
+  if (weekday === 0 || weekday === 6) return false;
+  const t = hour * 60 + minute;
+  const afterClose = 14 * 60 + 46;
+  return t >= afterClose;
+}
+
 /** Ngày lịch VN (YYYY-MM-DD) theo múi giờ Asia/Ho_Chi_Minh — dùng cooldown mở lại vị thế. */
 export function vnCalendarTodayYmd(): string {
   return new Intl.DateTimeFormat('en-CA', {
