@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
-import { Recommendation } from '../signal/dto/recommendation.dto';
+import {
+  Recommendation,
+  RecommendationResult,
+} from '../signal/dto/recommendation.dto';
 import { RecommendationService } from '../signal/recommendation.service';
-import { SignalDirection } from '../signal/entities/signal.entity';
+import { SignalDirection, SignalType } from '../signal/entities/signal.entity';
 import { SignalService } from '../signal/signal.service';
 import { StockService } from '../stock/stock.service';
 import { TelegramNotifyPolicyService } from '../telegram/telegram-notify-policy.service';
@@ -34,6 +37,36 @@ const REC_CONF_ORDER: Record<'HIGH' | 'MEDIUM' | 'LOW', number> = {
   MEDIUM: 2,
   LOW: 1,
 };
+
+const MINERVINI_BULLISH_TYPES = new Set<string>([
+  SignalType.MINERVINI_TREND_TEMPLATE,
+  SignalType.MINERVINI_VCP_BASE,
+  SignalType.MINERVINI_PIVOT_BREAKOUT,
+  SignalType.MINERVINI_VOLUME_CONFIRM,
+  SignalType.MINERVINI_BUY_ZONE,
+]);
+
+const MINERVINI_BEARISH_TYPES = new Set<string>([
+  SignalType.MINERVINI_EXTENDED,
+  SignalType.FAILED_BREAKOUT,
+  SignalType.VOLUME_CLIMAX_TOP,
+  SignalType.DISTRIBUTION_BAR,
+  SignalType.SUPPORT_BREAKDOWN,
+]);
+
+type ScannerSignalSummary = Record<
+  string,
+  {
+    tradingDate: string;
+    bullish: string[];
+    bearish: string[];
+    topSignal: string | null;
+    direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    score: number;
+    stars: 0 | 1 | 2 | 3;
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  }
+>;
 
 @Injectable()
 export class ScannerService {
@@ -103,6 +136,80 @@ export class ScannerService {
     const head = types.slice(0, max);
     const rest = types.length - head.length;
     return rest > 0 ? `${head.join(', ')} <i>+${rest}</i>` : head.join(', ');
+  }
+
+  async getSignalsSummary(): Promise<{
+    orderedTickers: string[];
+    summary: ScannerSignalSummary;
+  }> {
+    const watchlist = await this.watchlistService.findActiveSortedByPriority();
+    const orderedTickers = watchlist.map((s) => s.ticker);
+    const summary: ScannerSignalSummary = {};
+    const pool = this.syncPoolSize();
+
+    await mapPool(watchlist, pool, async (stock) => {
+      try {
+        const result = await this.recommendationService.recommend(stock.ticker);
+        summary[stock.ticker.toUpperCase()] =
+          this.recommendationToScannerSummary(result);
+      } catch (e) {
+        this.logger.warn(
+          `Scanner summary lỗi ${stock.ticker}: ${(e as Error).message}`,
+        );
+      }
+    });
+
+    return { orderedTickers, summary };
+  }
+
+  private recommendationToScannerSummary(
+    result: RecommendationResult,
+  ): ScannerSignalSummary[string] {
+    const bullish = result.bullishSignals
+      .map((s) => s.type)
+      .filter((t) => MINERVINI_BULLISH_TYPES.has(t));
+    const bearish = result.bearishSignals
+      .map((s) => s.type)
+      .filter((t) => MINERVINI_BEARISH_TYPES.has(t));
+
+    const direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL' =
+      result.recommendation === Recommendation.STRONG_BUY ||
+      result.recommendation === Recommendation.BUY
+        ? 'BULLISH'
+        : result.recommendation === Recommendation.STRONG_SELL ||
+            result.recommendation === Recommendation.SELL
+          ? 'BEARISH'
+          : 'NEUTRAL';
+
+    const stars: 0 | 1 | 2 | 3 =
+      result.recommendation === Recommendation.STRONG_BUY
+        ? 3
+        : result.recommendation === Recommendation.BUY
+          ? 2
+          : direction === 'BEARISH' && result.confidence === 'HIGH'
+            ? 2
+            : 0;
+
+    const topSignal =
+      direction === 'BULLISH'
+        ? (bullish.find((t) => t === 'MINERVINI_PIVOT_BREAKOUT') ??
+          bullish.find((t) => t === 'MINERVINI_VCP_BASE') ??
+          bullish[0] ??
+          null)
+        : direction === 'BEARISH'
+          ? (bearish[0] ?? null)
+          : null;
+
+    return {
+      tradingDate: result.tradingDate,
+      bullish,
+      bearish,
+      topSignal,
+      direction,
+      score: result.score,
+      stars,
+      confidence: result.confidence,
+    };
   }
 
   // ─── Cron jobs ────────────────────────────────────────────────────────
@@ -302,10 +409,18 @@ export class ScannerService {
           stock.ticker,
         );
         const bullish = signals
-          .filter((s) => s.direction === SignalDirection.BULLISH)
+          .filter(
+            (s) =>
+              s.direction === SignalDirection.BULLISH &&
+              MINERVINI_BULLISH_TYPES.has(s.type),
+          )
           .map((s) => s.type.toString());
         const bearish = signals
-          .filter((s) => s.direction === SignalDirection.BEARISH)
+          .filter(
+            (s) =>
+              s.direction === SignalDirection.BEARISH &&
+              MINERVINI_BEARISH_TYPES.has(s.type),
+          )
           .map((s) => s.type.toString());
 
         if (bullish.length || bearish.length) {
@@ -447,7 +562,7 @@ export class ScannerService {
       let summary = `📊 <b>Khuyến nghị</b> — ${date}\n`;
       summary +=
         buyNotifyMode === 'safe'
-          ? `<i>Phiên mới nhất · ${watchlist.length} mã · MUA: STRONG_BUY + HIGH + nền</i>\n`
+          ? `<i>Phiên mới nhất · ${watchlist.length} mã · MUA: Strict Minervini STRONG_BUY</i>\n`
           : `<i>Phiên mới nhất · ${watchlist.length} mã</i>\n`;
       summary += '─'.repeat(24) + '\n\n';
 

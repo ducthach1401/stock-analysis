@@ -1,5 +1,14 @@
 /** Hằng số, đọc URL/session, PWA, nhãn tín hiệu — load trước app.js */
-const STOCK_APP_TAB_IDS = ['dashboard', 'market', 'derivatives', 'scanner', 'signals', 'stocks', 'guide', 'watchlist'];
+const STOCK_APP_TAB_IDS = [
+  'dashboard',
+  'market',
+  'derivatives',
+  'scanner',
+  'signals',
+  'stocks',
+  'guide',
+  'watchlist',
+];
 const STOCK_SIGNAL_TICKER_KEY = 'stockAnalysisSignalTicker';
 const STOCK_PRICE_TICKER_KEY = 'stockAnalysisPriceTicker';
 
@@ -123,6 +132,12 @@ const SIGNAL_LABELS_VI = {
   BASE_FORMING: 'Nền tích lũy',
   RESISTANCE_BREAKOUT: 'Break kháng cự',
   SUPPORT_BREAKDOWN: 'Thủng hỗ trợ',
+  MINERVINI_TREND_TEMPLATE: 'Minervini trend template',
+  MINERVINI_VCP_BASE: 'Minervini nền/VCP',
+  MINERVINI_PIVOT_BREAKOUT: 'Minervini breakout pivot',
+  MINERVINI_VOLUME_CONFIRM: 'Minervini volume xác nhận',
+  MINERVINI_BUY_ZONE: 'Minervini buy zone',
+  MINERVINI_EXTENDED: 'Minervini quá xa MA50',
   MACD_BULLISH_CROSS: 'MACD cắt tăng',
   MACD_BEARISH_CROSS: 'MACD cắt giảm',
   BB_BREAKOUT_DOWN: 'Chạm BB dưới (oversold)',
@@ -143,4 +158,3 @@ const SIGNAL_LABELS_VI = {
   MA_GOLDEN_CROSS: 'MA golden (legacy)',
   MA_DEATH_CROSS: 'MA death (legacy)',
 };
-

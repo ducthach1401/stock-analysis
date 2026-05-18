@@ -6,12 +6,12 @@ function app() {
     tab: urlTab || readSavedTab(),
     tabs: [
       { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-      { id: 'market',    label: 'Thị trường', icon: '🏛️' },
+      { id: 'market', label: 'Thị trường', icon: '🏛️' },
       { id: 'derivatives', label: 'Phái sinh', icon: '📉' },
-      { id: 'scanner',   label: 'Scanner',   icon: '🔍' },
-      { id: 'signals',   label: 'Tín hiệu',  icon: '⚡' },
-      { id: 'stocks',    label: 'Cổ phiếu',  icon: '📈' },
-      { id: 'guide',     label: 'Chiến lược', icon: '📘' },
+      { id: 'scanner', label: 'Scanner', icon: '🔍' },
+      { id: 'signals', label: 'Tín hiệu', icon: '⚡' },
+      { id: 'stocks', label: 'Cổ phiếu', icon: '📈' },
+      { id: 'guide', label: 'Chiến lược', icon: '📘' },
       { id: 'watchlist', label: 'Watchlist', icon: '⭐' },
     ],
     loading: false,
@@ -23,8 +23,8 @@ function app() {
     searchTicker: '',
     signals: [],
     signalTicker: urlTicker || readSavedTicker(STOCK_SIGNAL_TICKER_KEY),
-    allChartSignals: [],   // tất cả tín hiệu lịch sử (cho chart markers)
-    signalStats: null,     // { total, bullish, bearish, topTypes }
+    allChartSignals: [], // tất cả tín hiệu lịch sử (cho chart markers)
+    signalStats: null, // { total, bullish, bearish, topTypes }
     /** GET /signals/backtest/summary — compound 12 tháng (đóng lệnh), fullPeriod trên từng dòng */
     backtestLeaderboard: { good: [], bad: [], total: 0 },
     /** GET /signals/:ticker/backtest/runs */
@@ -94,14 +94,26 @@ function app() {
     rsiChart: null,
     macdChart: null,
     indicators: { rsi: null, macd: null, macdSignal: null, macdHist: null },
-    actionLoading: { sync: false, syncFull: false, scan: false, recommend: false, syncOne: false, syncOneFull: false, summary: false, analyze: false, analyzeHistory: false, analyzeHistoryAll: false, backtest: false },
+    actionLoading: {
+      sync: false,
+      syncFull: false,
+      scan: false,
+      recommend: false,
+      syncOne: false,
+      syncOneFull: false,
+      summary: false,
+      analyze: false,
+      analyzeHistory: false,
+      analyzeHistoryAll: false,
+      backtest: false,
+    },
     actionLog: [],
     toast: { show: false, msg: '', type: 'success' },
     /** Menu ☰: Cổ phiếu, Chiến lược, Watchlist, thông báo, làm mới, giao diện */
     moreMenuOpen: false,
     // ── Watchlist management ──────────────────────────────────────────────
-    wlItems: [],          // toàn bộ (kể inactive)
-    wlFilter: 'all',      // 'all' | 'active' | 'inactive'
+    wlItems: [], // toàn bộ (kể inactive)
+    wlFilter: 'all', // 'all' | 'active' | 'inactive'
     wlSearch: '',
     wlAddForm: { show: false, ticker: '', name: '', sector: '' },
     wlCheckingLiquidity: false,
@@ -126,20 +138,32 @@ function app() {
     /** Điện thoại + không standalone: màn cài (trừ khi đã bỏ qua trong localStorage) */
     pwaMandatoryGate: computePwaMandatoryGate(),
     /** Đồng bộ với localStorage — chỉ true sau khi người dùng bấm bỏ qua màn cài */
-    pwaGateSkipped: typeof localStorage !== 'undefined' && localStorage.getItem(PWA_GATE_SKIP_KEY) === '1',
+    pwaGateSkipped:
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem(PWA_GATE_SKIP_KEY) === '1',
     /** Gợn UI hướng dẫn Safari vs Chrome / Android */
     pwaIosUi: typeof navigator !== 'undefined' && isIosTouchDevice(),
     pwaAndroidUi: typeof navigator !== 'undefined' && isAndroidUi(),
     /** safari | chrome | firefox | edge | opera | other — chỉ meaningful khi pwaIosUi */
-    pwaIosBrowser: typeof navigator !== 'undefined' ? getIosBrowserKind() : 'other',
-    pwaCanWebShare: typeof navigator !== 'undefined' && typeof navigator.share === 'function',
-    browserNotify: typeof localStorage !== 'undefined' && localStorage.getItem('browserNotify') === 'true',
+    pwaIosBrowser:
+      typeof navigator !== 'undefined' ? getIosBrowserKind() : 'other',
+    pwaCanWebShare:
+      typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+    browserNotify:
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('browserNotify') === 'true',
     notificationPermission:
       typeof Notification !== 'undefined' ? Notification.permission : 'denied',
 
     // ── Auth ────────────────────────────────────────────────────────────
     isAdmin: false,
-    loginModal: { show: false, username: '', password: '', error: '', loading: false },
+    loginModal: {
+      show: false,
+      username: '',
+      password: '',
+      error: '',
+      loading: false,
+    },
 
     async doLogin() {
       this.loginModal.loading = true;
@@ -148,17 +172,27 @@ function app() {
         const res = await fetch('/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: this.loginModal.username, password: this.loginModal.password }),
+          body: JSON.stringify({
+            username: this.loginModal.username,
+            password: this.loginModal.password,
+          }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          this.loginModal.error = err?.message || 'Sai tên đăng nhập hoặc mật khẩu';
+          this.loginModal.error =
+            err?.message || 'Sai tên đăng nhập hoặc mật khẩu';
           return;
         }
         const data = await res.json();
         localStorage.setItem('adminToken', data.accessToken);
         this.isAdmin = true;
-        this.loginModal = { show: false, username: '', password: '', error: '', loading: false };
+        this.loginModal = {
+          show: false,
+          username: '',
+          password: '',
+          error: '',
+          loading: false,
+        };
         this.showToast('Đăng nhập thành công', 'success');
       } catch (e) {
         this.loginModal.error = 'Không thể kết nối đến server';
@@ -184,7 +218,8 @@ function app() {
         this.isAdmin = false;
         localStorage.removeItem('adminToken');
         this.loginModal.show = true;
-        this.loginModal.error = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+        this.loginModal.error =
+          'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
         throw new Error('Unauthorized');
       }
       return res;
@@ -218,9 +253,12 @@ function app() {
             : this.tab === 'stocks'
               ? this.priceTicker
               : '';
-        if (t && String(t).trim()) p.set('ticker', String(t).trim().toUpperCase());
+        if (t && String(t).trim())
+          p.set('ticker', String(t).trim().toUpperCase());
         const qs = p.toString();
-        const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+        const next = qs
+          ? `${window.location.pathname}?${qs}`
+          : window.location.pathname;
         if (window.location.pathname + window.location.search !== next) {
           history.replaceState(null, '', next);
         }
@@ -229,13 +267,21 @@ function app() {
 
     persistSignalTicker(v) {
       try {
-        if (v) sessionStorage.setItem(STOCK_SIGNAL_TICKER_KEY, String(v).toUpperCase());
+        if (v)
+          sessionStorage.setItem(
+            STOCK_SIGNAL_TICKER_KEY,
+            String(v).toUpperCase(),
+          );
         else sessionStorage.removeItem(STOCK_SIGNAL_TICKER_KEY);
       } catch {}
     },
     persistPriceTicker(v) {
       try {
-        if (v) sessionStorage.setItem(STOCK_PRICE_TICKER_KEY, String(v).toUpperCase());
+        if (v)
+          sessionStorage.setItem(
+            STOCK_PRICE_TICKER_KEY,
+            String(v).toUpperCase(),
+          );
         else sessionStorage.removeItem(STOCK_PRICE_TICKER_KEY);
       } catch {}
     },
@@ -257,6 +303,7 @@ function app() {
         DISTRIBUTION_BAR: 'Phân phối',
         VOLUME_CLIMAX_TOP: 'Climax đỉnh',
         FAILED_BREAKOUT: 'Bull trap',
+        MINERVINI_EXTENDED: 'Quá xa MA50',
         RSI_BEARISH_DIVERGENCE: 'Phân kỳ RSI',
         MACD_BEARISH_DIVERGENCE: 'Phân kỳ MACD',
         EMA_DEATH_CROSS: 'Death cross',
@@ -270,14 +317,19 @@ function app() {
         SHOOTING_STAR: 'Shooting star',
         BB_BREAKOUT_UP: 'BB trên (overbought)',
       };
-      return m[s.topSignal] ?? this.signalTypeLabelVi(s.topSignal).split(' ').slice(0, 2).join(' ');
+      return (
+        m[s.topSignal] ??
+        this.signalTypeLabelVi(s.topSignal).split(' ').slice(0, 2).join(' ')
+      );
     },
 
     toggleDark() {
       this.darkMode = !this.darkMode;
       localStorage.setItem('darkMode', this.darkMode);
       try {
-        const m = document.querySelector('meta[name="theme-color"]:not([media])');
+        const m = document.querySelector(
+          'meta[name="theme-color"]:not([media])',
+        );
         if (m) m.setAttribute('content', this.darkMode ? '#18181b' : '#4f46e5');
       } catch {}
       this.updateChartTheme();
@@ -285,13 +337,19 @@ function app() {
 
     persistChartSignalLabels() {
       try {
-        localStorage.setItem('chartSignalLabels', this.chartSignalLabels ? 'true' : 'false');
+        localStorage.setItem(
+          'chartSignalLabels',
+          this.chartSignalLabels ? 'true' : 'false',
+        );
       } catch {}
       this.$nextTick(() => {
         if (this.barData.length && this.signalTicker) {
           requestAnimationFrame(() => this.renderChart(this.signalTicker));
         }
-        if (this.tab === 'market' && (this.marketBarVni.length || this.marketBarVn30.length)) {
+        if (
+          this.tab === 'market' &&
+          (this.marketBarVni.length || this.marketBarVn30.length)
+        ) {
           requestAnimationFrame(() => {
             if (this.marketBarVni.length) {
               this.renderMarketIndexPanel(this.marketBarVni, 'vni');
@@ -306,15 +364,27 @@ function app() {
 
     persistChartOverlays() {
       try {
-        localStorage.setItem('chartShowEma', this.chartShowEma ? 'true' : 'false');
-        localStorage.setItem('chartShowSR', this.chartShowSR ? 'true' : 'false');
-        localStorage.setItem('derivShowBb', this.derivShowBb ? 'true' : 'false');
+        localStorage.setItem(
+          'chartShowEma',
+          this.chartShowEma ? 'true' : 'false',
+        );
+        localStorage.setItem(
+          'chartShowSR',
+          this.chartShowSR ? 'true' : 'false',
+        );
+        localStorage.setItem(
+          'derivShowBb',
+          this.derivShowBb ? 'true' : 'false',
+        );
       } catch {}
       this.$nextTick(() => {
         if (this.barData.length && this.signalTicker) {
           requestAnimationFrame(() => this.renderChart(this.signalTicker));
         }
-        if (this.tab === 'market' && (this.marketBarVni.length || this.marketBarVn30.length)) {
+        if (
+          this.tab === 'market' &&
+          (this.marketBarVni.length || this.marketBarVn30.length)
+        ) {
           requestAnimationFrame(() => {
             if (this.marketBarVni.length) {
               this.renderMarketIndexPanel(this.marketBarVni, 'vni');
@@ -332,17 +402,20 @@ function app() {
 
     updateChartTheme() {
       const dark = this.darkMode;
-      const chartBg    = dark ? '#09090b' : '#ffffff';
-      const textColor  = dark ? '#71717a' : '#64748b';
-      const gridColor  = dark ? '#27272a' : '#f1f5f9';
-      const borderColor= dark ? '#3f3f46' : '#e2e8f0';
+      const chartBg = dark ? '#09090b' : '#ffffff';
+      const textColor = dark ? '#71717a' : '#64748b';
+      const gridColor = dark ? '#27272a' : '#f1f5f9';
+      const borderColor = dark ? '#3f3f46' : '#e2e8f0';
       const opts = {
         layout: { background: { color: chartBg }, textColor },
-        grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+        grid: {
+          vertLines: { color: gridColor },
+          horzLines: { color: gridColor },
+        },
         timeScale: { borderColor },
       };
-      if (this.lwChart)   this.lwChart.applyOptions(opts);
-      if (this.rsiChart)  this.rsiChart.applyOptions(opts);
+      if (this.lwChart) this.lwChart.applyOptions(opts);
+      if (this.rsiChart) this.rsiChart.applyOptions(opts);
       if (this.macdChart) this.macdChart.applyOptions(opts);
       ['vni', 'vn30'].forEach((slot) => {
         const k = this.marketCharts[slot];
@@ -370,10 +443,14 @@ function app() {
       const token = localStorage.getItem('adminToken');
       if (token) {
         try {
-          const res = await fetch('/auth/me', { headers: { Authorization: `Bearer ${token}` } });
+          const res = await fetch('/auth/me', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
           this.isAdmin = res.ok;
           if (!res.ok) localStorage.removeItem('adminToken');
-        } catch { this.isAdmin = false; }
+        } catch {
+          this.isAdmin = false;
+        }
       }
       this.$watch('signalTicker', (v) => {
         this.persistSignalTicker(v);
@@ -398,7 +475,9 @@ function app() {
       await this.loadWatchlist();
       if (this.signalTicker) {
         window.dispatchEvent(
-          new CustomEvent('signal-ticker-sync', { detail: { ticker: this.signalTicker } }),
+          new CustomEvent('signal-ticker-sync', {
+            detail: { ticker: this.signalTicker },
+          }),
         );
       }
       // Giữ hành vi như trước: vào tab Tín hiệu / Cổ phiếu (kể cả từ ?tab=&ticker=) là tải chart + khuyến nghị, không cần bấm thêm
@@ -461,7 +540,8 @@ function app() {
       const minute = parseInt(get('minute'), 10);
       const h = Number.isFinite(hour) ? hour : 0;
       const m = Number.isFinite(minute) ? minute : 0;
-      const inMorning = (h === 9 && m >= 30) || h === 10 || (h === 11 && m <= 30);
+      const inMorning =
+        (h === 9 && m >= 30) || h === 10 || (h === 11 && m <= 30);
       const inAfternoon = h === 13 || (h === 14 && m <= 45);
       return inMorning || inAfternoon;
     },
@@ -496,15 +576,23 @@ function app() {
       this.stopDerivativesSessionPoll();
       if (this.tab !== 'derivatives') return;
       const ms = this.derivativesPollIntervalMs();
-      this._derivativesPollTimer = setInterval(() => this.tickDerivativesSessionSync(), ms);
+      this._derivativesPollTimer = setInterval(
+        () => this.tickDerivativesSessionSync(),
+        ms,
+      );
       if (this._vnCashMarketSessionOpen()) {
-        this._derivativesPollFirst = setTimeout(() => this.tickDerivativesSessionSync(), 5000);
+        this._derivativesPollFirst = setTimeout(
+          () => this.tickDerivativesSessionSync(),
+          5000,
+        );
       }
     },
 
     refreshPwaMandatoryGate() {
       try {
-        this.pwaGateSkipped = typeof localStorage !== 'undefined' && localStorage.getItem(PWA_GATE_SKIP_KEY) === '1';
+        this.pwaGateSkipped =
+          typeof localStorage !== 'undefined' &&
+          localStorage.getItem(PWA_GATE_SKIP_KEY) === '1';
       } catch {
         this.pwaGateSkipped = false;
       }
@@ -517,7 +605,10 @@ function app() {
       } catch {}
       this.pwaGateSkipped = true;
       this.refreshPwaMandatoryGate();
-      this.showToast('Đang dùng trên trình duyệt. Hiện lại màn cài: menu ☰ → «Hiện lại màn cài app».', 'info');
+      this.showToast(
+        'Đang dùng trên trình duyệt. Hiện lại màn cài: menu ☰ → «Hiện lại màn cài app».',
+        'info',
+      );
     },
 
     clearPwaGateSkip() {
@@ -532,9 +623,13 @@ function app() {
       if (typeof window === 'undefined') return;
       this.refreshPwaMandatoryGate();
       const onViewportOrDisplayMode = () => this.refreshPwaMandatoryGate();
-      window.addEventListener('resize', onViewportOrDisplayMode, { passive: true });
+      window.addEventListener('resize', onViewportOrDisplayMode, {
+        passive: true,
+      });
       try {
-        window.matchMedia('(display-mode: standalone)').addEventListener('change', onViewportOrDisplayMode);
+        window
+          .matchMedia('(display-mode: standalone)')
+          .addEventListener('change', onViewportOrDisplayMode);
       } catch {}
       if ('Notification' in window) {
         this.notificationPermission = Notification.permission;
@@ -572,7 +667,10 @@ function app() {
     async installPwa() {
       const ev = this.pwaDeferredInstall;
       if (!ev || typeof ev.prompt !== 'function') {
-        this.showToast('Dùng menu trình duyệt: «Thêm vào màn hình chính» hoặc «Cài đặt app»', 'info');
+        this.showToast(
+          'Dùng menu trình duyệt: «Thêm vào màn hình chính» hoặc «Cài đặt app»',
+          'info',
+        );
         return;
       }
       ev.prompt();
@@ -591,24 +689,32 @@ function app() {
       if (this.pwaIosUi) {
         return `Hướng dẫn — ${iosBrowserTitleVi(this.pwaIosBrowser)}`;
       }
-      if (this.pwaAndroidUi) return 'Hướng dẫn — Android (Chrome, Samsung Internet, Edge, Brave…)';
+      if (this.pwaAndroidUi)
+        return 'Hướng dẫn — Android (Chrome, Samsung Internet, Edge, Brave…)';
       return 'Hướng dẫn — trình duyệt điện thoại';
     },
 
     async openPwaIosShareSheet() {
-      if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+      if (
+        typeof navigator === 'undefined' ||
+        typeof navigator.share !== 'function'
+      ) {
         this.showToast('Làm theo các bước trong khung dưới', 'info');
         return;
       }
       try {
         await navigator.share({
-          title: typeof document !== 'undefined' ? document.title : 'Stock Analysis',
+          title:
+            typeof document !== 'undefined' ? document.title : 'Stock Analysis',
           text: 'Thêm Stock Analysis lên màn hình chính',
           url: typeof window !== 'undefined' ? window.location.href : '',
         });
       } catch (e) {
         if (!e || e.name !== 'AbortError') {
-          this.showToast('Không mở được bảng chia sẻ — làm theo bước bên dưới', 'info');
+          this.showToast(
+            'Không mở được bảng chia sẻ — làm theo bước bên dưới',
+            'info',
+          );
         }
       }
     },
@@ -620,7 +726,10 @@ function app() {
       }
       this.notificationPermission = Notification.permission;
       if (Notification.permission === 'denied') {
-        this.showToast('Đã chặn thông báo — bật trong cài đặt trình duyệt / site', 'info');
+        this.showToast(
+          'Đã chặn thông báo — bật trong cài đặt trình duyệt / site',
+          'info',
+        );
         return;
       }
       if (Notification.permission === 'granted') {
@@ -630,7 +739,9 @@ function app() {
           else localStorage.removeItem('browserNotify');
         } catch {}
         this.showToast(
-          this.browserNotify ? 'Đã bật thông báo (khi tab ẩn)' : 'Đã tắt thông báo hệ thống',
+          this.browserNotify
+            ? 'Đã bật thông báo (khi tab ẩn)'
+            : 'Đã tắt thông báo hệ thống',
           'success',
         );
         return;
@@ -642,7 +753,10 @@ function app() {
         try {
           localStorage.setItem('browserNotify', 'true');
         } catch {}
-        this.showToast('Đã cấp quyền — thông báo khi bạn không mở tab', 'success');
+        this.showToast(
+          'Đã cấp quyền — thông báo khi bạn không mở tab',
+          'success',
+        );
         try {
           new Notification('Stock Analysis', {
             body: 'Thông báo đã bật.',
@@ -683,17 +797,23 @@ function app() {
     },
 
     async loadOpenPositions() {
-      const r = await fetch('/positions/open').then(r => r.json()).catch(() => []);
+      const r = await fetch('/positions/open')
+        .then((r) => r.json())
+        .catch(() => []);
       this.openPositions = Array.isArray(r) ? r : [];
     },
 
     async loadClosedPositions() {
-      const r = await fetch('/positions/closed').then(r => r.json()).catch(() => []);
+      const r = await fetch('/positions/closed')
+        .then((r) => r.json())
+        .catch(() => []);
       this.closedPositions = Array.isArray(r) ? r : [];
     },
 
     async loadWatchlist() {
-      const r = await fetch('/scanner/watchlist').then(res => res.json()).catch(() => []);
+      const r = await fetch('/scanner/watchlist')
+        .then((res) => res.json())
+        .catch(() => []);
       this.watchlist = Array.isArray(r) ? r : [];
       window.__watchlist__ = this.watchlist;
       await Promise.all([
@@ -705,7 +825,9 @@ function app() {
     },
 
     async loadTickerPickerUniverse() {
-      const r = await fetch('/watchlist/ticker-picker').then((res) => res.json()).catch(() => []);
+      const r = await fetch('/watchlist/ticker-picker')
+        .then((res) => res.json())
+        .catch(() => []);
       window.__tickerPickerUniverse__ = Array.isArray(r) ? r : [];
     },
 
@@ -719,7 +841,9 @@ function app() {
     async loadFormingSetups() {
       this.formingLoading = true;
       try {
-        const r = await fetch('/scanner/forming-setups').then(res => res.json()).catch(() => ({}));
+        const r = await fetch('/scanner/forming-setups')
+          .then((res) => res.json())
+          .catch(() => ({}));
         this.formingSetups = {
           tradingDate: r?.tradingDate || '',
           items: Array.isArray(r?.items) ? r.items : [],
@@ -730,19 +854,35 @@ function app() {
     },
 
     async loadSignalSummary() {
-      const r = await fetch('/scanner/signals-summary').then(res => res.json()).catch(() => ({}));
-      const summary = r?.summary && typeof r.summary === 'object' ? r.summary : (r && typeof r === 'object' ? r : {});
-      const ordered = Array.isArray(r?.orderedTickers) ? r.orderedTickers : Object.keys(summary);
+      const r = await fetch('/scanner/signals-summary')
+        .then((res) => res.json())
+        .catch(() => ({}));
+      const summary =
+        r?.summary && typeof r.summary === 'object'
+          ? r.summary
+          : r && typeof r === 'object'
+            ? r
+            : {};
+      const ordered = Array.isArray(r?.orderedTickers)
+        ? r.orderedTickers
+        : Object.keys(summary);
       this.signalSummary = summary;
       this.signalOrderTickers = ordered;
       window.__signalSummary__ = this.signalSummary;
 
       // Auto-select: ưu tiên blue-cap/thanh khoản (ordered), sau đó độ tin cậy, rồi |score|
       if (!this.signalTicker && Object.keys(this.signalSummary).length > 0) {
-        const confVal = (c) => ({ HIGH: 3, MEDIUM: 2, LOW: 1 }[c] ?? 0);
-        const ordIdx = (t) => ordered.findIndex((x) => String(x).toUpperCase() === String(t).toUpperCase());
+        const confVal = (c) => ({ HIGH: 3, MEDIUM: 2, LOW: 1 })[c] ?? 0;
+        const ordIdx = (t) =>
+          ordered.findIndex(
+            (x) => String(x).toUpperCase() === String(t).toUpperCase(),
+          );
         const candidates = ordered
-          .map((t) => [t, this.signalSummary[t] ?? this.signalSummary[String(t).toUpperCase()]])
+          .map((t) => [
+            t,
+            this.signalSummary[t] ??
+              this.signalSummary[String(t).toUpperCase()],
+          ])
           .filter(([, s]) => s);
         candidates.sort((a, b) => {
           const [ta, sa] = a;
@@ -758,7 +898,9 @@ function app() {
         if (top) {
           this.signalTicker = top[0];
           window.dispatchEvent(
-            new CustomEvent('signal-ticker-sync', { detail: { ticker: top[0] } }),
+            new CustomEvent('signal-ticker-sync', {
+              detail: { ticker: top[0] },
+            }),
           );
           if (this.tab === 'signals') this.loadSignals();
         }
@@ -775,17 +917,28 @@ function app() {
       const MAX_MERGED = 900;
       const STORED_REQ = 400;
       const [sigs, rec, stored] = await Promise.all([
-        fetch(`/signals/${t}`).then(r => r.json()).catch(() => []),
-        fetch(`/signals/${t}/recommend`, { method: 'POST' }).then(r => r.json()).catch(() => null),
-        fetch(`/stocks/${t}/stored?limit=${STORED_REQ}`).then(r => r.json()).catch(() => []),
+        fetch(`/signals/${t}`)
+          .then((r) => r.json())
+          .catch(() => []),
+        fetch(`/signals/${t}/recommend`, { method: 'POST' })
+          .then((r) => r.json())
+          .catch(() => null),
+        fetch(`/stocks/${t}/stored?limit=${STORED_REQ}`)
+          .then((r) => r.json())
+          .catch(() => []),
       ]);
       this.signals = Array.isArray(sigs) ? sigs.slice(0, 20) : [];
       this.currentRec = rec;
-      let raw = Array.isArray(stored) && stored.length > 0
-        ? stored
-        : await fetch(`/stocks/${t}/history`).then(r => r.json()).catch(() => []);
+      let raw =
+        Array.isArray(stored) && stored.length > 0
+          ? stored
+          : await fetch(`/stocks/${t}/history`)
+              .then((r) => r.json())
+              .catch(() => []);
       raw = Array.isArray(raw) ? raw : [];
-      const sorted = [...raw].sort((a, b) => String(a.tradingDate).localeCompare(String(b.tradingDate)));
+      const sorted = [...raw].sort((a, b) =>
+        String(a.tradingDate).localeCompare(String(b.tradingDate)),
+      );
       const incoming = sorted.slice(-MAX_CHART_BARS);
       let merged = incoming;
       if (
@@ -809,8 +962,11 @@ function app() {
       this.barData = merged;
       this._barDataTicker = t;
 
-      const from = this.barData.length > 0 ? this.barData[0].tradingDate : '2000-01-01';
-      const chartSigs = await fetch(`/signals/${t}/chart?from=${from}`).then(r => r.json()).catch(() => []);
+      const from =
+        this.barData.length > 0 ? this.barData[0].tradingDate : '2000-01-01';
+      const chartSigs = await fetch(`/signals/${t}/chart?from=${from}`)
+        .then((r) => r.json())
+        .catch(() => []);
       this._applyChartSignalsPayload(chartSigs);
 
       await this.loadBacktestRuns();
@@ -826,7 +982,9 @@ function app() {
         return;
       }
       const t = this.signalTicker.toUpperCase();
-      const runs = await fetch(`/signals/${t}/backtest/runs?take=15`).then((r) => r.json()).catch(() => []);
+      const runs = await fetch(`/signals/${t}/backtest/runs?take=15`)
+        .then((r) => r.json())
+        .catch(() => []);
       this.backtestRuns = Array.isArray(runs) ? runs : [];
       if (this.backtestRuns.length > 0) {
         await this.loadBacktestDetail(this.backtestRuns[0].id);
@@ -838,7 +996,9 @@ function app() {
     async loadBacktestDetail(runId) {
       if (!this.signalTicker || !runId) return;
       const t = this.signalTicker.toUpperCase();
-      const d = await fetch(`/signals/${t}/backtest/runs/${runId}`).then((r) => r.json()).catch(() => null);
+      const d = await fetch(`/signals/${t}/backtest/runs/${runId}`)
+        .then((r) => r.json())
+        .catch(() => null);
       this.backtestDetail = d && d.id ? d : null;
     },
 
@@ -851,33 +1011,47 @@ function app() {
         await this.loadBacktestRuns();
         this.showToast('Đã chạy backtest và lưu — ' + t, 'success');
       } catch (e) {
-        if (e.message !== 'Unauthorized') this.showToast('Backtest lỗi: ' + (e.message || e), 'error');
+        if (e.message !== 'Unauthorized')
+          this.showToast('Backtest lỗi: ' + (e.message || e), 'error');
       }
       this.actionLoading.backtest = false;
     },
 
     _applyChartSignalsPayload(sigs) {
       this.allChartSignals = Array.isArray(sigs) ? sigs : [];
-      const bullish = this.allChartSignals.filter(s => s.direction === 'BULLISH');
-      const bearish = this.allChartSignals.filter(s => s.direction === 'BEARISH');
+      const bullish = this.allChartSignals.filter(
+        (s) => s.direction === 'BULLISH',
+      );
+      const bearish = this.allChartSignals.filter(
+        (s) => s.direction === 'BEARISH',
+      );
       const typeCounts = {};
-      this.allChartSignals.forEach(s => { typeCounts[s.type] = (typeCounts[s.type] || 0) + 1; });
-      const topTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      this.allChartSignals.forEach((s) => {
+        typeCounts[s.type] = (typeCounts[s.type] || 0) + 1;
+      });
+      const topTypes = Object.entries(typeCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
       this.signalStats = {
         total: this.allChartSignals.length,
         bullish: bullish.length,
         bearish: bearish.length,
-        tradingDays: new Set(this.allChartSignals.map(s => s.tradingDate)).size,
+        tradingDays: new Set(this.allChartSignals.map((s) => s.tradingDate))
+          .size,
         topTypes,
       };
     },
 
     async loadChartSignals(ticker) {
       const t = (ticker || this.signalTicker).toUpperCase();
-      const from = this.barData.length > 0 ? this.barData[0].tradingDate : '2000-01-01';
-      const sigs = await fetch(`/signals/${t}/chart?from=${from}`).then(r => r.json()).catch(() => []);
+      const from =
+        this.barData.length > 0 ? this.barData[0].tradingDate : '2000-01-01';
+      const sigs = await fetch(`/signals/${t}/chart?from=${from}`)
+        .then((r) => r.json())
+        .catch(() => []);
       this._applyChartSignalsPayload(sigs);
-      if (this.barData.length) this.$nextTick(() => requestAnimationFrame(() => this.renderChart(t)));
+      if (this.barData.length)
+        this.$nextTick(() => requestAnimationFrame(() => this.renderChart(t)));
     },
 
     /** Phân tích chỉ phiên mới nhất (nhanh) */
@@ -902,7 +1076,9 @@ function app() {
       const t = this.signalTicker.toUpperCase();
       this.log('info', `▶ Phân tích lịch sử ${t} (job)...`);
       try {
-        const res = await this.authFetch(`/queue/analyze-history/${t}`, { method: 'POST' }).then(r => r.json());
+        const res = await this.authFetch(`/queue/analyze-history/${t}`, {
+          method: 'POST',
+        }).then((r) => r.json());
         if (res?.jobId) {
           await this.pollJob(res.jobId, `Lịch sử ${t}`, async () => {
             await this.loadSignals();
@@ -919,7 +1095,9 @@ function app() {
       this.actionLoading.analyzeHistoryAll = true;
       this.log('info', '▶ Phân tích lịch sử toàn watchlist...');
       try {
-        const res = await this.authFetch('/queue/analyze-history', { method: 'POST' }).then(r => r.json());
+        const res = await this.authFetch('/queue/analyze-history', {
+          method: 'POST',
+        }).then((r) => r.json());
         if (res?.jobId) {
           await this.pollJob(res.jobId, 'Phân tích lịch sử toàn watchlist');
           await this.loadSignalSummary();
@@ -937,20 +1115,39 @@ function app() {
       if (!barData?.length || !sigSource?.length) return [];
 
       const SIG_WEIGHTS = {
-        RESISTANCE_BREAKOUT: 5, EMA_GOLDEN_CROSS: 3.5, EMA_BOUNCE: 3,
+        RESISTANCE_BREAKOUT: 5,
+        EMA_GOLDEN_CROSS: 3.5,
+        EMA_BOUNCE: 3,
         WASHOUT_BAR: 3.5,
-        BASE_FORMING: 2, MACD_BULLISH_CROSS: 2, RSI_OVERSOLD: 2,
-        BULLISH_ENGULFING: 1.5, HAMMER: 1.5, BB_BREAKOUT_DOWN: 1.5,
-        EMA_BULLISH_STACK: 2.5, RSI_MOMENTUM_UP: 2.5, VOLUME_SURGE: 1,
+        BASE_FORMING: 2,
+        MACD_BULLISH_CROSS: 2,
+        RSI_OVERSOLD: 2,
+        BULLISH_ENGULFING: 1.5,
+        HAMMER: 1.5,
+        BB_BREAKOUT_DOWN: 1.5,
+        EMA_BULLISH_STACK: 2.5,
+        RSI_MOMENTUM_UP: 2.5,
+        VOLUME_SURGE: 1,
       };
       const BUY_PRIORITY = [
-        'RESISTANCE_BREAKOUT', 'WASHOUT_BAR', 'EMA_GOLDEN_CROSS', 'EMA_BOUNCE',
-        'BASE_FORMING', 'MACD_BULLISH_CROSS', 'RSI_OVERSOLD', 'BB_BREAKOUT_DOWN',
+        'RESISTANCE_BREAKOUT',
+        'WASHOUT_BAR',
+        'EMA_GOLDEN_CROSS',
+        'EMA_BOUNCE',
+        'BASE_FORMING',
+        'MACD_BULLISH_CROSS',
+        'RSI_OVERSOLD',
+        'BB_BREAKOUT_DOWN',
       ];
       const SELL_PRIORITY = [
-        'RSI_BEARISH_DIVERGENCE', 'FAILED_BREAKOUT', 'VOLUME_CLIMAX_TOP',
-        'DISTRIBUTION_BAR', 'MACD_BEARISH_DIVERGENCE', 'EMA_DEATH_CROSS',
-        'MA_DEATH_CROSS', 'BB_BREAKOUT_UP',
+        'RSI_BEARISH_DIVERGENCE',
+        'FAILED_BREAKOUT',
+        'VOLUME_CLIMAX_TOP',
+        'DISTRIBUTION_BAR',
+        'MACD_BEARISH_DIVERGENCE',
+        'EMA_DEATH_CROSS',
+        'MA_DEATH_CROSS',
+        'BB_BREAKOUT_UP',
         'SUPPORT_BREAKDOWN',
       ];
       const MIN_BUY_SCORE = 3.5;
@@ -991,9 +1188,13 @@ function app() {
           const bullScore = bull.reduce((s, t) => s + (SIG_WEIGHTS[t] ?? 0), 0);
           const topBuy = BUY_PRIORITY.find((t) => bull.includes(t)) ?? bull[0];
           const topScore = SIG_WEIGHTS[topBuy] ?? 0;
-          const sinceLastBuy = barIdx >= 0 ? barIdx - lastBuyBarIdx : BUY_COOLDOWN;
+          const sinceLastBuy =
+            barIdx >= 0 ? barIdx - lastBuyBarIdx : BUY_COOLDOWN;
 
-          if ((bullScore >= MIN_BUY_SCORE || topScore >= 3.5) && sinceLastBuy >= BUY_COOLDOWN) {
+          if (
+            (bullScore >= MIN_BUY_SCORE || topScore >= 3.5) &&
+            sinceLastBuy >= BUY_COOLDOWN
+          ) {
             const buyTxt = this.signalTypeLabelVi(topBuy);
             markers.push({
               time: date,
@@ -1010,7 +1211,8 @@ function app() {
         if (bear.length) {
           const topSell = SELL_PRIORITY.find((t) => bear.includes(t));
           if (topSell) {
-            const sinceLastSell = barIdx >= 0 ? barIdx - lastSellBarIdx : SELL_COOLDOWN;
+            const sinceLastSell =
+              barIdx >= 0 ? barIdx - lastSellBarIdx : SELL_COOLDOWN;
             if (sinceLastSell >= SELL_COOLDOWN) {
               const sellTxt = this.signalTypeLabelVi(topSell);
               markers.push({
@@ -1041,15 +1243,24 @@ function app() {
     },
 
     renderChart(ticker) {
-      const container    = this.$refs.chartContainer;
+      const container = this.$refs.chartContainer;
       const rsiContainer = this.$refs.rsiContainer;
       const macdContainer = this.$refs.macdContainer;
       if (!container || !this.barData.length) return;
 
       // Destroy existing charts
-      if (this.lwChart)   { this.lwChart.remove();   this.lwChart   = null; }
-      if (this.rsiChart)  { this.rsiChart.remove();  this.rsiChart  = null; }
-      if (this.macdChart) { this.macdChart.remove();  this.macdChart = null; }
+      if (this.lwChart) {
+        this.lwChart.remove();
+        this.lwChart = null;
+      }
+      if (this.rsiChart) {
+        this.rsiChart.remove();
+        this.rsiChart = null;
+      }
+      if (this.macdChart) {
+        this.macdChart.remove();
+        this.macdChart = null;
+      }
 
       // ── Shared chart options (respects dark mode) ────────────────────────
       const dark = this.darkMode;
@@ -1059,13 +1270,24 @@ function app() {
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: 11,
       };
-      const baseGrid   = {
+      const baseGrid = {
         vertLines: { color: dark ? '#27272a' : '#f1f5f9' },
         horzLines: { color: dark ? '#27272a' : '#f1f5f9' },
       };
-      const baseTS     = { borderColor: dark ? '#3f3f46' : '#e2e8f0', timeVisible: false, fixLeftEdge: false, fixRightEdge: false, rightOffset: 0 };
+      const baseTS = {
+        borderColor: dark ? '#3f3f46' : '#e2e8f0',
+        timeVisible: false,
+        fixLeftEdge: false,
+        fixRightEdge: false,
+        rightOffset: 0,
+      };
       // Cùng barSpacing trên cả 3 chart — nếu khác, RSI/MACD lệch pixel với giá
-      const syncTs = { ...baseTS, timeVisible: true, barSpacing: 8, minBarSpacing: 4 };
+      const syncTs = {
+        ...baseTS,
+        timeVisible: true,
+        barSpacing: 8,
+        minBarSpacing: 4,
+      };
 
       const n = (x) => {
         const v = typeof x === 'number' ? x : Number(x);
@@ -1081,7 +1303,11 @@ function app() {
         layout: { ...baseLayout, fontSize: 12 },
         grid: baseGrid,
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-        rightPriceScale: { borderColor: '#e5e7eb', scaleMargins: { top: 0.08, bottom: 0.22 }, minimumWidth: 70 },
+        rightPriceScale: {
+          borderColor: '#e5e7eb',
+          scaleMargins: { top: 0.08, bottom: 0.22 },
+          minimumWidth: 70,
+        },
         timeScale: syncTs,
         localization: {
           priceFormatter: (p) =>
@@ -1091,38 +1317,66 @@ function app() {
       this.lwChart = chart;
 
       const candleSeries = chart.addCandlestickSeries({
-        upColor: '#26a69a', downColor: '#ef5350',
+        upColor: '#26a69a',
+        downColor: '#ef5350',
         borderVisible: false,
-        wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
       });
-      const candleData = this.barData.map(b => ({
+      const candleData = this.barData.map((b) => ({
         time: b.tradingDate,
         open: +(n(b.open) / 1000).toFixed(2),
         high: +(n(b.high) / 1000).toFixed(2),
-        low:  +(n(b.low) / 1000).toFixed(2),
+        low: +(n(b.low) / 1000).toFixed(2),
         close: +(n(b.close) / 1000).toFixed(2),
       }));
       candleSeries.setData(candleData);
 
       // Volume
-      const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
-      volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-      volSeries.setData(this.barData.map(b => ({
-        time: b.tradingDate, value: n(b.volume),
-        color: n(b.close) >= n(b.open) ? '#26a69a33' : '#ef535033',
-      })));
+      const volSeries = chart.addHistogramSeries({
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'vol',
+      });
+      volSeries
+        .priceScale()
+        .applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      volSeries.setData(
+        this.barData.map((b) => ({
+          time: b.tradingDate,
+          value: n(b.volume),
+          color: n(b.close) >= n(b.open) ? '#26a69a33' : '#ef535033',
+        })),
+      );
 
       // EMA20 / EMA50
-      const closes = this.barData.map(b => n(b.close) / 1000);
+      const closes = this.barData.map((b) => n(b.close) / 1000);
       const emaFn = (vals, p) => {
-        const k = 2/(p+1); let e = null;
-        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return +e.toFixed(3); });
+        const k = 2 / (p + 1);
+        let e = null;
+        return vals.map((v) => {
+          e = e === null ? v : v * k + e * (1 - k);
+          return +e.toFixed(3);
+        });
       };
       const ema20 = emaFn(closes, 20);
       const ema50 = emaFn(closes, 50);
       const addEma = (values, warmup, color, title) => {
-        const s = chart.addLineSeries({ color, lineWidth: 1.5, title, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
-        s.setData(this.barData.slice(warmup).map((b, i) => ({ time: b.tradingDate, value: values[i+warmup] })));
+        const s = chart.addLineSeries({
+          color,
+          lineWidth: 1.5,
+          title,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          crosshairMarkerVisible: false,
+        });
+        s.setData(
+          this.barData
+            .slice(warmup)
+            .map((b, i) => ({
+              time: b.tradingDate,
+              value: values[i + warmup],
+            })),
+        );
       };
       if (this.chartShowEma) {
         addEma(ema20, 19, '#3b82f6', 'EMA20');
@@ -1133,15 +1387,27 @@ function app() {
       let supK = null;
       let resK = null;
       const pt = this.currentRec?.priceTarget;
-      if (pt && Number.isFinite(Number(pt.support)) && Number.isFinite(Number(pt.resistance))) {
+      if (
+        pt &&
+        Number.isFinite(Number(pt.support)) &&
+        Number.isFinite(Number(pt.resistance))
+      ) {
         supK = +(n(pt.support) / 1000).toFixed(2);
         resK = +(n(pt.resistance) / 1000).toFixed(2);
       } else if (this.barData.length >= 20) {
         const recent20 = this.barData.slice(-20);
-        supK = +(Math.min(...recent20.map(b => n(b.low))) / 1000).toFixed(2);
-        resK = +(Math.max(...this.barData.map(b => n(b.high))) / 1000).toFixed(2);
+        supK = +(Math.min(...recent20.map((b) => n(b.low))) / 1000).toFixed(2);
+        resK = +(
+          Math.max(...this.barData.map((b) => n(b.high))) / 1000
+        ).toFixed(2);
       }
-      if (this.chartShowSR && supK != null && resK != null && supK > 0 && resK > 0) {
+      if (
+        this.chartShowSR &&
+        supK != null &&
+        resK != null &&
+        supK > 0 &&
+        resK > 0
+      ) {
         const dash = LightweightCharts.LineStyle.Dashed;
         const supCol = dark ? '#4ade80' : '#16a34a';
         const resCol = dark ? '#f87171' : '#dc2626';
@@ -1163,7 +1429,8 @@ function app() {
         });
       }
 
-      const sigSource = this.allChartSignals.length > 0 ? this.allChartSignals : this.signals;
+      const sigSource =
+        this.allChartSignals.length > 0 ? this.allChartSignals : this.signals;
       const mk = this.buildSignalMarkers(this.barData, sigSource);
       if (mk.length) candleSeries.setMarkers(mk);
 
@@ -1171,16 +1438,28 @@ function app() {
       const rsiValues = this.calcRSI(closes, 14);
       if (rsiContainer) {
         const rsiChart = LightweightCharts.createChart(rsiContainer, {
-          width: rsiContainer.clientWidth, height: 120,
-          layout: baseLayout, grid: baseGrid,
+          width: rsiContainer.clientWidth,
+          height: 120,
+          layout: baseLayout,
+          grid: baseGrid,
           crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-          rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 70, autoScale: false },
+          rightPriceScale: {
+            borderColor: '#e5e7eb',
+            minimumWidth: 70,
+            autoScale: false,
+          },
           timeScale: syncTs,
         });
         this.rsiChart = rsiChart;
         rsiChart.priceScale('right').applyOptions({ minimum: 0, maximum: 100 });
 
-        const rsiSeries = rsiChart.addLineSeries({ color: '#8b5cf6', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: 'RSI' });
+        const rsiSeries = rsiChart.addLineSeries({
+          color: '#8b5cf6',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: 'RSI',
+        });
         rsiSeries.setData(
           this.barData.map((b, i) => {
             const v = rsiValues[i];
@@ -1190,12 +1469,32 @@ function app() {
         );
         // Overbought / Oversold / Mid reference lines
         const lineStyle = LightweightCharts.LineStyle.Dashed;
-        rsiSeries.createPriceLine({ price: 70, color: '#ef4444', lineWidth: 1, lineStyle, axisLabelVisible: true,  title: '70' });
-        rsiSeries.createPriceLine({ price: 30, color: '#10b981', lineWidth: 1, lineStyle, axisLabelVisible: true,  title: '30' });
-        rsiSeries.createPriceLine({ price: 50, color: '#94a3b8', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+        rsiSeries.createPriceLine({
+          price: 70,
+          color: '#ef4444',
+          lineWidth: 1,
+          lineStyle,
+          axisLabelVisible: true,
+          title: '70',
+        });
+        rsiSeries.createPriceLine({
+          price: 30,
+          color: '#10b981',
+          lineWidth: 1,
+          lineStyle,
+          axisLabelVisible: true,
+          title: '30',
+        });
+        rsiSeries.createPriceLine({
+          price: 50,
+          color: '#94a3b8',
+          lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dotted,
+          axisLabelVisible: false,
+        });
 
         // Cập nhật giá trị hiện tại
-        const lastRsi = rsiValues.filter(v => v != null).at(-1);
+        const lastRsi = rsiValues.filter((v) => v != null).at(-1);
         this.indicators = { ...this.indicators, rsi: lastRsi ?? null };
       }
 
@@ -1203,8 +1502,10 @@ function app() {
       const macdData = this.calcMACD(closes, 12, 26, 9);
       if (macdContainer) {
         const macdChart = LightweightCharts.createChart(macdContainer, {
-          width: macdContainer.clientWidth, height: 120,
-          layout: baseLayout, grid: baseGrid,
+          width: macdContainer.clientWidth,
+          height: 120,
+          layout: baseLayout,
+          grid: baseGrid,
           crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
           rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 70 },
           timeScale: syncTs,
@@ -1212,31 +1513,70 @@ function app() {
         this.macdChart = macdChart;
 
         // MACD histogram — mỗi phiên một điểm (whitespace khi chưa có hist) để khớp chỉ số logic với chart giá
-        const histSeries = macdChart.addHistogramSeries({ priceScaleId: 'right', lastValueVisible: false });
+        const histSeries = macdChart.addHistogramSeries({
+          priceScaleId: 'right',
+          lastValueVisible: false,
+        });
         histSeries.setData(
           macdData.map((d) => {
             if (d.hist == null || Number.isNaN(d.hist)) return { time: d.time };
             const h = d.hist;
-            return { time: d.time, value: h, color: h >= 0 ? '#26a69a88' : '#ef535088' };
+            return {
+              time: d.time,
+              value: h,
+              color: h >= 0 ? '#26a69a88' : '#ef535088',
+            };
           }),
         );
 
-        const macdLine = macdChart.addLineSeries({ color: '#3b82f6', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'MACD' });
+        const macdLine = macdChart.addLineSeries({
+          color: '#3b82f6',
+          lineWidth: 1.5,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: 'MACD',
+        });
         macdLine.setData(
-          macdData.map((d) => (d.macd != null && !Number.isNaN(d.macd) ? { time: d.time, value: d.macd } : { time: d.time })),
+          macdData.map((d) =>
+            d.macd != null && !Number.isNaN(d.macd)
+              ? { time: d.time, value: d.macd }
+              : { time: d.time },
+          ),
         );
 
-        const sigLine = macdChart.addLineSeries({ color: '#f97316', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'Signal' });
+        const sigLine = macdChart.addLineSeries({
+          color: '#f97316',
+          lineWidth: 1.5,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: 'Signal',
+        });
         sigLine.setData(
-          macdData.map((d) => (d.signal != null && !Number.isNaN(d.signal) ? { time: d.time, value: d.signal } : { time: d.time })),
+          macdData.map((d) =>
+            d.signal != null && !Number.isNaN(d.signal)
+              ? { time: d.time, value: d.signal }
+              : { time: d.time },
+          ),
         );
 
         // Zero line
-        histSeries.createPriceLine({ price: 0, color: '#94a3b8', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+        histSeries.createPriceLine({
+          price: 0,
+          color: '#94a3b8',
+          lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dotted,
+          axisLabelVisible: false,
+        });
 
         // Cập nhật giá trị hiện tại
-        const lastMacd = macdData.filter(d => d.signal != null).at(-1);
-        if (lastMacd) this.indicators = { ...this.indicators, macd: lastMacd.macd, macdSignal: lastMacd.signal, macdHist: lastMacd.hist };
+        const lastMacd = macdData.filter((d) => d.signal != null).at(-1);
+        if (lastMacd)
+          this.indicators = {
+            ...this.indicators,
+            macd: lastMacd.macd,
+            macdSignal: lastMacd.signal,
+            macdHist: lastMacd.hist,
+          };
       }
 
       // ── Sync time scales — ưu tiên: restore sau lazy-load → viewport đã lưu → fitContent ─
@@ -1276,13 +1616,19 @@ function app() {
       setTimeout(() => {
         if (!this.lwChart) return;
         const range = this.lwChart.timeScale().getVisibleLogicalRange();
-        const rightOffset = range ? Math.round((range.to - range.from) * 0.27) : 15;
-        [this.lwChart, this.rsiChart, this.macdChart].forEach(c => {
+        const rightOffset = range
+          ? Math.round((range.to - range.from) * 0.27)
+          : 15;
+        [this.lwChart, this.rsiChart, this.macdChart].forEach((c) => {
           if (c) c.timeScale().applyOptions({ rightOffset });
         });
         const synced = this.lwChart.timeScale().getVisibleLogicalRange();
         if (synced && tkr) {
-          this.chartViewport = { ticker: tkr, from: synced.from, to: synced.to };
+          this.chartViewport = {
+            ticker: tkr,
+            from: synced.from,
+            to: synced.to,
+          };
           this.rsiChart?.timeScale().setVisibleLogicalRange(synced);
           this.macdChart?.timeScale().setVisibleLogicalRange(synced);
         }
@@ -1290,16 +1636,18 @@ function app() {
 
       let syncing = false;
       const syncAll = (source, others) => {
-        source.timeScale().subscribeVisibleLogicalRangeChange(range => {
+        source.timeScale().subscribeVisibleLogicalRangeChange((range) => {
           if (syncing || !range) return;
           syncing = true;
-          others.forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(range); });
+          others.forEach((c) => {
+            if (c) c.timeScale().setVisibleLogicalRange(range);
+          });
           syncing = false;
         });
       };
       const sub = [this.rsiChart, this.macdChart];
       syncAll(chart, sub);
-      if (this.rsiChart)  syncAll(this.rsiChart,  [chart, this.macdChart]);
+      if (this.rsiChart) syncAll(this.rsiChart, [chart, this.macdChart]);
       if (this.macdChart) syncAll(this.macdChart, [chart, this.rsiChart]);
 
       // Lazy load nến cũ chỉ khi đã zoom/pan (không kích hoạt khi fitContent hiển thị cả khối nến — tránh vòng lặp tải + render)
@@ -1314,7 +1662,10 @@ function app() {
         if (span >= barCount * 0.92) return;
         if (range.from > 14) return;
         clearTimeout(chartPanTimer);
-        chartPanTimer = setTimeout(() => this.maybeLoadOlderChartBars(tSym), 500);
+        chartPanTimer = setTimeout(
+          () => this.maybeLoadOlderChartBars(tSym),
+          500,
+        );
       });
 
       // Responsive resize (debounce — tránh lag khi layout đổi)
@@ -1322,9 +1673,16 @@ function app() {
       const ro = new ResizeObserver(() => {
         clearTimeout(roTimer);
         roTimer = setTimeout(() => {
-          if (this.lwChart)   this.lwChart.applyOptions({ width: container.clientWidth });
-          if (this.rsiChart)  this.rsiChart.applyOptions({ width: rsiContainer?.clientWidth ?? 0 });
-          if (this.macdChart) this.macdChart.applyOptions({ width: macdContainer?.clientWidth ?? 0 });
+          if (this.lwChart)
+            this.lwChart.applyOptions({ width: container.clientWidth });
+          if (this.rsiChart)
+            this.rsiChart.applyOptions({
+              width: rsiContainer?.clientWidth ?? 0,
+            });
+          if (this.macdChart)
+            this.macdChart.applyOptions({
+              width: macdContainer?.clientWidth ?? 0,
+            });
         }, 120);
       });
       ro.observe(container);
@@ -1334,76 +1692,128 @@ function app() {
 
     calcRSI(closes, period = 14) {
       if (closes.length < period + 1) return [];
-      let avgGain = 0, avgLoss = 0;
+      let avgGain = 0,
+        avgLoss = 0;
       for (let i = 1; i <= period; i++) {
-        const d = closes[i] - closes[i-1];
-        if (d > 0) avgGain += d; else avgLoss -= d;
+        const d = closes[i] - closes[i - 1];
+        if (d > 0) avgGain += d;
+        else avgLoss -= d;
       }
-      avgGain /= period; avgLoss /= period;
+      avgGain /= period;
+      avgLoss /= period;
       const rsi = new Array(period + 1).fill(null);
-      rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2));
+      rsi.push(
+        avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2),
+      );
       for (let i = period + 1; i < closes.length; i++) {
-        const d = closes[i] - closes[i-1];
-        avgGain = (avgGain * (period-1) + Math.max(0,  d)) / period;
-        avgLoss = (avgLoss * (period-1) + Math.max(0, -d)) / period;
-        rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2));
+        const d = closes[i] - closes[i - 1];
+        avgGain = (avgGain * (period - 1) + Math.max(0, d)) / period;
+        avgLoss = (avgLoss * (period - 1) + Math.max(0, -d)) / period;
+        rsi.push(
+          avgLoss === 0
+            ? 100
+            : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2),
+        );
       }
       return rsi;
     },
 
     calcMACD(closes, fast = 12, slow = 26, signal = 9) {
       const emaFn = (vals, p) => {
-        const k = 2/(p+1); let e = null;
-        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return e; });
+        const k = 2 / (p + 1);
+        let e = null;
+        return vals.map((v) => {
+          e = e === null ? v : v * k + e * (1 - k);
+          return e;
+        });
       };
       const ef = emaFn(closes, fast);
       const es = emaFn(closes, slow);
       const macdLine = closes.map((_, i) => ef[i] - es[i]);
-      const sigLine  = emaFn(macdLine.slice(slow-1), signal);
+      const sigLine = emaFn(macdLine.slice(slow - 1), signal);
       return closes.map((_, i) => {
-        if (i < slow - 1) return { time: this.barData[i]?.tradingDate, macd: null, signal: null, hist: null };
-        const si = i - (slow-1);
-        const m  = +macdLine[i].toFixed(4);
-        const s  = si >= signal-1 ? +sigLine[si-(signal-1)].toFixed(4) : null;
-        return { time: this.barData[i]?.tradingDate, macd: m, signal: s, hist: s != null ? +(m-s).toFixed(4) : null };
+        if (i < slow - 1)
+          return {
+            time: this.barData[i]?.tradingDate,
+            macd: null,
+            signal: null,
+            hist: null,
+          };
+        const si = i - (slow - 1);
+        const m = +macdLine[i].toFixed(4);
+        const s =
+          si >= signal - 1 ? +sigLine[si - (signal - 1)].toFixed(4) : null;
+        return {
+          time: this.barData[i]?.tradingDate,
+          macd: m,
+          signal: s,
+          hist: s != null ? +(m - s).toFixed(4) : null,
+        };
       });
     },
 
     /** MACD với chuỗi thời gian từ `bars` (tab Thị trường — không dùng `this.barData`). */
     calcMACDFromBars(closes, bars, fast = 12, slow = 26, signal = 9) {
       const emaFn = (vals, p) => {
-        const k = 2/(p+1); let e = null;
-        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return e; });
+        const k = 2 / (p + 1);
+        let e = null;
+        return vals.map((v) => {
+          e = e === null ? v : v * k + e * (1 - k);
+          return e;
+        });
       };
       const ef = emaFn(closes, fast);
       const es = emaFn(closes, slow);
       const macdLine = closes.map((_, i) => ef[i] - es[i]);
-      const sigLine  = emaFn(macdLine.slice(slow-1), signal);
+      const sigLine = emaFn(macdLine.slice(slow - 1), signal);
       return closes.map((_, i) => {
-        if (i < slow - 1) return { time: bars[i]?.tradingDate, macd: null, signal: null, hist: null };
-        const si = i - (slow-1);
-        const m  = +macdLine[i].toFixed(4);
-        const s  = si >= signal-1 ? +sigLine[si-(signal-1)].toFixed(4) : null;
-        return { time: bars[i]?.tradingDate, macd: m, signal: s, hist: s != null ? +(m-s).toFixed(4) : null };
+        if (i < slow - 1)
+          return {
+            time: bars[i]?.tradingDate,
+            macd: null,
+            signal: null,
+            hist: null,
+          };
+        const si = i - (slow - 1);
+        const m = +macdLine[i].toFixed(4);
+        const s =
+          si >= signal - 1 ? +sigLine[si - (signal - 1)].toFixed(4) : null;
+        return {
+          time: bars[i]?.tradingDate,
+          macd: m,
+          signal: s,
+          hist: s != null ? +(m - s).toFixed(4) : null,
+        };
       });
     },
 
     /** MACD cho nến intraday — `bars[i].time` là Unix giây. */
     calcMACDFromIntradayBars(closes, bars, fast = 12, slow = 26, signal = 9) {
       const emaFn = (vals, p) => {
-        const k = 2/(p+1); let e = null;
-        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return e; });
+        const k = 2 / (p + 1);
+        let e = null;
+        return vals.map((v) => {
+          e = e === null ? v : v * k + e * (1 - k);
+          return e;
+        });
       };
       const ef = emaFn(closes, fast);
       const es = emaFn(closes, slow);
       const macdLine = closes.map((_, i) => ef[i] - es[i]);
-      const sigLine  = emaFn(macdLine.slice(slow-1), signal);
+      const sigLine = emaFn(macdLine.slice(slow - 1), signal);
       return closes.map((_, i) => {
-        if (i < slow - 1) return { time: bars[i]?.time, macd: null, signal: null, hist: null };
-        const si = i - (slow-1);
-        const m  = +macdLine[i].toFixed(4);
-        const s  = si >= signal-1 ? +sigLine[si-(signal-1)].toFixed(4) : null;
-        return { time: bars[i]?.time, macd: m, signal: s, hist: s != null ? +(m-s).toFixed(4) : null };
+        if (i < slow - 1)
+          return { time: bars[i]?.time, macd: null, signal: null, hist: null };
+        const si = i - (slow - 1);
+        const m = +macdLine[i].toFixed(4);
+        const s =
+          si >= signal - 1 ? +sigLine[si - (signal - 1)].toFixed(4) : null;
+        return {
+          time: bars[i]?.time,
+          macd: m,
+          signal: s,
+          hist: s != null ? +(m - s).toFixed(4) : null,
+        };
       });
     },
 
@@ -1436,7 +1846,8 @@ function app() {
       for (let i = period - 1; i < n; i++) {
         const slice = closes.slice(i - period + 1, i + 1);
         const mean = slice.reduce((a, b) => a + b, 0) / period;
-        const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period;
+        const variance =
+          slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period;
         const std = Math.sqrt(variance);
         const u = mean + stdMult * std;
         const l = mean - stdMult * std;
@@ -1470,13 +1881,16 @@ function app() {
       let macdNote = '';
       if (lastM?.hist != null && prevM?.hist != null) {
         if (prevM.hist <= 0 && lastM.hist > 0) {
-          macdNote = 'MACD histogram vừa cắt lên 0 — có thể ưu tiên xem xét long.';
+          macdNote =
+            'MACD histogram vừa cắt lên 0 — có thể ưu tiên xem xét long.';
         } else if (prevM.hist >= 0 && lastM.hist < 0) {
-          macdNote = 'MACD histogram vừa cắt xuống 0 — có thể ưu tiên xem xét short / chốt long.';
+          macdNote =
+            'MACD histogram vừa cắt xuống 0 — có thể ưu tiên xem xét short / chốt long.';
         } else {
-          macdNote = lastM.hist > 0
-            ? 'Histogram đang dương (động lượng tăng).'
-            : 'Histogram đang âm (động lượng giảm).';
+          macdNote =
+            lastM.hist > 0
+              ? 'Histogram đang dương (động lượng tăng).'
+              : 'Histogram đang âm (động lượng giảm).';
         }
       }
       const atr = this.calcATRFromIntradayBars(sorted, 14);
@@ -1491,8 +1905,12 @@ function app() {
       const tpShort = lastClose - rr * mult * atr;
       let rsiNote = '';
       if (rsiLast != null && !Number.isNaN(rsiLast)) {
-        if (rsiLast < 30) rsiNote = 'RSI dưới 30 — vùng quá bán (cân nhắc long nếu có xác nhận khác).';
-        else if (rsiLast > 70) rsiNote = 'RSI trên 70 — vùng quá mua (cân nhắc short hoặc chốt long).';
+        if (rsiLast < 30)
+          rsiNote =
+            'RSI dưới 30 — vùng quá bán (cân nhắc long nếu có xác nhận khác).';
+        else if (rsiLast > 70)
+          rsiNote =
+            'RSI trên 70 — vùng quá mua (cân nhắc short hoặc chốt long).';
         else rsiNote = `RSI ~${Number(rsiLast).toFixed(1)} — trung tính.`;
       }
       const lb = sorted[sorted.length - 1];
@@ -1506,7 +1924,8 @@ function app() {
       const bull = cl >= o;
       let candleNote = '';
       if (bodyPct < 0.12) {
-        candleNote = 'Nến cuối: thân rất nhỏ / doji — do dự, nên chờ nến xác nhận.';
+        candleNote =
+          'Nến cuối: thân rất nhỏ / doji — do dự, nên chờ nến xác nhận.';
       } else if (bodyPct > 0.7) {
         candleNote = bull
           ? `Nến cuối: tăng mạnh, thân ~${body.toFixed(1)} điểm.`
@@ -1551,7 +1970,8 @@ function app() {
       }
 
       let biasLabelVi = 'Trung lập';
-      let biasHint = 'Điểm long/short cân bằng — hệ thống không ưu tiên một hướng; nên đứng ngoài hoặc chờ nến xác nhận.';
+      let biasHint =
+        'Điểm long/short cân bằng — hệ thống không ưu tiên một hướng; nên đứng ngoài hoặc chờ nến xác nhận.';
       if (bias === 'long') {
         biasLabelVi = 'LONG';
         biasHint = `Ưu tiên hướng mua (điểm +${longPts} vs ${shortPts}). SL/TP bên dưới là kèo long tham khảo.`;
@@ -1560,12 +1980,25 @@ function app() {
         biasHint = `Ưu tiên hướng bán (điểm +${shortPts} vs ${longPts}). SL/TP bên dưới là kèo short tham khảo.`;
       }
 
-      const sl = bias === 'long' ? +slLong.toFixed(2) : bias === 'short' ? +slShort.toFixed(2) : null;
-      const tp = bias === 'long' ? +tpLong.toFixed(2) : bias === 'short' ? +tpShort.toFixed(2) : null;
+      const sl =
+        bias === 'long'
+          ? +slLong.toFixed(2)
+          : bias === 'short'
+            ? +slShort.toFixed(2)
+            : null;
+      const tp =
+        bias === 'long'
+          ? +tpLong.toFixed(2)
+          : bias === 'short'
+            ? +tpShort.toFixed(2)
+            : null;
 
       return {
         lastClose: +lastClose.toFixed(2),
-        rsiLast: rsiLast != null && !Number.isNaN(rsiLast) ? +Number(rsiLast).toFixed(1) : null,
+        rsiLast:
+          rsiLast != null && !Number.isNaN(rsiLast)
+            ? +Number(rsiLast).toFixed(1)
+            : null,
         atr: +atr.toFixed(2),
         bias,
         biasLabelVi,
@@ -1609,7 +2042,9 @@ function app() {
           const prevSize = byTime.size;
           const raw = await fetch(
             `/stocks/VN30/intraday-index?${res}&from=${encodeURIComponent(targetFrom.toISOString())}&to=${encodeURIComponent(reqTo.toISOString())}`,
-          ).then((r) => r.json()).catch(() => []);
+          )
+            .then((r) => r.json())
+            .catch(() => []);
           const arr = Array.isArray(raw) ? raw : [];
           if (!arr.length) break;
           let batchMin = Infinity;
@@ -1626,11 +2061,16 @@ function app() {
           reqTo = new Date(batchMin * 1000 - 1000);
           if (reqTo.getTime() < targetFrom.getTime()) break;
         }
-        this.derivBars = [...byTime.values()].sort((a, b) => Number(a.time) - Number(b.time));
+        this.derivBars = [...byTime.values()].sort(
+          (a, b) => Number(a.time) - Number(b.time),
+        );
         if (!this.derivBars.length) {
           this.derivBarsResolution = null;
           this.derivHasMoreOlder = false;
-          this.derivAnalysis = { short: 'Không có nến trong khoảng này (thử khung khác hoặc làm mới).' };
+          this.derivAnalysis = {
+            short:
+              'Không có nến trong khoảng này (thử khung khác hoặc làm mới).',
+          };
           this.destroyDerivCharts();
           await this.$nextTick();
         } else {
@@ -1646,7 +2086,12 @@ function app() {
     },
 
     async maybeLoadOlderDerivBars() {
-      if (!this.derivBars?.length || this.derivOlderLoading || !this.derivHasMoreOlder) return;
+      if (
+        !this.derivBars?.length ||
+        this.derivOlderLoading ||
+        !this.derivHasMoreOlder
+      )
+        return;
       const oldestSec = Number(this.derivBars[0].time);
       if (!Number.isFinite(oldestSec)) return;
       const toD = new Date(oldestSec * 1000);
@@ -1670,7 +2115,9 @@ function app() {
         const res = `resolution=${encodeURIComponent(this.derivResolution)}`;
         const raw = await fetch(
           `/stocks/VN30/intraday-index?${res}&from=${encodeURIComponent(fromD.toISOString())}&to=${encodeURIComponent(toD.toISOString())}`,
-        ).then((r) => r.json()).catch(() => []);
+        )
+          .then((r) => r.json())
+          .catch(() => []);
         const arr = Array.isArray(raw) ? raw : [];
         if (!arr.length) {
           this.derivHasMoreOlder = false;
@@ -1681,7 +2128,9 @@ function app() {
           const t = Number(b.time);
           if (Number.isFinite(t)) byTime.set(t, b);
         }
-        const merged = [...byTime.values()].sort((a, b) => Number(a.time) - Number(b.time));
+        const merged = [...byTime.values()].sort(
+          (a, b) => Number(a.time) - Number(b.time),
+        );
         const added = merged.length - prevLen;
         if (added <= 0) {
           this.derivHasMoreOlder = false;
@@ -1768,7 +2217,11 @@ function app() {
         layout: { ...baseLayout, fontSize: 12 },
         grid: baseGrid,
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-        rightPriceScale: { borderColor: '#e5e7eb', scaleMargins: { top: 0.08, bottom: 0.22 }, minimumWidth: 64 },
+        rightPriceScale: {
+          borderColor: '#e5e7eb',
+          scaleMargins: { top: 0.08, bottom: 0.22 },
+          minimumWidth: 64,
+        },
         timeScale: syncTs,
         localization: {
           priceFormatter: (p) => n(p).toFixed(2),
@@ -1777,35 +2230,62 @@ function app() {
       });
 
       const candleSeries = chart.addCandlestickSeries({
-        upColor: '#26a69a', downColor: '#ef5350',
+        upColor: '#26a69a',
+        downColor: '#ef5350',
         borderVisible: false,
-        wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
       });
-      candleSeries.setData(barData.map((b) => ({
-        time: n(b.time),
-        open: +(n(b.open) / 1000).toFixed(2),
-        high: +(n(b.high) / 1000).toFixed(2),
-        low: +(n(b.low) / 1000).toFixed(2),
-        close: +(n(b.close) / 1000).toFixed(2),
-      })));
+      candleSeries.setData(
+        barData.map((b) => ({
+          time: n(b.time),
+          open: +(n(b.open) / 1000).toFixed(2),
+          high: +(n(b.high) / 1000).toFixed(2),
+          low: +(n(b.low) / 1000).toFixed(2),
+          close: +(n(b.close) / 1000).toFixed(2),
+        })),
+      );
 
-      const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
-      volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-      volSeries.setData(barData.map((b) => ({
-        time: n(b.time), value: n(b.volume),
-        color: n(b.close) >= n(b.open) ? '#26a69a33' : '#ef535033',
-      })));
+      const volSeries = chart.addHistogramSeries({
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'vol',
+      });
+      volSeries
+        .priceScale()
+        .applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      volSeries.setData(
+        barData.map((b) => ({
+          time: n(b.time),
+          value: n(b.volume),
+          color: n(b.close) >= n(b.open) ? '#26a69a33' : '#ef535033',
+        })),
+      );
 
       const closes = barData.map((b) => n(b.close) / 1000);
       const emaFn = (vals, p) => {
-        const k = 2/(p+1); let e = null;
-        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return +e.toFixed(3); });
+        const k = 2 / (p + 1);
+        let e = null;
+        return vals.map((v) => {
+          e = e === null ? v : v * k + e * (1 - k);
+          return +e.toFixed(3);
+        });
       };
       const ema20 = emaFn(closes, 20);
       const ema50 = emaFn(closes, 50);
       const addEma = (values, warmup, color, title) => {
-        const s = chart.addLineSeries({ color, lineWidth: 1.5, title, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
-        s.setData(barData.slice(warmup).map((b, i) => ({ time: n(b.time), value: values[i+warmup] })));
+        const s = chart.addLineSeries({
+          color,
+          lineWidth: 1.5,
+          title,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          crosshairMarkerVisible: false,
+        });
+        s.setData(
+          barData
+            .slice(warmup)
+            .map((b, i) => ({ time: n(b.time), value: values[i + warmup] })),
+        );
       };
       if (this.chartShowEma) {
         addEma(ema20, 19, '#3b82f6', 'EMA20');
@@ -1813,7 +2293,11 @@ function app() {
       }
 
       /** BB + đánh dấu nén (BW &lt; 8%) — chỉ 5m/15m; tín hiệu DB vẫn là nến ngày. */
-      if (this.derivShowBb && (dr === '5' || dr === '15') && barData.length >= 20) {
+      if (
+        this.derivShowBb &&
+        (dr === '5' || dr === '15') &&
+        barData.length >= 20
+      ) {
         const bb = this.calcBollingerIntraday(closes);
         const lineBb = (vals, color, title) => {
           const s = chart.addLineSeries({
@@ -1866,12 +2350,32 @@ function app() {
         supK = +(Math.min(...recent20.map((b) => n(b.low))) / 1000).toFixed(2);
         resK = +(Math.max(...recent20.map((b) => n(b.high))) / 1000).toFixed(2);
       }
-      if (this.chartShowSR && supK != null && resK != null && supK > 0 && resK > 0) {
+      if (
+        this.chartShowSR &&
+        supK != null &&
+        resK != null &&
+        supK > 0 &&
+        resK > 0
+      ) {
         const dash = LightweightCharts.LineStyle.Dashed;
         const supCol = dark ? '#4ade80' : '#16a34a';
         const resCol = dark ? '#f87171' : '#dc2626';
-        candleSeries.createPriceLine({ price: supK, color: supCol, lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'Hỗ trợ' });
-        candleSeries.createPriceLine({ price: resK, color: resCol, lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'Kháng cự' });
+        candleSeries.createPriceLine({
+          price: supK,
+          color: supCol,
+          lineWidth: 1,
+          lineStyle: dash,
+          axisLabelVisible: true,
+          title: 'Hỗ trợ',
+        });
+        candleSeries.createPriceLine({
+          price: resK,
+          color: resCol,
+          lineWidth: 1,
+          lineStyle: dash,
+          axisLabelVisible: true,
+          title: 'Kháng cự',
+        });
       }
 
       const da = this.derivAnalysis;
@@ -1888,61 +2392,162 @@ function app() {
           title: 'Giá cuối',
         });
         if (da.bias === 'long' && da.sl != null && da.tp != null) {
-          candleSeries.createPriceLine({ price: da.sl, color: dark ? '#22c55e' : '#15803d', lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'SL' });
-          candleSeries.createPriceLine({ price: da.tp, color: dark ? '#86efac' : '#16a34a', lineWidth: 1, lineStyle: dot, axisLabelVisible: true, title: 'TP' });
+          candleSeries.createPriceLine({
+            price: da.sl,
+            color: dark ? '#22c55e' : '#15803d',
+            lineWidth: 1,
+            lineStyle: dash,
+            axisLabelVisible: true,
+            title: 'SL',
+          });
+          candleSeries.createPriceLine({
+            price: da.tp,
+            color: dark ? '#86efac' : '#16a34a',
+            lineWidth: 1,
+            lineStyle: dot,
+            axisLabelVisible: true,
+            title: 'TP',
+          });
         } else if (da.bias === 'short' && da.sl != null && da.tp != null) {
-          candleSeries.createPriceLine({ price: da.sl, color: dark ? '#f87171' : '#b91c1c', lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'SL' });
-          candleSeries.createPriceLine({ price: da.tp, color: dark ? '#fca5a5' : '#dc2626', lineWidth: 1, lineStyle: dot, axisLabelVisible: true, title: 'TP' });
+          candleSeries.createPriceLine({
+            price: da.sl,
+            color: dark ? '#f87171' : '#b91c1c',
+            lineWidth: 1,
+            lineStyle: dash,
+            axisLabelVisible: true,
+            title: 'SL',
+          });
+          candleSeries.createPriceLine({
+            price: da.tp,
+            color: dark ? '#fca5a5' : '#dc2626',
+            lineWidth: 1,
+            lineStyle: dot,
+            axisLabelVisible: true,
+            title: 'TP',
+          });
         }
       }
 
       const rsiValues = this.calcRSI(closes, 14);
       let rsiChart = null;
-      const rsiPaneH = rsiEl ? Math.max(96, Math.round(rsiEl.clientHeight) || 120) : 96;
-      const macdPaneH = macdEl ? Math.max(96, Math.round(macdEl.clientHeight) || 120) : 96;
+      const rsiPaneH = rsiEl
+        ? Math.max(96, Math.round(rsiEl.clientHeight) || 120)
+        : 96;
+      const macdPaneH = macdEl
+        ? Math.max(96, Math.round(macdEl.clientHeight) || 120)
+        : 96;
       if (rsiEl) {
         rsiChart = LightweightCharts.createChart(rsiEl, {
-          width: rsiEl.clientWidth, height: rsiPaneH,
-          layout: baseLayout, grid: baseGrid,
+          width: rsiEl.clientWidth,
+          height: rsiPaneH,
+          layout: baseLayout,
+          grid: baseGrid,
           crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-          rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 64, autoScale: false },
+          rightPriceScale: {
+            borderColor: '#e5e7eb',
+            minimumWidth: 64,
+            autoScale: false,
+          },
           timeScale: syncTs,
           localization: { timeFormatter: (time) => derivTimeLabel(time) },
         });
         rsiChart.priceScale('right').applyOptions({ minimum: 0, maximum: 100 });
-        const rsiSeries = rsiChart.addLineSeries({ color: '#8b5cf6', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: 'RSI' });
-        rsiSeries.setData(barData.map((b, i) => {
-          const v = rsiValues[i];
-          if (v == null || Number.isNaN(v)) return { time: n(b.time) };
-          return { time: n(b.time), value: v };
-        }));
+        const rsiSeries = rsiChart.addLineSeries({
+          color: '#8b5cf6',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: 'RSI',
+        });
+        rsiSeries.setData(
+          barData.map((b, i) => {
+            const v = rsiValues[i];
+            if (v == null || Number.isNaN(v)) return { time: n(b.time) };
+            return { time: n(b.time), value: v };
+          }),
+        );
         const lineStyle = LightweightCharts.LineStyle.Dashed;
-        rsiSeries.createPriceLine({ price: 70, color: '#ef4444', lineWidth: 1, lineStyle, axisLabelVisible: false, title: '' });
-        rsiSeries.createPriceLine({ price: 30, color: '#10b981', lineWidth: 1, lineStyle, axisLabelVisible: false, title: '' });
+        rsiSeries.createPriceLine({
+          price: 70,
+          color: '#ef4444',
+          lineWidth: 1,
+          lineStyle,
+          axisLabelVisible: false,
+          title: '',
+        });
+        rsiSeries.createPriceLine({
+          price: 30,
+          color: '#10b981',
+          lineWidth: 1,
+          lineStyle,
+          axisLabelVisible: false,
+          title: '',
+        });
       }
 
       const macdData = this.calcMACDFromIntradayBars(closes, barData);
       let macdChart = null;
       if (macdEl) {
         macdChart = LightweightCharts.createChart(macdEl, {
-          width: macdEl.clientWidth, height: macdPaneH,
-          layout: baseLayout, grid: baseGrid,
+          width: macdEl.clientWidth,
+          height: macdPaneH,
+          layout: baseLayout,
+          grid: baseGrid,
           crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
           rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 64 },
           timeScale: syncTs,
           localization: { timeFormatter: (time) => derivTimeLabel(time) },
         });
-        const histSeries = macdChart.addHistogramSeries({ priceScaleId: 'right', lastValueVisible: false });
-        histSeries.setData(macdData.map((d) => {
-          if (d.hist == null || Number.isNaN(d.hist)) return { time: d.time };
-          const h = d.hist;
-          return { time: d.time, value: h, color: h >= 0 ? '#26a69a88' : '#ef535088' };
-        }));
-        const macdLine = macdChart.addLineSeries({ color: '#3b82f6', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'MACD' });
-        macdLine.setData(macdData.map((d) => (d.macd != null && !Number.isNaN(d.macd) ? { time: d.time, value: d.macd } : { time: d.time })));
-        const sigLine = macdChart.addLineSeries({ color: '#f97316', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'Signal' });
-        sigLine.setData(macdData.map((d) => (d.signal != null && !Number.isNaN(d.signal) ? { time: d.time, value: d.signal } : { time: d.time })));
-        histSeries.createPriceLine({ price: 0, color: '#94a3b8', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+        const histSeries = macdChart.addHistogramSeries({
+          priceScaleId: 'right',
+          lastValueVisible: false,
+        });
+        histSeries.setData(
+          macdData.map((d) => {
+            if (d.hist == null || Number.isNaN(d.hist)) return { time: d.time };
+            const h = d.hist;
+            return {
+              time: d.time,
+              value: h,
+              color: h >= 0 ? '#26a69a88' : '#ef535088',
+            };
+          }),
+        );
+        const macdLine = macdChart.addLineSeries({
+          color: '#3b82f6',
+          lineWidth: 1.5,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: 'MACD',
+        });
+        macdLine.setData(
+          macdData.map((d) =>
+            d.macd != null && !Number.isNaN(d.macd)
+              ? { time: d.time, value: d.macd }
+              : { time: d.time },
+          ),
+        );
+        const sigLine = macdChart.addLineSeries({
+          color: '#f97316',
+          lineWidth: 1.5,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: 'Signal',
+        });
+        sigLine.setData(
+          macdData.map((d) =>
+            d.signal != null && !Number.isNaN(d.signal)
+              ? { time: d.time, value: d.signal }
+              : { time: d.time },
+          ),
+        );
+        histSeries.createPriceLine({
+          price: 0,
+          color: '#94a3b8',
+          lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dotted,
+          axisLabelVisible: false,
+        });
       }
 
       const dRestore = this._derivScrollRestore;
@@ -1957,13 +2562,17 @@ function app() {
       }
       setTimeout(() => {
         const range = chart.timeScale().getVisibleLogicalRange();
-        const rightOffset = range ? Math.round((range.to - range.from) * 0.22) : 12;
+        const rightOffset = range
+          ? Math.round((range.to - range.from) * 0.22)
+          : 12;
         [chart, rsiChart, macdChart].forEach((c) => {
           if (c) c.timeScale().applyOptions({ rightOffset });
         });
         const synced = chart.timeScale().getVisibleLogicalRange();
-        if (synced && rsiChart) rsiChart.timeScale().setVisibleLogicalRange(synced);
-        if (synced && macdChart) macdChart.timeScale().setVisibleLogicalRange(synced);
+        if (synced && rsiChart)
+          rsiChart.timeScale().setVisibleLogicalRange(synced);
+        if (synced && macdChart)
+          macdChart.timeScale().setVisibleLogicalRange(synced);
       }, 50);
 
       let syncing = false;
@@ -1971,7 +2580,9 @@ function app() {
         source.timeScale().subscribeVisibleLogicalRangeChange((range) => {
           if (syncing || !range) return;
           syncing = true;
-          others.forEach((c) => { if (c) c.timeScale().setVisibleLogicalRange(range); });
+          others.forEach((c) => {
+            if (c) c.timeScale().setVisibleLogicalRange(range);
+          });
           syncing = false;
         });
       };
@@ -1997,11 +2608,23 @@ function app() {
         clearTimeout(roTimer);
         roTimer = setTimeout(() => {
           const nh = Math.max(280, Math.round(mainEl.clientHeight) || 420);
-          const rh = rsiEl ? Math.max(96, Math.round(rsiEl.clientHeight) || 120) : 0;
-          const mh = macdEl ? Math.max(96, Math.round(macdEl.clientHeight) || 120) : 0;
+          const rh = rsiEl
+            ? Math.max(96, Math.round(rsiEl.clientHeight) || 120)
+            : 0;
+          const mh = macdEl
+            ? Math.max(96, Math.round(macdEl.clientHeight) || 120)
+            : 0;
           chart.applyOptions({ width: mainEl.clientWidth, height: nh });
-          if (rsiChart) rsiChart.applyOptions({ width: rsiEl?.clientWidth ?? 0, height: rh });
-          if (macdChart) macdChart.applyOptions({ width: macdEl?.clientWidth ?? 0, height: mh });
+          if (rsiChart)
+            rsiChart.applyOptions({
+              width: rsiEl?.clientWidth ?? 0,
+              height: rh,
+            });
+          if (macdChart)
+            macdChart.applyOptions({
+              width: macdEl?.clientWidth ?? 0,
+              height: mh,
+            });
         }, 120);
       });
       ro.observe(mainEl);
@@ -2063,7 +2686,10 @@ function app() {
     onDerivativesTabFocus() {
       this.$nextTick(() => {
         requestAnimationFrame(() => {
-          if (!this.derivBars.length || this.derivBarsResolution !== this.derivResolution) {
+          if (
+            !this.derivBars.length ||
+            this.derivBarsResolution !== this.derivResolution
+          ) {
             void this.loadDerivIntraday({ silent: true });
           } else {
             this.renderDerivIntradayPanel();
@@ -2073,7 +2699,9 @@ function app() {
     },
 
     async loadDerivSignalsLatest() {
-      const raw = await fetch('/signals/VN30').then((r) => r.json()).catch(() => []);
+      const raw = await fetch('/signals/VN30')
+        .then((r) => r.json())
+        .catch(() => []);
       this.derivSignalsLatest = Array.isArray(raw) ? raw.slice(0, 40) : [];
     },
 
@@ -2090,20 +2718,30 @@ function app() {
       try {
         const tickers = ['VNINDEX', 'VN30'];
         for (const t of tickers) {
-          const res = await this.authFetch(`/queue/sync/${t}?windowDays=31`, { method: 'POST' })
+          const res = await this.authFetch(`/queue/sync/${t}?windowDays=31`, {
+            method: 'POST',
+          })
             .then((r) => r.json())
             .catch(() => null);
           if (!res?.jobId) {
             this.showToast(`Không tạo job đồng bộ ${t}`, 'error');
             return;
           }
-          await this.pollJob(res.jobId, `Đồng bộ ${t} ~1 tháng`, null, { silentToast: true });
+          await this.pollJob(res.jobId, `Đồng bộ ${t} ~1 tháng`, null, {
+            silentToast: true,
+          });
         }
-        await Promise.all([this.loadDerivSignalsLatest(), this.loadMarketCharts({ silent: true })]);
+        await Promise.all([
+          this.loadDerivSignalsLatest(),
+          this.loadMarketCharts({ silent: true }),
+        ]);
         if (this.tab === 'derivatives') {
           await this.loadDerivIntraday({ silent: true, reset: true });
         }
-        this.showToast('Đã đồng bộ ~1 tháng (VNINDEX + VN30) và phân tích tín hiệu', 'success');
+        this.showToast(
+          'Đã đồng bộ ~1 tháng (VNINDEX + VN30) và phân tích tín hiệu',
+          'success',
+        );
       } catch (e) {
         if (e.message !== 'Unauthorized') {
           this.showToast('Lỗi đồng bộ', 'error');
@@ -2121,8 +2759,12 @@ function app() {
       try {
         this._marketScrollRestore = null;
         const [rawVni, rawV30] = await Promise.all([
-          fetch(`/stocks/VNINDEX/stored?limit=${INITIAL}`).then((r) => r.json()).catch(() => []),
-          fetch(`/stocks/VN30/stored?limit=${INITIAL}`).then((r) => r.json()).catch(() => []),
+          fetch(`/stocks/VNINDEX/stored?limit=${INITIAL}`)
+            .then((r) => r.json())
+            .catch(() => []),
+          fetch(`/stocks/VN30/stored?limit=${INITIAL}`)
+            .then((r) => r.json())
+            .catch(() => []),
         ]);
         const norm = (arr) => {
           const a = Array.isArray(arr) ? arr : [];
@@ -2146,10 +2788,18 @@ function app() {
                   : v30[0].tradingDate;
         const q = `from=${encodeURIComponent(from)}`;
         const [chartVni, chartV30, latestVni, latestV30] = await Promise.all([
-          fetch(`/signals/VNINDEX/chart?${q}`).then((r) => r.json()).catch(() => []),
-          fetch(`/signals/VN30/chart?${q}`).then((r) => r.json()).catch(() => []),
-          fetch('/signals/VNINDEX').then((r) => r.json()).catch(() => []),
-          fetch('/signals/VN30').then((r) => r.json()).catch(() => []),
+          fetch(`/signals/VNINDEX/chart?${q}`)
+            .then((r) => r.json())
+            .catch(() => []),
+          fetch(`/signals/VN30/chart?${q}`)
+            .then((r) => r.json())
+            .catch(() => []),
+          fetch('/signals/VNINDEX')
+            .then((r) => r.json())
+            .catch(() => []),
+          fetch('/signals/VN30')
+            .then((r) => r.json())
+            .catch(() => []),
         ]);
         this.marketBarVni = vni;
         this.marketBarVn30 = v30;
@@ -2185,7 +2835,8 @@ function app() {
       const arrKey = slot === 'vni' ? 'marketBarVni' : 'marketBarVn30';
       const sigKey = slot === 'vni' ? 'marketSignalsVni' : 'marketSignalsVn30';
       const hasKey = slot === 'vni' ? 'marketHasMoreVni' : 'marketHasMoreVn30';
-      const loadKey = slot === 'vni' ? 'marketOlderLoadingVni' : 'marketOlderLoadingVn30';
+      const loadKey =
+        slot === 'vni' ? 'marketOlderLoadingVni' : 'marketOlderLoadingVn30';
 
       const bars = this[arrKey];
       if (!Array.isArray(bars) || !bars.length || this[loadKey]) return;
@@ -2258,23 +2909,28 @@ function app() {
       try {
         const tickers = ['VNINDEX', 'VN30'];
         for (const t of tickers) {
-          const res = await this.authFetch(`/queue/sync/${t}?full=1`, { method: 'POST' })
+          const res = await this.authFetch(`/queue/sync/${t}?full=1`, {
+            method: 'POST',
+          })
             .then((r) => r.json())
             .catch(() => null);
           if (!res?.jobId) {
             this.showToast(`Không tạo job đồng bộ ${t}`, 'error');
             return;
           }
-          this.log('info', `⏳ Đồng bộ full IPO + phân tích ${t} (job #${res.jobId})...`);
-          await this.pollJob(
-            res.jobId,
-            `Đồng bộ ${t}`,
-            null,
-            { silentToast: true },
+          this.log(
+            'info',
+            `⏳ Đồng bộ full IPO + phân tích ${t} (job #${res.jobId})...`,
           );
+          await this.pollJob(res.jobId, `Đồng bộ ${t}`, null, {
+            silentToast: true,
+          });
         }
         await this.loadMarketCharts({ silent: true });
-        this.showToast('Đã đồng bộ full IPO và phân tích nến VNINDEX / VN30', 'success');
+        this.showToast(
+          'Đã đồng bộ full IPO và phân tích nến VNINDEX / VN30',
+          'success',
+        );
       } catch (e) {
         if (e.message !== 'Unauthorized') {
           this.showToast('Lỗi đồng bộ chỉ số', 'error');
@@ -2289,9 +2945,12 @@ function app() {
      * `slot`: 'vni' | 'vn30' — khớp x-ref.
      */
     renderMarketIndexPanel(barData, slot) {
-      const mainEl = slot === 'vni' ? this.$refs.marketChartVni : this.$refs.marketChartVn30;
-      const rsiEl = slot === 'vni' ? this.$refs.marketRsiVni : this.$refs.marketRsiVn30;
-      const macdEl = slot === 'vni' ? this.$refs.marketMacdVni : this.$refs.marketMacdVn30;
+      const mainEl =
+        slot === 'vni' ? this.$refs.marketChartVni : this.$refs.marketChartVn30;
+      const rsiEl =
+        slot === 'vni' ? this.$refs.marketRsiVni : this.$refs.marketRsiVn30;
+      const macdEl =
+        slot === 'vni' ? this.$refs.marketMacdVni : this.$refs.marketMacdVn30;
       if (!mainEl || !barData?.length) return;
 
       this.destroyMarketSlot(slot);
@@ -2309,8 +2968,19 @@ function app() {
         vertLines: { color: dark ? '#27272a' : '#f1f5f9' },
         horzLines: { color: dark ? '#27272a' : '#f1f5f9' },
       };
-      const baseTS = { borderColor: dark ? '#3f3f46' : '#e2e8f0', timeVisible: false, fixLeftEdge: false, fixRightEdge: false, rightOffset: 0 };
-      const syncTs = { ...baseTS, timeVisible: true, barSpacing: 7, minBarSpacing: 3 };
+      const baseTS = {
+        borderColor: dark ? '#3f3f46' : '#e2e8f0',
+        timeVisible: false,
+        fixLeftEdge: false,
+        fixRightEdge: false,
+        rightOffset: 0,
+      };
+      const syncTs = {
+        ...baseTS,
+        timeVisible: true,
+        barSpacing: 7,
+        minBarSpacing: 3,
+      };
 
       const n = (x) => {
         const v = typeof x === 'number' ? x : Number(x);
@@ -2323,45 +2993,80 @@ function app() {
         layout: { ...baseLayout, fontSize: 12 },
         grid: baseGrid,
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-        rightPriceScale: { borderColor: '#e5e7eb', scaleMargins: { top: 0.08, bottom: 0.22 }, minimumWidth: 64 },
+        rightPriceScale: {
+          borderColor: '#e5e7eb',
+          scaleMargins: { top: 0.08, bottom: 0.22 },
+          minimumWidth: 64,
+        },
         timeScale: syncTs,
         localization: { priceFormatter: (p) => n(p).toFixed(2) },
       });
 
       const candleSeries = chart.addCandlestickSeries({
-        upColor: '#26a69a', downColor: '#ef5350',
+        upColor: '#26a69a',
+        downColor: '#ef5350',
         borderVisible: false,
-        wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
       });
-      candleSeries.setData(barData.map(b => ({
-        time: b.tradingDate,
-        open: +(n(b.open) / 1000).toFixed(2),
-        high: +(n(b.high) / 1000).toFixed(2),
-        low:  +(n(b.low) / 1000).toFixed(2),
-        close: +(n(b.close) / 1000).toFixed(2),
-      })));
+      candleSeries.setData(
+        barData.map((b) => ({
+          time: b.tradingDate,
+          open: +(n(b.open) / 1000).toFixed(2),
+          high: +(n(b.high) / 1000).toFixed(2),
+          low: +(n(b.low) / 1000).toFixed(2),
+          close: +(n(b.close) / 1000).toFixed(2),
+        })),
+      );
 
-      const sigForMarkers = slot === 'vni' ? this.marketSignalsVni : this.marketSignalsVn30;
+      const sigForMarkers =
+        slot === 'vni' ? this.marketSignalsVni : this.marketSignalsVn30;
       const mk = this.buildSignalMarkers(barData, sigForMarkers);
       if (mk.length) candleSeries.setMarkers(mk);
 
-      const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
-      volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-      volSeries.setData(barData.map(b => ({
-        time: b.tradingDate, value: n(b.volume),
-        color: n(b.close) >= n(b.open) ? '#26a69a33' : '#ef535033',
-      })));
+      const volSeries = chart.addHistogramSeries({
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'vol',
+      });
+      volSeries
+        .priceScale()
+        .applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      volSeries.setData(
+        barData.map((b) => ({
+          time: b.tradingDate,
+          value: n(b.volume),
+          color: n(b.close) >= n(b.open) ? '#26a69a33' : '#ef535033',
+        })),
+      );
 
-      const closes = barData.map(b => n(b.close) / 1000);
+      const closes = barData.map((b) => n(b.close) / 1000);
       const emaFn = (vals, p) => {
-        const k = 2/(p+1); let e = null;
-        return vals.map(v => { e = e===null ? v : v*k+e*(1-k); return +e.toFixed(3); });
+        const k = 2 / (p + 1);
+        let e = null;
+        return vals.map((v) => {
+          e = e === null ? v : v * k + e * (1 - k);
+          return +e.toFixed(3);
+        });
       };
       const ema20 = emaFn(closes, 20);
       const ema50 = emaFn(closes, 50);
       const addEma = (values, warmup, color, title) => {
-        const s = chart.addLineSeries({ color, lineWidth: 1.5, title, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
-        s.setData(barData.slice(warmup).map((b, i) => ({ time: b.tradingDate, value: values[i+warmup] })));
+        const s = chart.addLineSeries({
+          color,
+          lineWidth: 1.5,
+          title,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          crosshairMarkerVisible: false,
+        });
+        s.setData(
+          barData
+            .slice(warmup)
+            .map((b, i) => ({
+              time: b.tradingDate,
+              value: values[i + warmup],
+            })),
+        );
       };
       if (this.chartShowEma) {
         addEma(ema20, 19, '#3b82f6', 'EMA20');
@@ -2372,63 +3077,155 @@ function app() {
       let resK = null;
       if (barData.length >= 20) {
         const recent20 = barData.slice(-20);
-        supK = +(Math.min(...recent20.map(b => n(b.low))) / 1000).toFixed(2);
-        resK = +(Math.max(...recent20.map(b => n(b.high))) / 1000).toFixed(2);
+        supK = +(Math.min(...recent20.map((b) => n(b.low))) / 1000).toFixed(2);
+        resK = +(Math.max(...recent20.map((b) => n(b.high))) / 1000).toFixed(2);
       }
-      if (this.chartShowSR && supK != null && resK != null && supK > 0 && resK > 0) {
+      if (
+        this.chartShowSR &&
+        supK != null &&
+        resK != null &&
+        supK > 0 &&
+        resK > 0
+      ) {
         const dash = LightweightCharts.LineStyle.Dashed;
         const supCol = dark ? '#4ade80' : '#16a34a';
         const resCol = dark ? '#f87171' : '#dc2626';
-        candleSeries.createPriceLine({ price: supK, color: supCol, lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'Hỗ trợ' });
-        candleSeries.createPriceLine({ price: resK, color: resCol, lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'Kháng cự' });
+        candleSeries.createPriceLine({
+          price: supK,
+          color: supCol,
+          lineWidth: 1,
+          lineStyle: dash,
+          axisLabelVisible: true,
+          title: 'Hỗ trợ',
+        });
+        candleSeries.createPriceLine({
+          price: resK,
+          color: resCol,
+          lineWidth: 1,
+          lineStyle: dash,
+          axisLabelVisible: true,
+          title: 'Kháng cự',
+        });
       }
 
       const rsiValues = this.calcRSI(closes, 14);
       let rsiChart = null;
       if (rsiEl) {
         rsiChart = LightweightCharts.createChart(rsiEl, {
-          width: rsiEl.clientWidth, height: 96,
-          layout: baseLayout, grid: baseGrid,
+          width: rsiEl.clientWidth,
+          height: 96,
+          layout: baseLayout,
+          grid: baseGrid,
           crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-          rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 64, autoScale: false },
+          rightPriceScale: {
+            borderColor: '#e5e7eb',
+            minimumWidth: 64,
+            autoScale: false,
+          },
           timeScale: syncTs,
         });
         rsiChart.priceScale('right').applyOptions({ minimum: 0, maximum: 100 });
-        const rsiSeries = rsiChart.addLineSeries({ color: '#8b5cf6', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: 'RSI' });
-        rsiSeries.setData(barData.map((b, i) => {
-          const v = rsiValues[i];
-          if (v == null || Number.isNaN(v)) return { time: b.tradingDate };
-          return { time: b.tradingDate, value: v };
-        }));
+        const rsiSeries = rsiChart.addLineSeries({
+          color: '#8b5cf6',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: 'RSI',
+        });
+        rsiSeries.setData(
+          barData.map((b, i) => {
+            const v = rsiValues[i];
+            if (v == null || Number.isNaN(v)) return { time: b.tradingDate };
+            return { time: b.tradingDate, value: v };
+          }),
+        );
         const lineStyle = LightweightCharts.LineStyle.Dashed;
-        rsiSeries.createPriceLine({ price: 70, color: '#ef4444', lineWidth: 1, lineStyle, axisLabelVisible: false, title: '' });
-        rsiSeries.createPriceLine({ price: 30, color: '#10b981', lineWidth: 1, lineStyle, axisLabelVisible: false, title: '' });
+        rsiSeries.createPriceLine({
+          price: 70,
+          color: '#ef4444',
+          lineWidth: 1,
+          lineStyle,
+          axisLabelVisible: false,
+          title: '',
+        });
+        rsiSeries.createPriceLine({
+          price: 30,
+          color: '#10b981',
+          lineWidth: 1,
+          lineStyle,
+          axisLabelVisible: false,
+          title: '',
+        });
       }
 
       const macdData = this.calcMACDFromBars(closes, barData);
       let macdChart = null;
       if (macdEl) {
         macdChart = LightweightCharts.createChart(macdEl, {
-          width: macdEl.clientWidth, height: 96,
-          layout: baseLayout, grid: baseGrid,
+          width: macdEl.clientWidth,
+          height: 96,
+          layout: baseLayout,
+          grid: baseGrid,
           crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
           rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 64 },
           timeScale: syncTs,
         });
-        const histSeries = macdChart.addHistogramSeries({ priceScaleId: 'right', lastValueVisible: false });
-        histSeries.setData(macdData.map((d) => {
-          if (d.hist == null || Number.isNaN(d.hist)) return { time: d.time };
-          const h = d.hist;
-          return { time: d.time, value: h, color: h >= 0 ? '#26a69a88' : '#ef535088' };
-        }));
-        const macdLine = macdChart.addLineSeries({ color: '#3b82f6', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'MACD' });
-        macdLine.setData(macdData.map((d) => (d.macd != null && !Number.isNaN(d.macd) ? { time: d.time, value: d.macd } : { time: d.time })));
-        const sigLine = macdChart.addLineSeries({ color: '#f97316', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, title: 'Signal' });
-        sigLine.setData(macdData.map((d) => (d.signal != null && !Number.isNaN(d.signal) ? { time: d.time, value: d.signal } : { time: d.time })));
-        histSeries.createPriceLine({ price: 0, color: '#94a3b8', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+        const histSeries = macdChart.addHistogramSeries({
+          priceScaleId: 'right',
+          lastValueVisible: false,
+        });
+        histSeries.setData(
+          macdData.map((d) => {
+            if (d.hist == null || Number.isNaN(d.hist)) return { time: d.time };
+            const h = d.hist;
+            return {
+              time: d.time,
+              value: h,
+              color: h >= 0 ? '#26a69a88' : '#ef535088',
+            };
+          }),
+        );
+        const macdLine = macdChart.addLineSeries({
+          color: '#3b82f6',
+          lineWidth: 1.5,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: 'MACD',
+        });
+        macdLine.setData(
+          macdData.map((d) =>
+            d.macd != null && !Number.isNaN(d.macd)
+              ? { time: d.time, value: d.macd }
+              : { time: d.time },
+          ),
+        );
+        const sigLine = macdChart.addLineSeries({
+          color: '#f97316',
+          lineWidth: 1.5,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: 'Signal',
+        });
+        sigLine.setData(
+          macdData.map((d) =>
+            d.signal != null && !Number.isNaN(d.signal)
+              ? { time: d.time, value: d.signal }
+              : { time: d.time },
+          ),
+        );
+        histSeries.createPriceLine({
+          price: 0,
+          color: '#94a3b8',
+          lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dotted,
+          axisLabelVisible: false,
+        });
       }
 
-      const mktRestore = this._marketScrollRestore?.slot === slot ? this._marketScrollRestore : null;
+      const mktRestore =
+        this._marketScrollRestore?.slot === slot
+          ? this._marketScrollRestore
+          : null;
       if (mktRestore) this._marketScrollRestore = null;
       if (mktRestore && mktRestore.added > 0) {
         chart.timeScale().setVisibleLogicalRange({
@@ -2440,13 +3237,17 @@ function app() {
       }
       setTimeout(() => {
         const range = chart.timeScale().getVisibleLogicalRange();
-        const rightOffset = range ? Math.round((range.to - range.from) * 0.22) : 12;
+        const rightOffset = range
+          ? Math.round((range.to - range.from) * 0.22)
+          : 12;
         [chart, rsiChart, macdChart].forEach((c) => {
           if (c) c.timeScale().applyOptions({ rightOffset });
         });
         const synced = chart.timeScale().getVisibleLogicalRange();
-        if (synced && rsiChart) rsiChart.timeScale().setVisibleLogicalRange(synced);
-        if (synced && macdChart) macdChart.timeScale().setVisibleLogicalRange(synced);
+        if (synced && rsiChart)
+          rsiChart.timeScale().setVisibleLogicalRange(synced);
+        if (synced && macdChart)
+          macdChart.timeScale().setVisibleLogicalRange(synced);
       }, 50);
 
       let syncing = false;
@@ -2454,7 +3255,9 @@ function app() {
         source.timeScale().subscribeVisibleLogicalRangeChange((range) => {
           if (syncing || !range) return;
           syncing = true;
-          others.forEach((c) => { if (c) c.timeScale().setVisibleLogicalRange(range); });
+          others.forEach((c) => {
+            if (c) c.timeScale().setVisibleLogicalRange(range);
+          });
           syncing = false;
         });
       };
@@ -2466,15 +3269,22 @@ function app() {
       let marketPanTimer = null;
       chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
         if (!range || !barData?.length) return;
-        const loading = slot === 'vni' ? this.marketOlderLoadingVni : this.marketOlderLoadingVn30;
-        const hasMore = slot === 'vni' ? this.marketHasMoreVni : this.marketHasMoreVn30;
+        const loading =
+          slot === 'vni'
+            ? this.marketOlderLoadingVni
+            : this.marketOlderLoadingVn30;
+        const hasMore =
+          slot === 'vni' ? this.marketHasMoreVni : this.marketHasMoreVn30;
         if (loading || !hasMore) return;
         const barCount = barData.length;
         const span = range.to - range.from;
         if (span >= barCount * 0.92) return;
         if (range.from > 14) return;
         clearTimeout(marketPanTimer);
-        marketPanTimer = setTimeout(() => this.maybeLoadOlderMarketBars(slot), 500);
+        marketPanTimer = setTimeout(
+          () => this.maybeLoadOlderMarketBars(slot),
+          500,
+        );
       });
 
       let roTimer = null;
@@ -2483,8 +3293,10 @@ function app() {
         roTimer = setTimeout(() => {
           const nh = Math.max(280, Math.round(mainEl.clientHeight) || 420);
           chart.applyOptions({ width: mainEl.clientWidth, height: nh });
-          if (rsiChart) rsiChart.applyOptions({ width: rsiEl?.clientWidth ?? 0 });
-          if (macdChart) macdChart.applyOptions({ width: macdEl?.clientWidth ?? 0 });
+          if (rsiChart)
+            rsiChart.applyOptions({ width: rsiEl?.clientWidth ?? 0 });
+          if (macdChart)
+            macdChart.applyOptions({ width: macdEl?.clientWidth ?? 0 });
         }, 120);
       });
       ro.observe(mainEl);
@@ -2514,8 +3326,12 @@ function app() {
       const t = this.priceTicker.toUpperCase();
       const PAGE = 60;
       const [history, latest] = await Promise.all([
-        fetch(`/stocks/${t}/stored?limit=${PAGE}`).then(r => r.json()).catch(() => []),
-        fetch(`/stocks/${t}/latest`).then(r => r.json()).catch(() => null),
+        fetch(`/stocks/${t}/stored?limit=${PAGE}`)
+          .then((r) => r.json())
+          .catch(() => []),
+        fetch(`/stocks/${t}/latest`)
+          .then((r) => r.json())
+          .catch(() => null),
       ]);
       this.priceHistory = Array.isArray(history) ? history : [];
       this.priceHistoryHasMore = this.priceHistory.length >= PAGE;
@@ -2523,15 +3339,23 @@ function app() {
     },
 
     async loadMorePriceHistory() {
-      if (!this.priceTicker || !this.priceHistory.length || this.priceHistoryLoadingMore) return;
+      if (
+        !this.priceTicker ||
+        !this.priceHistory.length ||
+        this.priceHistoryLoadingMore
+      )
+        return;
       const t = this.priceTicker.toUpperCase();
       const PAGE = 60;
-      const oldest = this.priceHistory[this.priceHistory.length - 1].tradingDate;
+      const oldest =
+        this.priceHistory[this.priceHistory.length - 1].tradingDate;
       this.priceHistoryLoadingMore = true;
       try {
         const more = await fetch(
           `/stocks/${t}/stored?before=${encodeURIComponent(oldest)}&limit=${PAGE}`,
-        ).then(r => r.json()).catch(() => []);
+        )
+          .then((r) => r.json())
+          .catch(() => []);
         if (!Array.isArray(more) || !more.length) {
           this.priceHistoryHasMore = false;
           return;
@@ -2565,7 +3389,9 @@ function app() {
       try {
         const more = await fetch(
           `/stocks/${t}/stored?before=${encodeURIComponent(oldest)}&limit=${CHUNK}`,
-        ).then(r => r.json()).catch(() => []);
+        )
+          .then((r) => r.json())
+          .catch(() => []);
         if (!Array.isArray(more) || !more.length) return;
         const byDate = new Map(this.barData.map((b) => [b.tradingDate, b]));
         for (const b of more) byDate.set(b.tradingDate, b);
@@ -2577,11 +3403,17 @@ function app() {
         this.barData = merged;
 
         const from = this.barData[0].tradingDate;
-        const chartSigs = await fetch(`/signals/${t}/chart?from=${from}`).then(r => r.json()).catch(() => []);
+        const chartSigs = await fetch(`/signals/${t}/chart?from=${from}`)
+          .then((r) => r.json())
+          .catch(() => []);
         this._applyChartSignalsPayload(chartSigs);
 
         if (scrollSnap && added > 0) {
-          this._chartScrollRestore = { from: scrollSnap.from, to: scrollSnap.to, added };
+          this._chartScrollRestore = {
+            from: scrollSnap.from,
+            to: scrollSnap.to,
+            added,
+          };
           this.chartViewport = {
             ticker: t,
             from: scrollSnap.from + added,
@@ -2607,7 +3439,11 @@ function app() {
       const t = this.priceTicker.toUpperCase();
       const label = full ? `Full IPO ${t}` : `Đồng bộ ~1 năm / tăng dần ${t}`;
       const q = full ? '?full=1' : '';
-      const res = await this.authFetch(`/queue/sync/${t}${q}`, { method: 'POST' }).then(r => r.json()).catch(() => null);
+      const res = await this.authFetch(`/queue/sync/${t}${q}`, {
+        method: 'POST',
+      })
+        .then((r) => r.json())
+        .catch(() => null);
       if (res?.jobId) {
         this.log('info', `⏳ ${label} job #${res.jobId}...`);
         await this.pollJob(res.jobId, label, async () => {
@@ -2633,7 +3469,7 @@ function app() {
         sync: '/queue/sync',
         syncFull: '/queue/sync?full=1',
         scan: '/queue/scan',
-        recommend: '/scanner/recommend',  // nhẹ, giữ đồng bộ
+        recommend: '/scanner/recommend', // nhẹ, giữ đồng bộ
       };
       const labelMap = {
         sync: 'Đồng bộ ~1 năm / tăng dần (watchlist)',
@@ -2643,20 +3479,27 @@ function app() {
       };
       try {
         this.log('info', `▶ ${labelMap[action]}...`);
-        const res = await this.authFetch(endpointMap[action], { method: 'POST' }).then(r => r.json());
+        const res = await this.authFetch(endpointMap[action], {
+          method: 'POST',
+        }).then((r) => r.json());
 
         if (res?.jobId) {
           // Tác vụ nặng → poll tiến độ từ queue
-          this.log('info', `⏳ Job #${res.jobId} đã vào hàng chờ, đang xử lý...`);
+          this.log(
+            'info',
+            `⏳ Job #${res.jobId} đã vào hàng chờ, đang xử lý...`,
+          );
           await this.pollJob(res.jobId, labelMap[action]);
           if (action === 'scan') await this.loadSignalSummary();
-          if (action === 'sync' || action === 'syncFull') await this.loadSignalSummary();
+          if (action === 'sync' || action === 'syncFull')
+            await this.loadSignalSummary();
         } else {
           // Tác vụ nhẹ (recommend) → chờ trực tiếp
           this.log('success', `✓ ${labelMap[action]} xong`);
           this.showToast(`${labelMap[action]} xong!`, 'success');
           if (action === 'recommend') await this.refreshAll();
-          if (action === 'scan' || action === 'recommend') await this.loadSignalSummary();
+          if (action === 'scan' || action === 'recommend')
+            await this.loadSignalSummary();
         }
       } catch (e) {
         if (e.message !== 'Unauthorized') {
@@ -2672,22 +3515,27 @@ function app() {
       const silentToast = options.silentToast === true;
       let lastPercent = -1;
       while (true) {
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 2000));
         try {
-          const job = await fetch(`/queue/jobs/${jobId}`).then(r => r.json());
+          const job = await fetch(`/queue/jobs/${jobId}`).then((r) => r.json());
           if (!job) break;
 
           const p = job.progress || {};
           const pct = p.percent ?? 0;
           if (pct !== lastPercent) {
             const ticker = p.current ? ` [${p.current}]` : '';
-            this.log('info', `  ${pct}%${ticker} (${p.done ?? 0}/${p.total ?? '?'})`);
+            this.log(
+              'info',
+              `  ${pct}%${ticker} (${p.done ?? 0}/${p.total ?? '?'})`,
+            );
             lastPercent = pct;
           }
 
           if (job.state === 'completed') {
             const r = job.result || {};
-            const summary = Object.entries(r).map(([k,v]) => `${k}=${v}`).join(', ');
+            const summary = Object.entries(r)
+              .map(([k, v]) => `${k}=${v}`)
+              .join(', ');
             this.log('success', `✓ ${label} hoàn thành — ${summary}`);
             if (!silentToast) {
               this.showToast(`${label} xong!`, 'success');
@@ -2700,22 +3548,34 @@ function app() {
             this.showToast(`${label} lỗi`, 'error');
             break;
           }
-        } catch { break; }
+        } catch {
+          break;
+        }
       }
     },
 
     // ── Watchlist management ─────────────────────────────────────────────
     async loadWlItems() {
-      const r = await fetch('/watchlist').then(r => r.json()).catch(() => []);
+      const r = await fetch('/watchlist')
+        .then((r) => r.json())
+        .catch(() => []);
       this.wlItems = Array.isArray(r) ? r : [];
     },
 
     get filteredWlItems() {
-      return this.wlItems.filter(i => {
-        const matchFilter = this.wlFilter === 'all' ? true
-          : this.wlFilter === 'active' ? i.active : !i.active;
+      return this.wlItems.filter((i) => {
+        const matchFilter =
+          this.wlFilter === 'all'
+            ? true
+            : this.wlFilter === 'active'
+              ? i.active
+              : !i.active;
         const q = this.wlSearch.toLowerCase();
-        const matchSearch = !q || i.ticker.toLowerCase().includes(q) || i.name.toLowerCase().includes(q) || i.sector.toLowerCase().includes(q);
+        const matchSearch =
+          !q ||
+          i.ticker.toLowerCase().includes(q) ||
+          i.name.toLowerCase().includes(q) ||
+          i.sector.toLowerCase().includes(q);
         return matchFilter && matchSearch;
       });
     },
@@ -2756,7 +3616,9 @@ function app() {
     },
 
     async wlDeactivate(ticker) {
-      await this.authFetch(`/watchlist/${ticker}/deactivate`, { method: 'PUT' });
+      await this.authFetch(`/watchlist/${ticker}/deactivate`, {
+        method: 'PUT',
+      });
       await this.loadWlItems();
       await this.loadTickerPickerUniverse();
       this.showToast(`Đã tắt ${ticker}`, 'info');
@@ -2777,7 +3639,9 @@ function app() {
         const q = this.wlLiquidityExcludeDb ? '?excludeDb=1' : '';
         const res = await this.authFetch(`/watchlist/liquidity-candidates${q}`);
         const data = await res.json().catch(() => ({}));
-        this.wlLiquidityCandidates = Array.isArray(data.tickers) ? data.tickers : [];
+        this.wlLiquidityCandidates = Array.isArray(data.tickers)
+          ? data.tickers
+          : [];
         this.wlLiquidityMeta = data;
         this.wlLiquidityPanel = true;
       } catch {
@@ -2791,7 +3655,9 @@ function app() {
       this.wlCheckingLiquidity = true;
       this.log('info', '▶ Đồng bộ danh sách chuẩn + kiểm tra thanh khoản...');
       try {
-        const r = await this.authFetch('/watchlist/check-liquidity', { method: 'POST' }).then(res => res.json());
+        const r = await this.authFetch('/watchlist/check-liquidity', {
+          method: 'POST',
+        }).then((res) => res.json());
         await this.loadWlItems();
         await this.loadTickerPickerUniverse();
         await this.loadSignalSummary();
@@ -2799,7 +3665,9 @@ function app() {
         const sync = r.sync;
         const checked = liq.checked ?? 0;
         const parts = [
-          sync ? `+${sync.inserted ?? 0} mã mới, ${sync.updated ?? 0} cập nhật tên/ngành` : null,
+          sync
+            ? `+${sync.inserted ?? 0} mã mới, ${sync.updated ?? 0} cập nhật tên/ngành`
+            : null,
           `quét ${checked} mã: tắt ${(liq.deactivated ?? []).length}, bật lại ${(liq.reactivated ?? []).length}`,
         ].filter(Boolean);
         const msg = `✓ ${parts.join(' — ')}`;
@@ -2823,8 +3691,16 @@ function app() {
         this.toast.show = false;
       }, 3000);
       if (!this.browserNotify) return;
-      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
+      if (
+        typeof Notification === 'undefined' ||
+        Notification.permission !== 'granted'
+      )
+        return;
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'visible'
+      )
+        return;
       try {
         const opts = {
           body: msg,
@@ -2849,14 +3725,17 @@ function app() {
 
     get avgPnl() {
       if (!this.openPositions.length) return 0;
-      const sum = this.openPositions.reduce((s, p) => s + Number(p.pnlPercent || 0), 0);
+      const sum = this.openPositions.reduce(
+        (s, p) => s + Number(p.pnlPercent || 0),
+        0,
+      );
       return sum / this.openPositions.length;
     },
 
     get bestPos() {
       if (!this.openPositions.length) return null;
       return this.openPositions.reduce((best, p) =>
-        Number(p.pnlPercent) > Number(best.pnlPercent) ? p : best
+        Number(p.pnlPercent) > Number(best.pnlPercent) ? p : best,
       );
     },
 
@@ -2864,14 +3743,21 @@ function app() {
       let list = this.watchlist;
       if (this.searchTicker) {
         const q = this.searchTicker.toUpperCase();
-        list = list.filter(s => s.ticker.includes(q) || s.name.toUpperCase().includes(q));
+        list = list.filter(
+          (s) => s.ticker.includes(q) || s.name.toUpperCase().includes(q),
+        );
       }
-      const order = this.signalOrderTickers?.length ? this.signalOrderTickers : this.watchlist.map(s => s.ticker);
+      const order = this.signalOrderTickers?.length
+        ? this.signalOrderTickers
+        : this.watchlist.map((s) => s.ticker);
       const rank = (t) => {
-        const i = order.findIndex(x => String(x).toUpperCase() === String(t).toUpperCase());
+        const i = order.findIndex(
+          (x) => String(x).toUpperCase() === String(t).toUpperCase(),
+        );
         return i === -1 ? 9999 : i;
       };
-      const confVal = (s) => ({ HIGH: 3, MEDIUM: 2, LOW: 1 }[s?.confidence] ?? 0);
+      const confVal = (s) =>
+        ({ HIGH: 3, MEDIUM: 2, LOW: 1 })[s?.confidence] ?? 0;
       return [...list].sort((a, b) => {
         const ra = rank(a.ticker);
         const rb = rank(b.ticker);
@@ -2892,7 +3778,10 @@ function app() {
       const target = Number(pos.targetPrice);
       const current = Number(pos.lastPrice || entry);
       if (target <= entry) return 0;
-      return Math.max(0, Math.round(((current - entry) / (target - entry)) * 100));
+      return Math.max(
+        0,
+        Math.round(((current - entry) / (target - entry)) * 100),
+      );
     },
 
     // ── Formatters ────────────────────────────────────────────────
@@ -2931,17 +3820,27 @@ function app() {
     },
 
     recEmoji(r) {
-      return { STRONG_BUY: '🚀', BUY: '📈', HOLD: '⏸️', SELL: '📉', STRONG_SELL: '🔥' }[r] || '—';
+      return (
+        {
+          STRONG_BUY: '🚀',
+          BUY: '📈',
+          HOLD: '⏸️',
+          SELL: '📉',
+          STRONG_SELL: '🔥',
+        }[r] || '—'
+      );
     },
 
     recLabel(r) {
-      return {
-        STRONG_BUY: 'Mua breakout Minervini',
-        BUY: 'Theo dõi mua / Chờ breakout',
-        HOLD: 'Giữ',
-        SELL: 'Bán',
-        STRONG_SELL: 'Bán tích cực',
-      }[r] || r;
+      return (
+        {
+          STRONG_BUY: 'Mua breakout Minervini',
+          BUY: 'Theo dõi mua / Chờ breakout',
+          HOLD: 'Giữ',
+          SELL: 'Bán',
+          STRONG_SELL: 'Bán tích cực',
+        }[r] || r
+      );
     },
 
     /** Giá phiên (entry) = đóng cửa; “vùng mua” = không đuổi xa so với limit gợi ý + trên hỗ trợ. */
@@ -3026,15 +3925,34 @@ function app() {
     },
 
     confidenceClass(c) {
-      return { HIGH: 'badge-green', MEDIUM: 'badge-yellow', LOW: 'badge-gray' }[c] || 'badge-gray';
+      return (
+        { HIGH: 'badge-green', MEDIUM: 'badge-yellow', LOW: 'badge-gray' }[c] ||
+        'badge-gray'
+      );
     },
 
     closeReasonLabel(r) {
-      return { TARGET_HIT: '🎯 Chốt TP', STOP_LOSS: '🛑 Cắt lỗ', PROFIT_FLOOR_20: '🔒 Chặn lãi', DISTRIBUTION: '🔄 Đảo chiều', MANUAL: '🤚 Thủ công' }[r] || r;
+      return (
+        {
+          TARGET_HIT: '🎯 Chốt TP',
+          STOP_LOSS: '🛑 Cắt lỗ',
+          PROFIT_FLOOR_20: '🔒 Chặn lãi',
+          DISTRIBUTION: '🔄 Đảo chiều',
+          MANUAL: '🤚 Thủ công',
+        }[r] || r
+      );
     },
 
     closeReasonClass(r) {
-      return { TARGET_HIT: 'badge-green', STOP_LOSS: 'badge-red', PROFIT_FLOOR_20: 'badge-green', DISTRIBUTION: 'badge-yellow', MANUAL: 'badge-gray' }[r] || 'badge-gray';
+      return (
+        {
+          TARGET_HIT: 'badge-green',
+          STOP_LOSS: 'badge-red',
+          PROFIT_FLOOR_20: 'badge-green',
+          DISTRIBUTION: 'badge-yellow',
+          MANUAL: 'badge-gray',
+        }[r] || 'badge-gray'
+      );
     },
   };
 }

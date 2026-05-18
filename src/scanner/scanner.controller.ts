@@ -23,10 +23,7 @@ export class ScannerController {
   // GET /scanner/signals-summary — tín hiệu mới nhất; orderedTickers = ưu tiên vốn hoá + thanh khoản
   @Get('signals-summary')
   async getSignalsSummary() {
-    const items = await this.watchlistService.findActiveSortedByPriority();
-    const tickers = items.map((s) => s.ticker);
-    const summary = await this.signalService.getSignalsSummary(tickers);
-    return { orderedTickers: tickers, summary };
+    return this.scannerService.getSignalsSummary();
   }
 
   /** GET /scanner/latest-signals?limit=40 — feed các bản ghi tín hiệu gần nhất (chỉ mã trong watchlist active) */
@@ -38,6 +35,9 @@ export class ScannerController {
     const signals = await this.signalService.getLatestSignalsForTickers(
       tickers,
       n,
+      {
+        strictMinerviniOnly: true,
+      },
     );
     return { signals };
   }

@@ -666,6 +666,7 @@ export class SignalService {
   async getLatestSignalsForTickers(
     tickers: string[],
     limit = 40,
+    options?: { strictMinerviniOnly?: boolean },
   ): Promise<
     Array<{
       id: number;
@@ -678,10 +679,26 @@ export class SignalService {
   > {
     const cap = Math.min(200, Math.max(1, limit));
     if (!tickers.length) return [];
+    const strictTypes = [
+      SignalType.MINERVINI_TREND_TEMPLATE,
+      SignalType.MINERVINI_VCP_BASE,
+      SignalType.MINERVINI_PIVOT_BREAKOUT,
+      SignalType.MINERVINI_VOLUME_CONFIRM,
+      SignalType.MINERVINI_BUY_ZONE,
+      SignalType.MINERVINI_EXTENDED,
+      SignalType.FAILED_BREAKOUT,
+      SignalType.VOLUME_CLIMAX_TOP,
+      SignalType.DISTRIBUTION_BAR,
+      SignalType.SUPPORT_BREAKDOWN,
+    ];
     const upper = tickers.map((t) => t.toUpperCase());
-    const rows = await this.signalRepo
+    const qb = this.signalRepo
       .createQueryBuilder('s')
-      .where('s.ticker IN (:...tickers)', { tickers: upper })
+      .where('s.ticker IN (:...tickers)', { tickers: upper });
+    if (options?.strictMinerviniOnly) {
+      qb.andWhere('s.type IN (:...strictTypes)', { strictTypes });
+    }
+    const rows = await qb
       .orderBy('s.tradingDate', 'DESC')
       .addOrderBy('s.id', 'DESC')
       .take(cap)
