@@ -37,10 +37,16 @@ describe('TelegramNotifyPolicyService', () => {
   it('dedupe: cùng key trong ngày chỉ gửi 1 lần', () => {
     const svc = makeService({ TELEGRAM_NOTIFY_PROFILE: 'full' });
     expect(
-      svc.shouldSend({ type: 'breakout_close_confirm', dedupeKey: 'AAA|2026-01-01' }),
+      svc.shouldSend({
+        type: 'breakout_close_confirm',
+        dedupeKey: 'AAA|2026-01-01',
+      }),
     ).toBe(true);
     expect(
-      svc.shouldSend({ type: 'breakout_close_confirm', dedupeKey: 'AAA|2026-01-01' }),
+      svc.shouldSend({
+        type: 'breakout_close_confirm',
+        dedupeKey: 'AAA|2026-01-01',
+      }),
     ).toBe(false);
   });
 

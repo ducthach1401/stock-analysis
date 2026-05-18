@@ -56,7 +56,10 @@ export class PositionService {
   ) {}
 
   private trackPnlDeltaThresholdPct(): number {
-    const raw = this.config.get<string>('TELEGRAM_TRACK_SIGNIFICANT_PNL_DELTA', '2');
+    const raw = this.config.get<string>(
+      'TELEGRAM_TRACK_SIGNIFICANT_PNL_DELTA',
+      '2',
+    );
     const n = parseFloat(raw ?? '2');
     return Number.isFinite(n) && n > 0 ? n : 2;
   }
@@ -419,7 +422,8 @@ export class PositionService {
         const pnlDelta = Math.abs(pnlPct - prevPnl);
         const target = Number(pos.targetPrice);
         const nearTargetPct = ((target - currentPrice) / target) * 100;
-        const isNearTarget = nearTargetPct >= 0 && nearTargetPct <= this.trackNearTargetPct();
+        const isNearTarget =
+          nearTargetPct >= 0 && nearTargetPct <= this.trackNearTargetPct();
         if (pnlDelta >= this.trackPnlDeltaThresholdPct() || isNearTarget) {
           updates.push(
             `  ${pnlEmoji} <b>${pos.ticker}</b>: ${fmt(currentPrice)} (${pnlStr}) | ` +

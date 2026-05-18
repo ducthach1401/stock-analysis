@@ -132,9 +132,11 @@ export class TelegramNotifyPolicyService {
       positionTrack: 'MAX_POSITION_TRACK_MSG_PER_DAY',
       breakoutConfirm: 'MAX_BREAKOUT_CONFIRM_MSG_PER_DAY',
     }[key];
-    const fallback = { recommend: '2', positionTrack: '1', breakoutConfirm: '20' }[
-      key
-    ];
+    const fallback = {
+      recommend: '2',
+      positionTrack: '1',
+      breakoutConfirm: '20',
+    }[key];
     const raw = this.config.get<string>(envKey, fallback) ?? fallback;
     const n = parseInt(raw, 10);
     return Number.isFinite(n) && n >= 0 ? n : parseInt(fallback, 10);

@@ -17,7 +17,12 @@ async function bootstrap() {
 
   // Gửi sau 5s để Docker network ổn định, không block startup
   setTimeout(() => {
-    if (!notifyPolicy.shouldSend({ type: 'startup', dedupeKey: `${env}-${hostname}-${port}` })) {
+    if (
+      !notifyPolicy.shouldSend({
+        type: 'startup',
+        dedupeKey: `${env}-${hostname}-${port}`,
+      })
+    ) {
       return;
     }
     telegram
