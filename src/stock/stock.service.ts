@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { vnCalendarTodayYmd } from '../common/vn-trading-days';
 import { isMarketIndexTicker } from '../scanner/watchlist';
+import { TelegramNotifyPolicyService } from '../telegram/telegram-notify-policy.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { IntradayIndexBarDto } from './dto/intraday-bar.dto';
 import { StockPriceResponseDto } from './dto/stock-query.dto';
@@ -28,6 +29,7 @@ export class StockService {
     @InjectRepository(StockPrice)
     private readonly stockPriceRepo: Repository<StockPrice>,
     private readonly telegramService: TelegramService,
+    private readonly telegramNotifyPolicy: TelegramNotifyPolicyService,
     private readonly dnseService: DnseService,
   ) {}
 
@@ -393,7 +395,11 @@ export class StockService {
   }
 
   // Kiểm tra biến động so với phiên trước và gửi cảnh báo Telegram
-  async checkAndAlert(ticker: string, threshold = 3): Promise<void> {
+  async checkAndAlert(
+    ticker: string,
+    threshold = 3,
+    forceNotify = false,
+  ): Promise<void> {
     const latest = await this.dnseService.fetchLatestBar(ticker);
     if (!latest) return;
 
@@ -410,12 +416,23 @@ export class StockService {
 
     const changePercent = ((latest.close - prevClose) / prevClose) * 100;
     if (Math.abs(changePercent) >= threshold) {
-      const direction = changePercent >= 0 ? '🟢 Tăng' : '🔴 Giảm';
+      const direction = changePercent >= 0 ? 'up' : 'down';
+      if (
+        !this.telegramNotifyPolicy.shouldSend({
+          type: 'stock_alert',
+          force: forceNotify,
+          ticker: ticker.toUpperCase(),
+          dedupeKey: `${ticker.toUpperCase()}|${vnCalendarTodayYmd()}|${threshold}|${direction}`,
+        })
+      ) {
+        return;
+      }
+      const directionLabel = changePercent >= 0 ? '🟢 Tăng' : '🔴 Giảm';
       const fmt = (n: number) =>
         (n / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + 'k';
       await this.telegramService.sendStockAlert(
         ticker,
-        `${direction} <b>${Math.abs(changePercent).toFixed(2)}%</b>\n` +
+        `${directionLabel} <b>${Math.abs(changePercent).toFixed(2)}%</b>\n` +
           `Giá: <b>${fmt(latest.close)}đ</b> (hôm qua: ${fmt(prevClose)}đ)\n` +
           `Cao: ${fmt(latest.high)}đ | Thấp: ${fmt(latest.low)}đ\n` +
           `KL: ${latest.volume.toLocaleString('vi-VN')}`,

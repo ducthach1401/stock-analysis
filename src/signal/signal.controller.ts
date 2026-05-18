@@ -40,8 +40,12 @@ export class SignalController {
   // POST /signals/:ticker/notify — phân tích + gửi tín hiệu lên Telegram
   @UseGuards(JwtAuthGuard)
   @Post(':ticker/notify')
-  analyzeAndNotify(@Param('ticker') ticker: string) {
-    return this.signalService.analyzeAndNotify(ticker);
+  analyzeAndNotify(
+    @Param('ticker') ticker: string,
+    @Query('forceNotify') forceNotify?: string,
+  ) {
+    const force = forceNotify === '1' || forceNotify === 'true';
+    return this.signalService.analyzeAndNotify(ticker, force);
   }
 
   // POST /signals/:ticker/recommend — lời khuyên mua/bán (public — dùng cho chart)
@@ -53,8 +57,12 @@ export class SignalController {
   // POST /signals/:ticker/recommend/notify — lời khuyên + gửi Telegram
   @UseGuards(JwtAuthGuard)
   @Post(':ticker/recommend/notify')
-  recommendAndNotify(@Param('ticker') ticker: string) {
-    return this.recommendationService.recommendAndNotify(ticker);
+  recommendAndNotify(
+    @Param('ticker') ticker: string,
+    @Query('forceNotify') forceNotify?: string,
+  ) {
+    const force = forceNotify === '1' || forceNotify === 'true';
+    return this.recommendationService.recommendAndNotify(ticker, force);
   }
 
   // GET /signals/:ticker?date=2024-12-01 — lấy tín hiệu đã lưu (20 mới nhất)

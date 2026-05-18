@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StockPrice } from '../stock/entities/stock-price.entity';
 import { Signal, SignalType } from '../signal/entities/signal.entity';
+import { TelegramNotifyPolicyService } from '../telegram/telegram-notify-policy.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { SignalService } from '../signal/signal.service';
 import { WatchlistService } from '../watchlist/watchlist.service';
@@ -41,6 +42,7 @@ export class IntradayBreakoutNotifyService {
     private readonly signalRepo: Repository<Signal>,
     private readonly signalService: SignalService,
     private readonly telegramService: TelegramService,
+    private readonly telegramNotifyPolicy: TelegramNotifyPolicyService,
     private readonly watchlistService: WatchlistService,
     private readonly config: ConfigService,
   ) {}
@@ -200,6 +202,16 @@ export class IntradayBreakoutNotifyService {
       minute: '2-digit',
     });
 
+    if (
+      !this.telegramNotifyPolicy.shouldSend({
+        type: 'breakout_intraday',
+        ticker: upper,
+        dedupeKey: `${upper}|${today}|intraday`,
+      })
+    ) {
+      return;
+    }
+
     await this.telegramService.sendMessage({
       text:
         `📈 <b>${upper}</b> đang mạnh: giữ trên cản ~${this.fmtK(resistance)}đ ` +
@@ -268,6 +280,16 @@ export class IntradayBreakoutNotifyService {
     if (close <= resistance) return;
 
     const breakPct = ((close - resistance) / resistance) * 100;
+
+    if (
+      !this.telegramNotifyPolicy.shouldSend({
+        type: 'breakout_close_confirm',
+        ticker: upper,
+        dedupeKey: `${upper}|${today}|close-confirm`,
+      })
+    ) {
+      return;
+    }
 
     await this.telegramService.sendMessage({
       text:

@@ -6,6 +6,7 @@ import { RecommendationService } from '../signal/recommendation.service';
 import { SignalDirection } from '../signal/entities/signal.entity';
 import { SignalService } from '../signal/signal.service';
 import { StockService } from '../stock/stock.service';
+import { TelegramNotifyPolicyService } from '../telegram/telegram-notify-policy.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { PositionService } from '../position/position.service';
 import { WatchlistService } from '../watchlist/watchlist.service';
@@ -20,6 +21,7 @@ import { shouldRunAnalyzeAllHistoryAfterSync } from '../common/sync-analyze-poli
 import {
   isVnAfterMarketCloseForDailySignals,
   isVnCashMarketSessionOpen,
+  vnCalendarTodayYmd,
 } from '../common/vn-trading-days';
 import {
   isMarketIndexTicker,
@@ -42,6 +44,7 @@ export class ScannerService {
     private readonly stockService: StockService,
     private readonly signalService: SignalService,
     private readonly telegramService: TelegramService,
+    private readonly telegramNotifyPolicy: TelegramNotifyPolicyService,
     private readonly recommendationService: RecommendationService,
     private readonly positionService: PositionService,
     private readonly watchlistService: WatchlistService,
@@ -334,7 +337,7 @@ export class ScannerService {
     }
   }
 
-  async recommendAll(): Promise<void> {
+  async recommendAll(forceNotify = false): Promise<void> {
     const watchlist = await this.watchlistService.findActiveSortedByPriority();
     const date = new Date().toLocaleDateString('vi-VN', {
       timeZone: 'Asia/Ho_Chi_Minh',
@@ -359,6 +362,14 @@ export class ScannerService {
         const rec = result.recommendation;
         const rank = tickerCapLiquidityRank(stock.ticker);
         const conf = REC_CONF_ORDER[result.confidence] ?? 0;
+        const isStrongBuyQuality =
+          rec === Recommendation.STRONG_BUY &&
+          result.confidence === 'HIGH' &&
+          !isMarketIndexTicker(stock.ticker);
+        const isStrongSellQuality =
+          rec === Recommendation.STRONG_SELL &&
+          result.confidence === 'HIGH' &&
+          !isMarketIndexTicker(stock.ticker);
 
         if (rec === Recommendation.STRONG_BUY || rec === Recommendation.BUY) {
           let scale: Awaited<
@@ -385,7 +396,7 @@ export class ScannerService {
           if (
             allowDailyTradeSignals &&
             includeBuyTelegram &&
-            !isMarketIndexTicker(stock.ticker)
+            isStrongBuyQuality
           ) {
             buyRows.push({
               rank,
@@ -401,7 +412,7 @@ export class ScannerService {
           const star = result.confidence === 'HIGH' ? ' ⭐' : '';
           const topSignal =
             result.bearishSignals[0]?.type.replace(/_/g, ' ') ?? '';
-          if (allowDailyTradeSignals && !isMarketIndexTicker(stock.ticker)) {
+          if (allowDailyTradeSignals && isStrongSellQuality) {
             distRows.push({
               rank,
               conf,
@@ -434,6 +445,15 @@ export class ScannerService {
 
     const hasAlert = buys.length > 0 || distributions.length > 0;
     if (hasAlert) {
+      if (
+        !this.telegramNotifyPolicy.shouldSend({
+          type: 'recommend_summary',
+          force: forceNotify,
+          dedupeKey: `recommend|${vnCalendarTodayYmd()}`,
+        })
+      ) {
+        return;
+      }
       let summary = `📊 <b>Khuyến nghị</b> — ${date}\n`;
       summary +=
         buyNotifyMode === 'safe'
@@ -442,7 +462,7 @@ export class ScannerService {
       summary += '─'.repeat(24) + '\n\n';
 
       if (buys.length) {
-        summary += `📈 <b>MUA</b> (${sortedBuys.length})\n${buys.join('\n')}\n`;
+        summary += `📈 <b>MUA</b> (${sortedBuys.length})\n${buys.slice(0, 5).join('\n')}\n`;
         if (moreBuys > 0) {
           summary += `<i>… +${moreBuys} mã</i>\n`;
         }
@@ -450,8 +470,7 @@ export class ScannerService {
       }
       if (distributions.length) {
         summary += `🔻 <b>Bán / đảo chiều</b> (${sortedDist.length})\n`;
-        summary += `<i>Không tự đóng lệnh theo tín hiệu.</i>\n`;
-        summary += `${distributions.join('\n')}\n`;
+        summary += `${distributions.slice(0, 5).join('\n')}\n`;
         if (moreSells > 0) {
           summary += `<i>… +${moreSells} mã</i>\n`;
         }
@@ -524,8 +543,17 @@ export class ScannerService {
       }
     }
 
-    await this.telegramService.sendMessage({ text: msg });
-    this.logger.log('✅ Đã gửi báo cáo tín hiệu lên Telegram');
+    if (
+      this.telegramNotifyPolicy.shouldSend({
+        type: 'signal_notify',
+        dedupeKey: `daily-summary|${vnCalendarTodayYmd()}`,
+      })
+    ) {
+      await this.telegramService.sendMessage({ text: msg });
+      this.logger.log('✅ Đã gửi báo cáo tín hiệu lên Telegram');
+    } else {
+      this.logger.log('Bỏ qua báo cáo tín hiệu Telegram theo policy');
+    }
   }
 
   // Phân tích lịch sử toàn bộ watchlist

@@ -1,6 +1,7 @@
 import { OgmaService } from '@ogma/nestjs-module';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
+import { TelegramNotifyPolicyService } from './telegram/telegram-notify-policy.service';
 import { TelegramService } from './telegram/telegram.service';
 
 async function bootstrap() {
@@ -10,11 +11,15 @@ async function bootstrap() {
   await app.listen(port);
 
   const telegram = app.get(TelegramService);
+  const notifyPolicy = app.get(TelegramNotifyPolicyService);
   const env = process.env.NODE_ENV ?? 'development';
   const hostname = process.env.HOSTNAME ?? 'localhost';
 
   // Gửi sau 5s để Docker network ổn định, không block startup
   setTimeout(() => {
+    if (!notifyPolicy.shouldSend({ type: 'startup', dedupeKey: `${env}-${hostname}-${port}` })) {
+      return;
+    }
     telegram
       .sendMessage({
         text:

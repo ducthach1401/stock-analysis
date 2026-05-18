@@ -136,7 +136,9 @@ export class StockController {
     @Param('ticker') ticker: string,
     @Query('threshold', new DefaultValuePipe(3), ParseFloatPipe)
     threshold: number,
+    @Query('forceNotify') forceNotify?: string,
   ) {
-    return this.stockService.checkAndAlert(ticker, threshold);
+    const force = forceNotify === '1' || forceNotify === 'true';
+    return this.stockService.checkAndAlert(ticker, threshold, force);
   }
 }

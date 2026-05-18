@@ -3,6 +3,7 @@ import { ModuleRef } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BollingerBands, EMA, MACD, RSI } from 'technicalindicators';
 import { LessThan, Repository } from 'typeorm';
+import { TelegramNotifyPolicyService } from '../telegram/telegram-notify-policy.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { isMarketIndexTicker, TICKERS } from '../scanner/watchlist';
 import { toChartTradingDateString } from '../common/chart-trading-date';
@@ -77,6 +78,7 @@ export class SignalService {
     @InjectRepository(StockPrice)
     private readonly stockPriceRepo: Repository<StockPrice>,
     private readonly telegramService: TelegramService,
+    private readonly telegramNotifyPolicy: TelegramNotifyPolicyService,
     private readonly moduleRef: ModuleRef,
   ) {}
 
@@ -433,7 +435,7 @@ export class SignalService {
   }
 
   // Phân tích và gửi Telegram ngay — chỉ phiên mới nhất (cây nến ngày đó), tránh spam cũ
-  async analyzeAndNotify(ticker: string): Promise<void> {
+  async analyzeAndNotify(ticker: string, forceNotify = false): Promise<void> {
     await this.analyze(ticker);
 
     const sessionDate = await this.getLatestStockTradingDate(ticker);
@@ -466,10 +468,19 @@ export class SignalService {
       )
       .join('\n');
 
-    await this.telegramService.sendStockAlert(
-      ticker,
-      `<b>Phiên ${sessionDate}: ${unnotified.length} tín hiệu</b>\n\n${lines}`,
-    );
+    if (
+      this.telegramNotifyPolicy.shouldSend({
+        type: 'signal_notify',
+        force: forceNotify,
+        ticker: ticker.toUpperCase(),
+        dedupeKey: `${ticker.toUpperCase()}|${sessionDate}`,
+      })
+    ) {
+      await this.telegramService.sendStockAlert(
+        ticker,
+        `<b>Phiên ${sessionDate}: ${unnotified.length} tín hiệu</b>\n\n${lines}`,
+      );
+    }
 
     await this.signalRepo.update(
       unnotified.map((s) => s.id),

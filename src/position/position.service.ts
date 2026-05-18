@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DnseService } from '../stock/dnse.service';
 import { StockPrice } from '../stock/entities/stock-price.entity';
+import { ConfigService } from '@nestjs/config';
+import { TelegramNotifyPolicyService } from '../telegram/telegram-notify-policy.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { RecommendationResult } from '../signal/dto/recommendation.dto';
 import {
@@ -49,7 +51,21 @@ export class PositionService {
     private readonly stockPriceRepo: Repository<StockPrice>,
     private readonly dnseService: DnseService,
     private readonly telegramService: TelegramService,
+    private readonly telegramNotifyPolicy: TelegramNotifyPolicyService,
+    private readonly config: ConfigService,
   ) {}
+
+  private trackPnlDeltaThresholdPct(): number {
+    const raw = this.config.get<string>('TELEGRAM_TRACK_SIGNIFICANT_PNL_DELTA', '2');
+    const n = parseFloat(raw ?? '2');
+    return Number.isFinite(n) && n > 0 ? n : 2;
+  }
+
+  private trackNearTargetPct(): number {
+    const raw = this.config.get<string>('TELEGRAM_TRACK_NEAR_TARGET_PCT', '2');
+    const n = parseFloat(raw ?? '2');
+    return Number.isFinite(n) && n > 0 ? n : 2;
+  }
 
   // ─── Mở vị thế / trung bình giá ───────────────────────────────────────────
 
@@ -295,6 +311,7 @@ export class PositionService {
 
     for (const pos of openPositions) {
       try {
+        const prevPnl = Number(pos.pnlPercent ?? 0);
         const bar = await this.dnseService.fetchLatestBar(pos.ticker);
         if (!bar) continue;
 
@@ -399,11 +416,16 @@ export class PositionService {
         // Vị thế vẫn mở — cập nhật DB
         await this.positionRepo.save(pos);
 
-        updates.push(
-          `  ${pnlEmoji} <b>${pos.ticker}</b>: ${fmt(currentPrice)} (${pnlStr}) | ` +
-            `Mua ${fmt(entry)} | Target ${fmt(Number(pos.targetPrice))} | ` +
-            `${daysHeld} ngày`,
-        );
+        const pnlDelta = Math.abs(pnlPct - prevPnl);
+        const target = Number(pos.targetPrice);
+        const nearTargetPct = ((target - currentPrice) / target) * 100;
+        const isNearTarget = nearTargetPct >= 0 && nearTargetPct <= this.trackNearTargetPct();
+        if (pnlDelta >= this.trackPnlDeltaThresholdPct() || isNearTarget) {
+          updates.push(
+            `  ${pnlEmoji} <b>${pos.ticker}</b>: ${fmt(currentPrice)} (${pnlStr}) | ` +
+              `Mua ${fmt(entry)} | Target ${fmt(target)} | ${daysHeld} ngày`,
+          );
+        }
       } catch (e) {
         this.logger.error(`Track lỗi ${pos.ticker}: ${(e as Error).message}`);
       }
@@ -421,7 +443,14 @@ export class PositionService {
       msg +=
         `<i>Thoát: chặn lãi (sàn tối thiểu ~${PROFIT_RUN_PCT}%, nâng theo đỉnh) khi quay đầu (không T+2) → target khi lãi &lt;${PROFIT_RUN_PCT}% (có T+2). ` +
         `Không đóng theo đảo chiều. Không SL.</i>`;
-      await this.telegramService.sendMessage({ text: msg });
+      if (
+        this.telegramNotifyPolicy.shouldSend({
+          type: 'position_track',
+          dedupeKey: `track|${today}`,
+        })
+      ) {
+        await this.telegramService.sendMessage({ text: msg });
+      }
     }
   }
 
@@ -569,6 +598,15 @@ export class PositionService {
     reason: CloseReason,
     pnlPct: number,
   ): Promise<void> {
+    if (
+      !this.telegramNotifyPolicy.shouldSend({
+        type: 'position_close',
+        ticker: pos.ticker,
+        dedupeKey: `${pos.ticker}|${pos.closeDate}|${reason}`,
+      })
+    ) {
+      return;
+    }
     const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN') + 'đ';
     const pnlStr = `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`;
 

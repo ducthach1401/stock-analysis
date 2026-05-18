@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ATR, EMA } from 'technicalindicators';
 import { Repository } from 'typeorm';
+import { TelegramNotifyPolicyService } from '../telegram/telegram-notify-policy.service';
 import { StockPrice } from '../stock/entities/stock-price.entity';
 import { TelegramService } from '../telegram/telegram.service';
 import {
@@ -84,6 +85,7 @@ export class RecommendationService {
     private readonly stockPriceRepo: Repository<StockPrice>,
     private readonly signalService: SignalService,
     private readonly telegramService: TelegramService,
+    private readonly telegramNotifyPolicy: TelegramNotifyPolicyService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -145,7 +147,10 @@ export class RecommendationService {
     );
   }
 
-  async recommendAndNotify(ticker: string): Promise<RecommendationResult> {
+  async recommendAndNotify(
+    ticker: string,
+    forceNotify = false,
+  ): Promise<RecommendationResult> {
     const result = await this.recommend(ticker);
     const buyMode = parseTelegramBuyNotifyMode(
       this.configService.get<string>('TELEGRAM_BUY_NOTIFY_MODE'),
@@ -159,7 +164,13 @@ export class RecommendationService {
       if (
         allowTgAfterClose &&
         !skipIndexTg &&
-        shouldIncludeBuyInTelegram(buyMode, result)
+        shouldIncludeBuyInTelegram(buyMode, result) &&
+        this.telegramNotifyPolicy.shouldSend({
+          type: 'recommend_manual',
+          force: forceNotify,
+          ticker: result.ticker,
+          dedupeKey: `${result.ticker}|${result.tradingDate}|buy`,
+        })
       ) {
         await this.sendRecommendation(result);
       } else {
@@ -175,7 +186,16 @@ export class RecommendationService {
       result.recommendation === Recommendation.SELL ||
       result.recommendation === Recommendation.STRONG_SELL
     ) {
-      if (allowTgAfterClose && !skipIndexTg) {
+      if (
+        allowTgAfterClose &&
+        !skipIndexTg &&
+        this.telegramNotifyPolicy.shouldSend({
+          type: 'recommend_manual',
+          force: forceNotify,
+          ticker: result.ticker,
+          dedupeKey: `${result.ticker}|${result.tradingDate}|sell`,
+        })
+      ) {
         await this.sendDistributionAlert(result);
       } else {
         this.logger.debug(

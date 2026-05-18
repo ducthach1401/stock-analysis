@@ -97,8 +97,9 @@ export class ScannerController {
   // POST /scanner/recommend — gửi khuyến nghị Telegram (nhẹ, giữ đồng bộ)
   @UseGuards(JwtAuthGuard)
   @Post('recommend')
-  recommendAll() {
-    return this.scannerService.recommendAll();
+  recommendAll(@Query('forceNotify') forceNotify?: string) {
+    const force = forceNotify === '1' || forceNotify === 'true';
+    return this.scannerService.recommendAll(force);
   }
 
   // POST /scanner/analyze-history?from=YYYY-MM-DD — enqueue phân tích lịch sử
