@@ -47,7 +47,7 @@ export class Position {
   @Column({ type: 'decimal', precision: 15, scale: 2 })
   targetPrice: number;
 
-  /** Luôn null — chiến lược ôm dài hạn, không đặt cắt lỗ tự động (cột giữ tương thích DB cũ). */
+  /** Stop Minervini tại ngày mở lệnh (~7% dưới entry). */
   @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
   stopLoss: number | null;
 

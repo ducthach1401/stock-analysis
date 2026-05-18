@@ -49,9 +49,9 @@ export interface PriceTarget {
     | 'breakout_entry'
     | 'support_base';
   targetPrice: number; // Giá chốt lời
-  /** Chiến lược ôm dài hạn — không đặt mức cắt lỗ tự động; luôn null. */
+  /** Stop Minervini tham chiếu (~7% dưới entry). */
   stopLoss: number | null;
-  /** R:R tham chiếu (lợi nhuận mục tiêu / 8% vốn) — không phải rủi ro SL. */
+  /** R:R Minervini = lợi nhuận mục tiêu / rủi ro tới stop. */
   riskReward: number;
   upside: number; // % lãi kỳ vọng nếu đúng
   downside: number; // 0 khi không dùng SL
@@ -86,8 +86,8 @@ export interface RecommendationResult {
 }
 
 /**
- * Chỉ mở vị thế tự động khi **STRONG_BUY** (điểm tổng ≥ 6).
- * `BUY` + HIGH vẫn có thể là nhiễu (nhiều chỉ báo nhỏ chưa đủ xác nhận xu hướng).
+ * Chỉ mở vị thế tự động khi **STRONG_BUY** Strict Minervini.
+ * `BUY` là setup theo dõi/chờ breakout, không mở vị thế tự động.
  */
 export function shouldOpenLivePosition(r: RecommendationResult): boolean {
   return r.recommendation === Recommendation.STRONG_BUY;

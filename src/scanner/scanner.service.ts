@@ -372,11 +372,8 @@ export class ScannerService {
           !isMarketIndexTicker(stock.ticker);
 
         if (rec === Recommendation.STRONG_BUY || rec === Recommendation.BUY) {
-          let scale: Awaited<
-            ReturnType<PositionService['openOrScaleIn']>
-          > | null = null;
           if (allowDailyTradeSignals) {
-            scale = await this.positionService.openOrScaleIn(result);
+            await this.positionService.openOrScaleIn(result);
           }
           const includeBuyTelegram = shouldIncludeBuyInTelegram(
             buyNotifyMode,
@@ -386,13 +383,6 @@ export class ScannerService {
             ? ` ${(pt.currentPrice / 1000).toFixed(1)}k→${(pt.targetPrice / 1000).toFixed(1)}k +${pt.upside.toFixed(0)}%`
             : '';
           const star = result.confidence === 'HIGH' ? ' ⭐' : '';
-          let shortExtra = '';
-          if (
-            scale?.outcome === 'AVERAGED' &&
-            scale.weightedEntryPrice != null
-          ) {
-            shortExtra = ` <i>TB ${(scale.weightedEntryPrice / 1000).toFixed(1)}k</i>`;
-          }
           if (
             allowDailyTradeSignals &&
             includeBuyTelegram &&
@@ -401,7 +391,7 @@ export class ScannerService {
             buyRows.push({
               rank,
               conf,
-              line: `  • <b>${stock.ticker}</b>${star}${priceStr}${shortExtra}`,
+              line: `  • <b>${stock.ticker}</b>${star}${priceStr}`,
             });
           }
         } else if (

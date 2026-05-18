@@ -8,8 +8,8 @@ import {
   SignalType,
 } from '../signal/entities/signal.entity';
 
-/** Tối đa số lần mua thêm (trung bình giá) cho một vị thế. */
-export const MAX_AVERAGE_DOWN_LEGS = 10;
+/** Minervini: không trung bình giá khi lỗ. */
+export const MAX_AVERAGE_DOWN_LEGS = 0;
 
 /**
  * Sau khi đóng lệnh, không mở lại cùng mã trong N ngày lịch (giống PositionService).
@@ -108,20 +108,14 @@ export function firstLegPriceFromWeightedAverage(
 }
 
 const GOOD_BASE_TYPES = new Set<string>([
-  SignalType.BASE_FORMING,
-  SignalType.EMA_BULLISH_STACK,
-  SignalType.BB_SQUEEZE,
-  SignalType.WASHOUT_BAR,
+  SignalType.MINERVINI_TREND_TEMPLATE,
+  SignalType.MINERVINI_VCP_BASE,
 ]);
 
 const RECOVERY_TYPES = new Set<string>([
-  SignalType.RSI_MOMENTUM_UP,
-  SignalType.MACD_BULLISH_CROSS,
-  SignalType.EMA_GOLDEN_CROSS,
-  SignalType.EMA_BOUNCE,
-  SignalType.BULLISH_ENGULFING,
-  SignalType.HAMMER,
-  SignalType.RESISTANCE_BREAKOUT,
+  SignalType.MINERVINI_PIVOT_BREAKOUT,
+  SignalType.MINERVINI_VOLUME_CONFIRM,
+  SignalType.MINERVINI_BUY_ZONE,
 ]);
 
 /** Các loại tín hiệu BULLISH trong ngày (backtest / API thô). */
@@ -138,14 +132,15 @@ function typesFromResult(r: RecommendationResult): Set<string> {
 }
 
 export function hasGoodBaseFromTypes(t: Set<string>): boolean {
-  for (const x of GOOD_BASE_TYPES) {
-    if (t.has(x)) return true;
-  }
-  return false;
+  return [...GOOD_BASE_TYPES].every((x) => t.has(x));
 }
 
 export function hasBreakoutFromTypes(t: Set<string>): boolean {
-  return t.has(SignalType.RESISTANCE_BREAKOUT);
+  return (
+    t.has(SignalType.MINERVINI_PIVOT_BREAKOUT) &&
+    t.has(SignalType.MINERVINI_VOLUME_CONFIRM) &&
+    t.has(SignalType.MINERVINI_BUY_ZONE)
+  );
 }
 
 export function hasRecoveryFromTypes(t: Set<string>): boolean {
@@ -210,50 +205,19 @@ export function averageReasonLabelFromSignals(
   return 'HỒI_PHỤC';
 }
 
-/**
- * Có “cơ sở” để TB: **nền tốt** (BASE / EMA stack / BB squeeze) **hoặc** tín hiệu **hồi phục**
- * (MACD/EMA bounce/RSI up…) — cùng tinh thần `averageReasonLabel` (NỀN / HỒI_PHỤC).
- * Khuyến nghị: BUY / STRONG_BUY, hoặc **HOLD** khi đã có cấu trúc (tránh lỡ TB vì điểm tổng chưa tới ngưỡng mua).
- * Không TB khi SELL / STRONG_SELL.
- */
-function allowsAverageDownRecommendation(
-  rec: Recommendation,
-  hasStructure: boolean,
-): boolean {
-  if (!hasStructure) return false;
-  if (rec === Recommendation.SELL || rec === Recommendation.STRONG_SELL) {
-    return false;
-  }
-  return (
-    rec === Recommendation.STRONG_BUY ||
-    rec === Recommendation.BUY ||
-    rec === Recommendation.HOLD
-  );
-}
-
-/**
- * TB khi: lỗ **≥ MIN** % so với giá TB; có nền hoặc hồi phục; khuyến nghị cho phép (kể cả HOLD có nền).
- */
+/** Minervini: tắt hẳn trung bình giá khi lỗ. */
 export function allowsAverageDown(
   r: RecommendationResult,
   weightedEntryPrice: number,
   currentLegCount: number,
 ): boolean {
-  if (currentLegCount >= MAX_AVERAGE_DOWN_LEGS) return false;
-  const px = r.priceTarget?.currentPrice;
-  if (px == null || px >= weightedEntryPrice) return false;
-
-  const lossPct = lossPercentBelowWeightedEntryLong(weightedEntryPrice, px);
-  if (lossPct < AVERAGE_DOWN_MIN_LOSS_PCT) {
-    return false;
-  }
-
-  const t = typesFromResult(r);
-  const hasStructure = hasGoodBaseFromTypes(t) || hasRecoveryFromTypes(t);
-  return allowsAverageDownRecommendation(r.recommendation, hasStructure);
+  void r;
+  void weightedEntryPrice;
+  void currentLegCount;
+  return false;
 }
 
-/** Cùng `allowsAverageDown` nhưng giá thị trường = đóng cửa phiên (backtest). */
+/** Minervini: tắt hẳn trung bình giá khi lỗ (backtest). */
 export function allowsAverageDownFromSignals(
   signals: Signal[],
   rec: Recommendation,
@@ -261,15 +225,10 @@ export function allowsAverageDownFromSignals(
   marketClose: number,
   averageLegCount: number,
 ): boolean {
-  if (averageLegCount >= MAX_AVERAGE_DOWN_LEGS) return false;
-  if (marketClose >= weightedEntry) return false;
-
-  const lossPct = lossPercentBelowWeightedEntryLong(weightedEntry, marketClose);
-  if (lossPct < AVERAGE_DOWN_MIN_LOSS_PCT) {
-    return false;
-  }
-
-  const t = bullishTypesFromSignals(signals);
-  const hasStructure = hasGoodBaseFromTypes(t) || hasRecoveryFromTypes(t);
-  return allowsAverageDownRecommendation(rec, hasStructure);
+  void signals;
+  void rec;
+  void weightedEntry;
+  void marketClose;
+  void averageLegCount;
+  return false;
 }

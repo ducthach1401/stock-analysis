@@ -12,16 +12,11 @@ import {
   POSITION_MIN_UPSIDE_PCT,
 } from '../signal/recommendation.service';
 import {
-  allowsAverageDown,
   allowsFirstPositionEntry,
-  averageReasonLabel,
   firstLegPriceFromWeightedAverage,
   isInReentryCooldown,
-  MAX_AVERAGE_DOWN_LEGS,
-  weightedEntryAfterAverageDown,
 } from './averaging-policy';
 import {
-  AverageDownLeg,
   CloseReason,
   Position,
   PositionStatus,
@@ -70,14 +65,12 @@ export class PositionService {
     return Number.isFinite(n) && n > 0 ? n : 2;
   }
 
-  // ─── Mở vị thế / trung bình giá ───────────────────────────────────────────
+  // ─── Mở vị thế (Minervini: không trung bình giá khi lỗ) ──────────────────
 
-  /** Kết quả xử lý tín hiệu mua (mở mới hoặc TB giá). */
+  /** Kết quả xử lý tín hiệu mua (chỉ mở mới; không TB giá). */
   async openOrScaleIn(result: RecommendationResult): Promise<{
-    outcome: 'OPENED' | 'AVERAGED' | 'NONE';
+    outcome: 'OPENED' | 'NONE';
     detail?: string;
-    /** Giá vào bình quân sau TB (chỉ khi AVERAGED). */
-    weightedEntryPrice?: number;
   }> {
     const ticker = result.ticker.toUpperCase();
     if (isMarketIndexTicker(ticker)) {
@@ -97,7 +90,11 @@ export class PositionService {
       where: { ticker, status: PositionStatus.OPEN },
     });
     if (existing) {
-      return this.tryAverageDown(result, existing);
+      return {
+        outcome: 'NONE',
+        detail:
+          'đang có vị thế mở — Minervini: không trung bình giá khi lỗ, chờ điểm vào mới sau khi đóng lệnh',
+      };
     }
     return this.tryOpenFirst(result);
   }
@@ -158,7 +155,7 @@ export class PositionService {
       entryDate: result.tradingDate,
       entryPrice,
       targetPrice: tgs.targetPrice,
-      stopLoss: null,
+      stopLoss: tgs.stopLoss,
       recommendation: result.recommendation,
       riskReward: tgs.riskReward,
       averageDownLegs: null,
@@ -173,101 +170,9 @@ export class PositionService {
     await this.positionRepo.save(position);
     this.logger.log(
       `📂 Mở vị thế ${ticker} @ ${(entryPrice / 1000).toFixed(1)}k` +
-        ` | TP ≥ ${(100 * POSITION_MIN_UPSIDE_PCT).toFixed(0)}%: target ${(tgs.targetPrice / 1000).toFixed(1)}k | không SL`,
+        ` | target ${(tgs.targetPrice / 1000).toFixed(1)}k | stop ${(Number(tgs.stopLoss) / 1000).toFixed(1)}k`,
     );
     return { outcome: 'OPENED' };
-  }
-
-  /**
-   * Trung bình giá: chỉ khi đang lỗ so với giá TB và có nền tốt hoặc tín hiệu hồi phục.
-   */
-  private async tryAverageDown(
-    result: RecommendationResult,
-    pos: Position,
-  ): Promise<{
-    outcome: 'AVERAGED' | 'NONE';
-    detail?: string;
-    weightedEntryPrice?: number;
-  }> {
-    const ticker = result.ticker.toUpperCase();
-    const pt = result.priceTarget;
-    if (!pt) return { outcome: 'NONE', detail: 'thiếu price target' };
-
-    const legs = pos.averageDownLegs ?? [];
-    if (legs.length >= MAX_AVERAGE_DOWN_LEGS) {
-      return {
-        outcome: 'NONE',
-        detail: `đã đủ ${MAX_AVERAGE_DOWN_LEGS} lần TB giá`,
-      };
-    }
-
-    const entryAvg = Number(pos.entryPrice);
-    if (!allowsAverageDown(result, entryAvg, legs.length)) {
-      const px = pt.currentPrice;
-      if (px >= entryAvg) {
-        return {
-          outcome: 'NONE',
-          detail: 'chưa lỗ so với giá TB — không TB thêm',
-        };
-      }
-      return {
-        outcome: 'NONE',
-        detail:
-          'chưa đủ điều kiện TB: lỗ ≥ 10% so với giá TB; nền tốt hoặc tín hiệu hồi phục; khuyến nghị BUY/STRONG_BUY/HOLD (không SELL)',
-      };
-    }
-
-    let addPrice = Number(pt.currentPrice);
-    if (result.tradingDate) {
-      const dayBar = await this.stockPriceRepo.findOne({
-        where: { ticker, tradingDate: result.tradingDate },
-      });
-      if (dayBar) addPrice = Number(dayBar.close);
-    }
-
-    const newAvg = weightedEntryAfterAverageDown(
-      entryAvg,
-      legs.length,
-      addPrice,
-    );
-
-    const reason = averageReasonLabel(result);
-    const newLeg: AverageDownLeg = {
-      date: result.tradingDate,
-      price: Math.round(addPrice),
-      reason,
-    };
-
-    const bars = await this.loadBarsAsc(ticker, 130);
-    if (bars.length < 20) {
-      return { outcome: 'NONE', detail: 'quá ít nến để cập nhật target' };
-    }
-    /** Một mức giá vào duy nhất: DB `entryPrice` = giá TB dùng cho target / P&L. */
-    const entryRounded = Math.round(newAvg);
-    const tgs = calcPriceTargetForFixedEntry(entryRounded, bars, {
-      minUpsidePct: POSITION_MIN_UPSIDE_PCT,
-    });
-
-    pos.entryPrice = entryRounded;
-    pos.targetPrice = tgs.targetPrice;
-    pos.stopLoss = null;
-    pos.riskReward = tgs.riskReward;
-    pos.recommendation = result.recommendation;
-    pos.averageDownLegs = [...legs, newLeg];
-    pos.lastPrice = addPrice;
-    pos.lastTrackedDate = result.tradingDate;
-    pos.pnlPercent = Number(
-      (((addPrice - entryRounded) / entryRounded) * 100).toFixed(2),
-    );
-
-    pos.peakPriceSinceOpen = Math.max(entryRounded, addPrice);
-
-    await this.positionRepo.save(pos);
-    this.logger.log(
-      `📊 TB giá ${ticker} lần ${pos.averageDownLegs.length} @ ${(addPrice / 1000).toFixed(1)}k` +
-        ` → giá vào (entry) ${(entryRounded / 1000).toFixed(1)}k | ${reason} | target ${(tgs.targetPrice / 1000).toFixed(1)}k (không dùng SL)`,
-    );
-    return { outcome: 'AVERAGED', weightedEntryPrice: entryRounded };
   }
 
   private async loadBarsAsc(
@@ -292,7 +197,7 @@ export class PositionService {
 
   /**
    * Lấy giá mới nhất và cập nhật tất cả vị thế đang mở.
-   * **Không** đóng theo tín hiệu đảo chiều — chỉ **mua/TB** và chờ **target** (hoặc **chặn lãi** khi giá quay đầu: sàn tối thiểu ~20%, **nâng** theo đỉnh).
+   * **Không** đóng theo tín hiệu đảo chiều — chỉ **mua lệnh đầu** và chờ **target** (hoặc **chặn lãi** khi giá quay đầu: sàn tối thiểu ~20%, **nâng** theo đỉnh).
    * Thứ tự: (0) chặn lãi (không T+2) → (1) target khi lãi &lt; ~20% (có T+2).
    */
   async trackAll(): Promise<void> {
@@ -350,14 +255,63 @@ export class PositionService {
         const hitProfitFloor =
           peakPnlPct > PROFIT_RUN_PCT && pnlPct <= floorPnlPct;
 
-        // ── Đóng lệnh: target (có T+2); chặn lãi xử lý ở trên
-        const hitTarget =
-          pnlPct < PROFIT_RUN_PCT && currentPrice >= Number(pos.targetPrice);
+        const hitStop =
+          pos.stopLoss != null && currentPrice <= Number(pos.stopLoss);
+        const hitTarget = currentPrice >= Number(pos.targetPrice);
         const settlementOk = canSellAfterT2(pos.entryDate, today);
         const sessionsAfter = tradingSessionsAfterEntryDate(
           pos.entryDate,
           today,
         );
+
+        if ((hitStop || hitTarget) && !settlementOk) {
+          await this.positionRepo.save(pos);
+          updates.push(
+            `  ⏳ <b>${pos.ticker}</b>: ${fmt(currentPrice)} (${pnlStr}) | ` +
+              `Mua ${fmt(entry)} — <i>Chờ T+2: ${sessionsAfter}/${MIN_TRADING_SESSIONS_AFTER_ENTRY} phiên sau ${pos.entryDate}</i>`,
+          );
+          continue;
+        }
+
+        if (hitStop) {
+          await this.closePosition(
+            pos,
+            currentPrice,
+            CloseReason.STOP_LOSS,
+            today,
+            this.detailStopLoss(pos, currentPrice),
+          );
+          await this.sendCloseAlert(
+            pos,
+            currentPrice,
+            CloseReason.STOP_LOSS,
+            pnlPct,
+          );
+          this.logger.log(
+            `🛑 ${pos.ticker} chạm stop. Đóng vị thế ${pnlPct.toFixed(2)}%`,
+          );
+          continue;
+        }
+
+        if (hitTarget) {
+          await this.closePosition(
+            pos,
+            currentPrice,
+            CloseReason.TARGET_HIT,
+            today,
+            this.detailTargetHit(pos, currentPrice),
+          );
+          await this.sendCloseAlert(
+            pos,
+            currentPrice,
+            CloseReason.TARGET_HIT,
+            pnlPct,
+          );
+          this.logger.log(
+            `🎯 ${pos.ticker} đạt target! Đóng vị thế +${pnlPct.toFixed(2)}%`,
+          );
+          continue;
+        }
 
         if (hitProfitFloor) {
           await this.closePosition(
@@ -380,38 +334,6 @@ export class PositionService {
           );
           this.logger.log(
             `🔒 ${pos.ticker} chặn lãi (sàn ~${floorPnlPct.toFixed(1)}%, đỉnh ~${peakPnlPct.toFixed(1)}%) — đóng ${pnlPct.toFixed(2)}%`,
-          );
-          continue;
-        }
-
-        if (hitTarget && !settlementOk) {
-          await this.positionRepo.save(pos);
-          updates.push(
-            `  ⏳ <b>${pos.ticker}</b>: ${fmt(currentPrice)} (${pnlStr}) | ` +
-              `Mua ${fmt(entry)} — <i>Chờ T+2: ${sessionsAfter}/${MIN_TRADING_SESSIONS_AFTER_ENTRY} phiên sau ${pos.entryDate} (đạt target)</i>`,
-          );
-          this.logger.debug(
-            `${pos.ticker}: chưa đủ T+2 (${sessionsAfter} phiên) — giữ vị thế`,
-          );
-          continue;
-        }
-
-        if (hitTarget) {
-          await this.closePosition(
-            pos,
-            currentPrice,
-            CloseReason.TARGET_HIT,
-            today,
-            this.detailTargetHit(pos, currentPrice),
-          );
-          await this.sendCloseAlert(
-            pos,
-            currentPrice,
-            CloseReason.TARGET_HIT,
-            pnlPct,
-          );
-          this.logger.log(
-            `🎯 ${pos.ticker} đạt target! Đóng vị thế +${pnlPct.toFixed(2)}%`,
           );
           continue;
         }
@@ -446,7 +368,7 @@ export class PositionService {
       msg += updates.join('\n') + '\n\n';
       msg +=
         `<i>Thoát: chặn lãi (sàn tối thiểu ~${PROFIT_RUN_PCT}%, nâng theo đỉnh) khi quay đầu (không T+2) → target khi lãi &lt;${PROFIT_RUN_PCT}% (có T+2). ` +
-        `Không đóng theo đảo chiều. Không SL.</i>`;
+        `Stop ~7% và target theo Strict Minervini. Không đóng theo đảo chiều yếu.</i>`;
       if (
         this.telegramNotifyPolicy.shouldSend({
           type: 'position_track',
@@ -525,6 +447,12 @@ export class PositionService {
     const fmt = (n: number) =>
       Math.round(n).toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ';
     return `Chốt mục tiêu — đóng cửa ${fmt(closePrice)} ≥ target ${fmt(Number(pos.targetPrice))}; đủ T+2 mới bán`;
+  }
+
+  private detailStopLoss(pos: Position, closePrice: number): string {
+    const fmt = (n: number) =>
+      Math.round(n).toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ';
+    return `Cắt lỗ Minervini — đóng cửa ${fmt(closePrice)} ≤ stop ${fmt(Number(pos.stopLoss))}; đủ T+2 mới bán`;
   }
 
   /** Điểm tổng hợp ≤ −6 = STRONG_SELL; khác với SELL (−3…−5) */

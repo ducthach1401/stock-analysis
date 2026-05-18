@@ -10,10 +10,17 @@ import { toChartTradingDateString } from '../common/chart-trading-date';
 import { StockPrice } from '../stock/entities/stock-price.entity';
 import { FormingSetupHint, TickerFormingSetups } from './dto/forming-setup.dto';
 import { Signal, SignalDirection, SignalType } from './entities/signal.entity';
+import { evaluateMinervini } from './minervini-strategy';
 
 // Trọng số tín hiệu cho scanner summary (đồng bộ với RecommendationService)
 const SUMMARY_WEIGHTS: Partial<Record<SignalType, number>> = {
   [SignalType.RESISTANCE_BREAKOUT]: 5,
+  [SignalType.MINERVINI_TREND_TEMPLATE]: 2,
+  [SignalType.MINERVINI_VCP_BASE]: 2,
+  [SignalType.MINERVINI_PIVOT_BREAKOUT]: 2,
+  [SignalType.MINERVINI_VOLUME_CONFIRM]: 1.5,
+  [SignalType.MINERVINI_BUY_ZONE]: 1.5,
+  [SignalType.MINERVINI_EXTENDED]: 3,
   [SignalType.SUPPORT_BREAKDOWN]: 5,
   [SignalType.FAILED_BREAKOUT]: 5,
   [SignalType.VOLUME_CLIMAX_TOP]: 4,
@@ -229,8 +236,8 @@ export class SignalService {
       this.logger.warn(`${ticker}: bỏ qua — ${liq.reason}`);
       return [];
     }
-    // Cần 130 bars: EMA100 + 30 buffer, breakout lookback 60 phiên
-    const bars = await this.loadBars(ticker, 130);
+    // Strict Minervini cần MA200 + MA200 slope + vùng 52W.
+    const bars = await this.loadBars(ticker, 260);
     if (bars.length < 65) {
       this.logger.warn(
         `${ticker}: không đủ dữ liệu (${bars.length} nến, cần ≥65)`,
@@ -248,6 +255,7 @@ export class SignalService {
       ...this.detectEmaBounce(bars),
       ...this.detectBase(bars),
       ...this.detectResistanceBreakout(bars),
+      ...this.detectMinerviniStrict(bars),
       ...this.detectSupportBreakdown(bars),
       // ── Phân phối đỉnh ──────────────────────────────────────────
       ...this.detectRsiBearishDivergence(bars),
@@ -303,13 +311,13 @@ export class SignalService {
   }
 
   // ─── Phân tích toàn bộ lịch sử (sliding window) ──────────────────────────
-  // Với mỗi ngày từ `from` đến nay, chạy lại bộ detect trên slice 130 bars
+  // Với mỗi ngày từ `from` đến nay, chạy lại bộ detect trên slice đủ cho Strict Minervini.
   // Kết quả lưu vào DB theo (ticker, tradingDate, type) — INSERT IGNORE
   async analyzeAllHistory(
     ticker: string,
     from?: string,
   ): Promise<{ analyzed: number; saved: number }> {
-    const MIN_BARS = 130;
+    const MIN_BARS = 260;
 
     // Load tất cả bars một lần duy nhất (ASC)
     const allBars = await this.loadAllBars(ticker);
@@ -320,7 +328,7 @@ export class SignalService {
       return { analyzed: 0, saved: 0 };
     }
 
-    /** Mặc định: phân tích mọi phiên từ ngày đầu tiên đủ cửa sổ 130 nến → nay. */
+    /** Mặc định: phân tích mọi phiên từ ngày đầu tiên đủ cửa sổ Minervini → nay. */
     const startDate = from ?? allBars[MIN_BARS - 1].tradingDate;
 
     let analyzed = 0;
@@ -341,6 +349,7 @@ export class SignalService {
         ...this.detectEmaBounce(slice),
         ...this.detectBase(slice),
         ...this.detectResistanceBreakout(slice),
+        ...this.detectMinerviniStrict(slice),
         ...this.detectSupportBreakdown(slice),
         ...this.detectRsiBearishDivergence(slice),
         ...this.detectMacdBearishDivergence(slice),
@@ -1301,6 +1310,70 @@ export class SignalService {
       ];
     }
     return [];
+  }
+
+  private detectMinerviniStrict(bars: OhlcvBar[]): DetectedSignal[] {
+    const e = evaluateMinervini(bars);
+    const signals: DetectedSignal[] = [];
+    const fmt = (n: number | null) =>
+      n == null ? 'N/A' : (n / 1000).toFixed(1) + 'k';
+
+    if (e.trendOk) {
+      signals.push({
+        type: SignalType.MINERVINI_TREND_TEMPLATE,
+        direction: SignalDirection.BULLISH,
+        value: bars[bars.length - 1]?.close ?? null,
+        description:
+          'Strict Minervini: giá > MA50 > MA150 > MA200, MA200 dốc lên, vị trí 52W đạt chuẩn',
+      });
+    }
+
+    if (e.baseOk) {
+      signals.push({
+        type: SignalType.MINERVINI_VCP_BASE,
+        direction: SignalDirection.BULLISH,
+        value: e.baseDepthPct,
+        description: `Strict Minervini: nền/VCP đạt, pivot ${fmt(e.pivot)}, depth ${e.baseDepthPct?.toFixed(1) ?? 'N/A'}%`,
+      });
+    }
+
+    if (e.breakoutOk) {
+      signals.push({
+        type: SignalType.MINERVINI_PIVOT_BREAKOUT,
+        direction: SignalDirection.BULLISH,
+        value: e.pivot,
+        description: `Strict Minervini: đóng cửa vượt pivot ${fmt(e.pivot)}`,
+      });
+    }
+
+    if (e.volumeOk) {
+      signals.push({
+        type: SignalType.MINERVINI_VOLUME_CONFIRM,
+        direction: SignalDirection.BULLISH,
+        value: e.volumeRatio,
+        description: `Strict Minervini: volume xác nhận ${e.volumeRatio?.toFixed(1) ?? 'N/A'}x MA50`,
+      });
+    }
+
+    if (e.buyZoneOk) {
+      signals.push({
+        type: SignalType.MINERVINI_BUY_ZONE,
+        direction: SignalDirection.BULLISH,
+        value: e.pivot,
+        description: 'Strict Minervini: giá nằm trong buy zone <=5% trên pivot',
+      });
+    }
+
+    if (e.extended) {
+      signals.push({
+        type: SignalType.MINERVINI_EXTENDED,
+        direction: SignalDirection.BEARISH,
+        value: bars[bars.length - 1]?.close ?? null,
+        description: 'Strict Minervini: giá quá xa MA50, không mua đuổi',
+      });
+    }
+
+    return signals;
   }
 
   private detectSupportBreakdown(bars: OhlcvBar[]): DetectedSignal[] {

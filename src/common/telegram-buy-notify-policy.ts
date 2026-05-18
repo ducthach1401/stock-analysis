@@ -18,9 +18,9 @@ export function parseTelegramBuyNotifyMode(
 
 /**
  * Chế độ `safe`: chỉ đưa MUA lên Telegram khi
- * - STRONG_BUY (điểm ≥ 6 — hội tụ mạnh),
+ * - STRONG_BUY Strict Minervini,
  * - độ tin cậy HIGH,
- * - và có ít nhất một trong: nền BASE_FORMING, cấu trúc EMA tăng bền, hoặc giá đang quanh vùng nền (`priceAtBase`).
+ * - và có đủ trend template + nền/VCP + breakout pivot.
  */
 export function shouldIncludeBuyInTelegram(
   mode: TelegramBuyNotifyMode,
@@ -31,10 +31,9 @@ export function shouldIncludeBuyInTelegram(
   if (result.confidence !== 'HIGH') return false;
 
   const bullishTypes = new Set(result.bullishSignals.map((s) => s.type));
-  const hasLongBaseStructure =
-    bullishTypes.has(SignalType.BASE_FORMING) ||
-    bullishTypes.has(SignalType.EMA_BULLISH_STACK);
-  const atBasePrice = result.priceTarget?.priceAtBase === true;
-
-  return hasLongBaseStructure || atBasePrice;
+  return (
+    bullishTypes.has(SignalType.MINERVINI_TREND_TEMPLATE) &&
+    bullishTypes.has(SignalType.MINERVINI_VCP_BASE) &&
+    bullishTypes.has(SignalType.MINERVINI_PIVOT_BREAKOUT)
+  );
 }

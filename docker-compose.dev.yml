@@ -3,6 +3,7 @@ services:
     image: node:22-alpine
     container_name: stock-analysis-app-dev
     working_dir: /app
+    user: '${UID:-1000}:${GID:-1000}'
     command: yarn start:dev
     env_file:
       - .env

@@ -29,7 +29,7 @@ export class SimulatedTrade {
   @Column({ type: 'decimal', precision: 15, scale: 2 })
   entryPrice: number;
 
-  @Column({ length: 20 })
+  @Column({ length: 32 })
   entryRecommendation: string;
 
   /** STRONG = STRONG_BUY, MODERATE = BUY */
@@ -62,7 +62,7 @@ export class SimulatedTrade {
   @Column({ type: 'decimal', precision: 15, scale: 2 })
   exitPrice: number;
 
-  @Column({ length: 20 })
+  @Column({ length: 32 })
   exitRecommendation: string;
 
   /** STRONG = STRONG_SELL, MODERATE = SELL; null nếu đóng cuối kỳ */

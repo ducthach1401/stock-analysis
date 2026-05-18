@@ -14,28 +14,16 @@ import { StockService } from '../stock/stock.service';
 import { SignalService } from './signal.service';
 import { Recommendation } from './dto/recommendation.dto';
 import { BacktestRun } from './entities/backtest-run.entity';
-import { Signal } from './entities/signal.entity';
 import { SimulatedTrade } from './entities/simulated-trade.entity';
-import type { AverageDownLeg } from '../position/entities/position.entity';
 import {
-  allowsAverageDownFromSignals,
-  allowsFirstPositionEntryFromSignals,
-  averageReasonLabelFromSignals,
   firstLegPriceFromWeightedAverage,
   isInReentryCooldown,
-  POSITION_REENTRY_COOLDOWN_DAYS,
-  weightedEntryAfterAverageDown,
 } from '../position/averaging-policy';
-import {
-  PROFIT_RUN_PCT,
-  effectiveProfitFloorPnl,
-} from '../common/position-profit-run';
 import { MIN_TRADING_SESSIONS_AFTER_ENTRY } from '../common/vn-trading-days';
 import {
-  calcPriceTargetForFixedEntry,
-  POSITION_MIN_UPSIDE_PCT,
-  RecommendationService,
-} from './recommendation.service';
+  evaluateMinervini,
+  MINERVINI_PROFIT_LOCK_PCT,
+} from './minervini-strategy';
 
 /** Giả lập T+2: ít nhất 2 phiên (nến) sau ngày mua mới được bán. */
 function canExitAfterT2(
@@ -45,32 +33,16 @@ function canExitAfterT2(
   return currentBarIndex - entryBarIndex >= MIN_TRADING_SESSIONS_AFTER_ENTRY;
 }
 
-function mapBars(history: StockPrice[]) {
-  return history.map((b) => ({
-    open: Number(b.open),
-    high: Number(b.high),
-    low: Number(b.low),
-    close: Number(b.close),
-  }));
-}
-
-/**
- * Target từ giá vào — tối thiểu 20% (cùng vị thế thật). Không dùng SL.
- */
-function targetsForWeightedEntry(
-  history: StockPrice[],
-  weightedEntry: number,
-): { takeProfitTarget: number | null; stopLossAtEntry: null } {
-  if (history.length < 20) {
-    return { takeProfitTarget: null, stopLossAtEntry: null };
-  }
-  const tgs = calcPriceTargetForFixedEntry(weightedEntry, mapBars(history), {
-    minUpsidePct: POSITION_MIN_UPSIDE_PCT,
-  });
-  return {
-    takeProfitTarget: tgs.targetPrice,
-    stopLossAtEntry: null,
-  };
+function smaFromValues(
+  values: number[],
+  endIndex: number,
+  length: number,
+): number | null {
+  if (endIndex < 0 || length <= 0 || endIndex + 1 < length) return null;
+  let sum = 0;
+  const start = endIndex - length + 1;
+  for (let i = start; i <= endIndex; i++) sum += values[i];
+  return sum / length;
 }
 
 /** Một dòng cho bảng xếp hạng backtest trên Dashboard (run mới nhất / mã). */
@@ -191,23 +163,14 @@ export class SignalBacktestService {
     private readonly runRepo: Repository<BacktestRun>,
     @InjectRepository(SimulatedTrade)
     private readonly tradeRepo: Repository<SimulatedTrade>,
-    @InjectRepository(Signal)
-    private readonly signalRepo: Repository<Signal>,
     @InjectRepository(StockPrice)
     private readonly stockRepo: Repository<StockPrice>,
-    private readonly recommendationService: RecommendationService,
     @Inject(forwardRef(() => StockService))
     private readonly stockService: StockService,
     private readonly signalService: SignalService,
   ) {}
 
-  /**
-   * Giống vị thế thật: vào khi **STRONG_BUY + (nền tích lũy: BASE / EMA stack / BB squeeze, hoặc break kháng cự)**;
-   * **TB giá** khi lỗ + nền/hồi phục; TP ≥ **20%** từ giá TB (hoặc cao hơn nếu kháng cự/ATR). **Không SL.**
-   * **Cooldown tái vào** sau khi đóng: mặc định **tắt** (`BACKTEST_REENTRY_COOLDOWN_DAYS=0`, thuật toán backtest cũ).
-   * Đặt `BACKTEST_REENTRY_COOLDOWN_DAYS=5` để gần `PositionService` (mở lại sau ~5 ngày lịch).
-   * Thoát: chặn lãi (sàn tối thiểu ~20%, nâng theo đỉnh) khi quay đầu → target (lãi &lt;20%) sau T+2 → cuối kỳ (không đóng theo đảo chiều).
-   */
+  /** Backtest Minervini thuần: STRONG_BUY + setup mạnh, không trung bình giá. */
   /**
    * Giả lập trên **toàn bộ nến giá** đã lưu (IPO → phiên mới nhất). Tín hiệu cùng kỳ.
    * Xếp hạng trang chủ dùng thêm cửa sổ **12 tháng** (theo ngày đóng lệnh) — xem `getBacktestGoodBad`.
@@ -217,11 +180,6 @@ export class SignalBacktestService {
   ): Promise<BacktestRun & { trades: SimulatedTrade[] }> {
     const t = ticker.toUpperCase();
     const reentryCooldownDays = backtestReentryCooldownDaysFromEnv();
-    if (reentryCooldownDays > 0) {
-      this.logger.log(
-        `${t}: backtest cooldown tái vào = ${reentryCooldownDays} ngày (POSITION_REENTRY_COOLDOWN_DAYS=${POSITION_REENTRY_COOLDOWN_DAYS} khi so với live)`,
-      );
-    }
 
     let syncSaved = 0;
     let syncMode = 'incremental';
@@ -264,25 +222,16 @@ export class SignalBacktestService {
     const periodFrom = bars[0].tradingDate;
     const periodTo = bars[bars.length - 1].tradingDate;
 
-    const signals = await this.signalRepo.find({
-      where: { ticker: t },
-      order: { tradingDate: 'ASC' },
-    });
-    const byDate = new Map<string, Signal[]>();
-    for (const s of signals) {
-      const list = byDate.get(s.tradingDate) ?? [];
-      list.push(s);
-      byDate.set(s.tradingDate, list);
-    }
+    const closes = bars.map((b) => Number(b.close));
 
     type Draft = {
       entryDate: string;
       entryPrice: number;
-      entryRecommendation: Recommendation;
+      entryRecommendation: string;
       entryStrength: string | null;
       entryReason: string | null;
       averageDownCount: number;
-      averageDownLegs: AverageDownLeg[] | null;
+      averageDownLegs: null;
       takeProfitTarget: number | null;
       stopLossAtEntry: number | null;
       exitDate: string;
@@ -300,39 +249,28 @@ export class SignalBacktestService {
       entryDate: string;
       entryBarIndex: number;
       entryPrice: number;
-      entryRecommendation: Recommendation;
+      entryRecommendation: string;
       entryStrength: string | null;
       entryReason: string | null;
       takeProfitTarget: number | null;
       stopLossAtEntry: number | null;
-      /** Số lần mua thêm (trung bình giá). */
-      averageLegCount: number;
-      averageDownLegs: AverageDownLeg[];
-      /** Đỉnh giá (đóng cửa) để chặn lãi khi quay đầu */
-      peakClose: number;
+      peakPrice: number;
     } | null = null;
 
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i];
-      const history = bars.slice(0, i + 1);
-      const daySignals = byDate.get(bar.tradingDate) ?? [];
-      const ev = this.recommendationService.evaluateSignals(daySignals);
-      const rec = ev.recommendation;
-      const close = Number(bar.close);
+      const close = closes[i];
+      const sma10 = smaFromValues(closes, i, 10);
 
       if (pos) {
-        pos.peakClose = Math.max(pos.peakClose, close);
-        const curPnlPct = ((close - pos.entryPrice) / pos.entryPrice) * 100;
-        const peakPnlPct =
-          ((pos.peakClose - pos.entryPrice) / pos.entryPrice) * 100;
-        const floorPnlPct = effectiveProfitFloorPnl(
-          pos.entryPrice,
-          pos.peakClose,
-        );
-        const hitProfitFloor =
-          peakPnlPct > PROFIT_RUN_PCT && curPnlPct <= floorPnlPct;
-
-        if (hitProfitFloor) {
+        const t2Ok = canExitAfterT2(pos.entryBarIndex, i);
+        pos.peakPrice = Math.max(pos.peakPrice, close);
+        const pnlPct = ((close - pos.entryPrice) / pos.entryPrice) * 100;
+        if (
+          t2Ok &&
+          pos.stopLossAtEntry != null &&
+          close <= pos.stopLossAtEntry
+        ) {
           const pnlPercent = ((close - pos.entryPrice) / pos.entryPrice) * 100;
           closed.push({
             entryDate: pos.entryDate,
@@ -340,17 +278,15 @@ export class SignalBacktestService {
             entryRecommendation: pos.entryRecommendation,
             entryStrength: pos.entryStrength,
             entryReason: pos.entryReason,
-            averageDownCount: pos.averageLegCount,
-            averageDownLegs: pos.averageDownLegs.length
-              ? [...pos.averageDownLegs]
-              : null,
+            averageDownCount: 0,
+            averageDownLegs: null,
             takeProfitTarget: pos.takeProfitTarget,
             stopLossAtEntry: pos.stopLossAtEntry,
             exitDate: bar.tradingDate,
             exitPrice: close,
-            exitRecommendation: 'PROFIT_FLOOR_20',
+            exitRecommendation: 'MINERVINI_STOP',
             exitSellStrength: null,
-            exitReason: `Chặn lãi (sàn ~${floorPnlPct.toFixed(1)}%, đỉnh ~${peakPnlPct.toFixed(1)}%) — đóng ${close.toLocaleString('vi-VN')}`,
+            exitReason: `Cắt lỗ Minervini: đóng ${close.toLocaleString('vi-VN')} <= stop ${Math.round(pos.stopLossAtEntry).toLocaleString('vi-VN')} (sau T+2)`,
             pnlPercent: Number(pnlPercent.toFixed(4)),
           });
           lastExitDate = bar.tradingDate;
@@ -358,91 +294,88 @@ export class SignalBacktestService {
           continue;
         }
 
-        const t2Ok = canExitAfterT2(pos.entryBarIndex, i);
         if (
           t2Ok &&
           pos.takeProfitTarget != null &&
-          curPnlPct < PROFIT_RUN_PCT &&
           close >= pos.takeProfitTarget
         ) {
           const pnlPercent = ((close - pos.entryPrice) / pos.entryPrice) * 100;
-          const tp = pos.takeProfitTarget;
           closed.push({
             entryDate: pos.entryDate,
             entryPrice: pos.entryPrice,
             entryRecommendation: pos.entryRecommendation,
             entryStrength: pos.entryStrength,
             entryReason: pos.entryReason,
-            averageDownCount: pos.averageLegCount,
-            averageDownLegs: pos.averageDownLegs.length
-              ? [...pos.averageDownLegs]
-              : null,
+            averageDownCount: 0,
+            averageDownLegs: null,
             takeProfitTarget: pos.takeProfitTarget,
             stopLossAtEntry: pos.stopLossAtEntry,
             exitDate: bar.tradingDate,
             exitPrice: close,
-            exitRecommendation: 'TARGET_HIT',
+            exitRecommendation: 'MINERVINI_TARGET',
             exitSellStrength: null,
-            exitReason: `Chốt mục tiêu ≥${tp.toLocaleString('vi-VN')}đ (sau T+2, đóng ${close.toLocaleString('vi-VN')})`,
+            exitReason: `Chốt target sau T+2: đóng ${close.toLocaleString('vi-VN')} ≥ ${Math.round(pos.takeProfitTarget).toLocaleString('vi-VN')}`,
             pnlPercent: Number(pnlPercent.toFixed(4)),
           });
           lastExitDate = bar.tradingDate;
           pos = null;
           continue;
         }
+
+        const peakPnlPct =
+          ((pos.peakPrice - pos.entryPrice) / pos.entryPrice) * 100;
+        const drawdownFromPeak = (pos.peakPrice - close) / pos.peakPrice;
         if (
-          allowsAverageDownFromSignals(
-            daySignals,
-            rec,
-            pos.entryPrice,
-            close,
-            pos.averageLegCount,
-          )
+          t2Ok &&
+          pnlPct >= MINERVINI_PROFIT_LOCK_PCT * 100 &&
+          ((sma10 != null && close < sma10) || drawdownFromPeak >= 0.08)
         ) {
-          const newAvg = Math.round(
-            weightedEntryAfterAverageDown(
-              pos.entryPrice,
-              pos.averageLegCount,
-              close,
-            ),
-          );
-          const { takeProfitTarget } = targetsForWeightedEntry(history, newAvg);
-          if (takeProfitTarget != null) {
-            pos.entryPrice = newAvg;
-            pos.takeProfitTarget = takeProfitTarget;
-            pos.stopLossAtEntry = null;
-            pos.averageLegCount += 1;
-            pos.peakClose = Math.max(newAvg, close);
-            pos.averageDownLegs.push({
-              date: bar.tradingDate,
-              price: Math.round(close),
-              reason: averageReasonLabelFromSignals(daySignals),
-            });
-          }
+          const pnlPercent = ((close - pos.entryPrice) / pos.entryPrice) * 100;
+          closed.push({
+            entryDate: pos.entryDate,
+            entryPrice: pos.entryPrice,
+            entryRecommendation: pos.entryRecommendation,
+            entryStrength: pos.entryStrength,
+            entryReason: pos.entryReason,
+            averageDownCount: 0,
+            averageDownLegs: null,
+            takeProfitTarget: pos.takeProfitTarget,
+            stopLossAtEntry: pos.stopLossAtEntry,
+            exitDate: bar.tradingDate,
+            exitPrice: close,
+            exitRecommendation: 'MINERVINI_PROFIT_LOCK',
+            exitSellStrength: null,
+            exitReason: `Chặn lãi Minervini: đỉnh lãi ${peakPnlPct.toFixed(1)}%, đóng dưới MA10 hoặc giảm ${(drawdownFromPeak * 100).toFixed(1)}% từ đỉnh`,
+            pnlPercent: Number(pnlPercent.toFixed(4)),
+          });
+          lastExitDate = bar.tradingDate;
+          pos = null;
           continue;
         }
       } else if (
-        !isInReentryCooldown(
-          lastExitDate,
-          bar.tradingDate,
-          reentryCooldownDays,
-        ) &&
-        allowsFirstPositionEntryFromSignals(daySignals, rec)
+        !isInReentryCooldown(lastExitDate, bar.tradingDate, reentryCooldownDays)
       ) {
-        const { takeProfitTarget } = targetsForWeightedEntry(history, close);
-        if (takeProfitTarget == null) continue;
+        const evalBars = bars.slice(0, i + 1).map((b) => ({
+          open: Number(b.open),
+          high: Number(b.high),
+          low: Number(b.low),
+          close: Number(b.close),
+          volume: Number(b.volume),
+          tradingDate: b.tradingDate,
+        }));
+        const setup = evaluateMinervini(evalBars);
+        if (setup.recommendation !== Recommendation.STRONG_BUY) continue;
+
         pos = {
           entryDate: bar.tradingDate,
           entryBarIndex: i,
           entryPrice: close,
-          entryRecommendation: rec,
-          entryStrength: ev.buyStrength,
-          entryReason: ev.reasoning,
-          takeProfitTarget,
-          stopLossAtEntry: null,
-          averageLegCount: 0,
-          averageDownLegs: [],
-          peakClose: close,
+          entryRecommendation: 'MINERVINI_STRONG_BUY',
+          entryStrength: 'STRONG',
+          entryReason: `Strict Minervini: ${setup.reasons.join(' · ')}`,
+          takeProfitTarget: setup.targetPrice,
+          stopLossAtEntry: setup.stopLoss,
+          peakPrice: close,
         };
       }
     }
@@ -458,10 +391,8 @@ export class SignalBacktestService {
         entryRecommendation: pos.entryRecommendation,
         entryStrength: pos.entryStrength,
         entryReason: pos.entryReason,
-        averageDownCount: pos.averageLegCount,
-        averageDownLegs: pos.averageDownLegs.length
-          ? [...pos.averageDownLegs]
-          : null,
+        averageDownCount: 0,
+        averageDownLegs: null,
         takeProfitTarget: pos.takeProfitTarget,
         stopLossAtEntry: pos.stopLossAtEntry,
         exitDate: last.tradingDate,

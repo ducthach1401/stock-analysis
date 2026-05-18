@@ -2936,8 +2936,8 @@ function app() {
 
     recLabel(r) {
       return {
-        STRONG_BUY: 'Mua tích cực',
-        BUY: 'Mua',
+        STRONG_BUY: 'Mua breakout Minervini',
+        BUY: 'Theo dõi mua / Chờ breakout',
         HOLD: 'Giữ',
         SELL: 'Bán',
         STRONG_SELL: 'Bán tích cực',
@@ -2959,10 +2959,7 @@ function app() {
           support_base: 'Nền tham chiếu (mua lại)',
           wait_base: 'Chờ về nền',
           breakout_entry: 'Giá mua (theo break)',
-          dip_rally_ma20: 'Mua (MA20 + rút chân)',
-          dip_rally_retest: 'Mua (retest cản)',
           wait_retest_break: 'Chờ retest sau break',
-          wait_dip_rally: 'Chờ pha hồi (EMA / retest)',
           pullback: 'Mua limit gợi ý',
         }[mode] || 'Mua limit gợi ý'
       );
@@ -2990,10 +2987,7 @@ function app() {
           support_base: 'Lý do mức «Nền tham chiếu»',
           wait_base: 'Lý do mức «Chờ về nền»',
           breakout_entry: 'Lý do mức «Giá mua theo break»',
-          dip_rally_ma20: 'Lý do mức «Mua sau pha MA20»',
-          dip_rally_retest: 'Lý do mức «Mua sau retest»',
           wait_retest_break: 'Lý do mức «Chờ retest»',
-          wait_dip_rally: 'Lý do mức «Chờ pha hồi»',
           pullback: 'Lý do mức «Mua limit gợi ý»',
         }[mode] || 'Lý do mức «Mua limit gợi ý»'
       );
@@ -3005,10 +2999,7 @@ function app() {
           support_base: 'Nền tham chiếu',
           wait_base: 'Chờ về nền',
           breakout_entry: 'Giá mua (theo break)',
-          dip_rally_ma20: 'Mua sau pha MA20',
-          dip_rally_retest: 'Mua sau retest',
           wait_retest_break: 'Chờ retest cản',
-          wait_dip_rally: 'Chờ pha hồi (EMA)',
           pullback: 'Limit / chờ hồi gợi ý',
         }[mode] || 'Giá mua gợi ý'
       );
@@ -3016,7 +3007,7 @@ function app() {
 
     inBuyZone(rec) {
       if (!rec?.priceTarget) return false;
-      if (!['BUY', 'STRONG_BUY'].includes(rec.recommendation)) return false;
+      if (rec.recommendation !== 'STRONG_BUY') return false;
       const pt = rec.priceTarget;
       const cur = Number(pt.currentPrice);
       const sup = Number(pt.support);
@@ -3028,7 +3019,7 @@ function app() {
       if (m === 'wait_base') {
         return cur >= sup * 0.995 && cur <= sup * 1.03;
       }
-      if (m === 'wait_retest_break' || m === 'wait_dip_rally') {
+      if (m === 'wait_retest_break') {
         return cur >= pull * 0.985 && cur <= pull * 1.025;
       }
       return cur <= pull * 1.03;
