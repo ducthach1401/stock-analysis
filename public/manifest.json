@@ -6,9 +6,9 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "browser"],
-  "background_color": "#f1f5f9",
-  "theme_color": "#4f46e5",
-  "orientation": "any",
+  "background_color": "#0b1211",
+  "theme_color": "#0f766e",
+  "orientation": "portrait",
   "lang": "vi",
   "icons": [
     {

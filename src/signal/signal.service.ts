@@ -60,6 +60,11 @@ interface DetectedSignal {
   description: string;
 }
 
+function sanitizeSignalValue(value: number | null): number | null {
+  if (value == null) return null;
+  return Number.isFinite(value) ? value : null;
+}
+
 interface OhlcvBar {
   open: number;
   high: number;
@@ -267,7 +272,7 @@ export class SignalService {
       // ────────────────────────────────────────────────────────────
       ...this.detectCandlestickPatterns(bars),
       ...this.detectVolumeSurge(bars),
-    ];
+    ].map((s) => ({ ...s, value: sanitizeSignalValue(s.value) }));
 
     const saved: Signal[] = [];
     for (const s of detected) {
@@ -359,7 +364,7 @@ export class SignalService {
         ...this.detectFailedBreakout(slice),
         ...this.detectCandlestickPatterns(slice),
         ...this.detectVolumeSurge(slice),
-      ];
+      ].map((s) => ({ ...s, value: sanitizeSignalValue(s.value) }));
 
       if (detected.length > 0) {
         // Raw INSERT IGNORE — tránh lỗi TypeORM "entity id not set"

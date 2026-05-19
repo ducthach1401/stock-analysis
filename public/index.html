@@ -6,10 +6,10 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#4f46e5" />
+    <meta name="theme-color" content="#0f766e" />
     <meta
       name="theme-color"
-      content="#18181b"
+      content="#0b1211"
       media="(prefers-color-scheme: dark)"
     />
     <meta
@@ -35,12 +35,12 @@
     <script>
       tailwind.config = { darkMode: 'class' };
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/vendor/tailwindcss-3.4.17.js"></script>
     <script
-      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+      src="/vendor/alpinejs-3.x.x.min.js"
       defer
     ></script>
-    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="/vendor/lightweight-charts-4.2.0.standalone.production.js"></script>
     <link rel="stylesheet" href="/css/app.css" />
   </head>
   <body class="min-h-screen safe-pb touch-manipulation">
@@ -49,11 +49,10 @@
       x-show="pwaMandatoryGate"
       x-cloak
       x-transition
-      class="pwa-install-overlay fixed inset-0 z-[250] flex flex-col text-zinc-100 shadow-[inset_0_0_120px_rgba(0,0,0,0.4)] backdrop-blur-sm"
+      class="pwa-install-overlay fixed inset-0 z-[250] flex flex-col text-zinc-100"
       style="
         padding-top: max(0.5rem, env(safe-area-inset-top));
         padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
-        background-color: rgba(0, 0, 0, 0.97);
       "
       role="dialog"
       aria-modal="true"
@@ -64,7 +63,7 @@
       >
         <div class="flex flex-col items-center text-center gap-3 shrink-0">
           <div
-            class="w-[4.5rem] h-[4.5rem] rounded-[1.35rem] overflow-hidden shadow-xl ring-2 ring-indigo-400/50 shrink-0 bg-zinc-900"
+            class="pwa-app-icon w-[4.5rem] h-[4.5rem] overflow-hidden shrink-0"
           >
             <img
               src="/icons/icon-192.png"
@@ -79,15 +78,15 @@
           <div>
             <h1
               id="pwa-gate-title"
-              class="text-xl font-bold text-white tracking-tight px-1"
+              class="pwa-title text-xl font-bold text-white px-1"
             >
               Cài app để dùng trên điện thoại
             </h1>
-            <p class="text-sm text-zinc-400 mt-2 leading-relaxed px-1">
+            <p class="pwa-copy text-sm mt-2 leading-relaxed px-1">
               Cài PWA để giao diện gọn và mở nhanh hơn. Bạn có thể
-              <strong class="text-zinc-200">bỏ qua</strong> và dùng trên trình
+              <strong>bỏ qua</strong> và dùng trên trình
               duyệt. Sau khi cài,
-              <strong class="text-zinc-200">mở từ icon</strong> màn hình chính
+              <strong>mở từ icon</strong> màn hình chính
               để có trải nghiệm đầy đủ.
             </p>
           </div>
@@ -98,14 +97,14 @@
             type="button"
             x-show="pwaDeferredInstall"
             @click="installPwa()"
-            class="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-bold text-base sm:text-lg shadow-lg shadow-emerald-900/40 touch-manipulation mobile-tap-target flex items-center justify-center gap-2 ring-2 ring-emerald-400/30"
+            class="pwa-primary-action w-full py-4 text-white font-bold text-base sm:text-lg touch-manipulation mobile-tap-target flex items-center justify-center gap-2"
           >
             <span class="text-2xl" aria-hidden="true">📲</span>
             <span>Cài tự động — thêm vào màn hình chính</span>
           </button>
           <p
             x-show="pwaDeferredInstall"
-            class="text-xs text-center text-emerald-200/80 leading-relaxed"
+            class="pwa-help text-xs text-center leading-relaxed"
           >
             Chrome sẽ mở hộp thoại hệ thống — chọn
             <strong class="text-white">Cài đặt</strong> /
@@ -113,7 +112,7 @@
           </p>
           <div
             x-show="!pwaDeferredInstall"
-            class="text-xs text-left rounded-xl border border-amber-500/40 bg-amber-950/40 px-3 py-2.5 text-amber-100 leading-relaxed"
+            class="pwa-warning text-xs text-left rounded-xl px-3 py-2.5 leading-relaxed"
           >
             <strong class="text-amber-50">Chưa có nút cài nhanh</strong> — dùng
             menu <strong>⋮</strong> Chrome → <strong>Cài đặt app</strong> hoặc
@@ -129,14 +128,14 @@
             type="button"
             x-show="pwaCanWebShare"
             @click="openPwaIosShareSheet()"
-            class="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-bold text-base sm:text-lg shadow-lg shadow-indigo-900/40 touch-manipulation mobile-tap-target flex items-center justify-center gap-2 ring-2 ring-indigo-400/30"
+            class="pwa-primary-action w-full py-4 text-white font-bold text-base sm:text-lg touch-manipulation mobile-tap-target flex items-center justify-center gap-2"
           >
             <span class="text-2xl" aria-hidden="true">📤</span>
             <span>Mở Chia sẻ — Thêm vào Màn hình chính</span>
           </button>
           <p
             x-show="pwaCanWebShare"
-            class="text-xs text-center text-indigo-200/90 leading-relaxed"
+            class="pwa-help text-xs text-center leading-relaxed"
           >
             Apple không cho cài kiểu Android. Trong bảng Chia sẻ, chọn
             <strong class="text-white">Thêm vào Màn hình chính</strong> /
@@ -145,7 +144,7 @@
           </p>
           <div
             x-show="!pwaCanWebShare"
-            class="text-xs text-left rounded-xl border border-amber-500/40 bg-amber-950/40 px-3 py-2.5 text-amber-100 leading-relaxed"
+            class="pwa-warning text-xs text-left rounded-xl px-3 py-2.5 leading-relaxed"
           >
             <strong class="text-amber-50">Không bật được Chia sẻ nhanh</strong>
             — làm theo đúng trình duyệt bạn đang dùng trong khung dưới (Safari,
@@ -154,10 +153,10 @@
         </div>
 
         <div
-          class="w-full rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-left text-sm text-zinc-200 space-y-3 shadow-inner"
+          class="pwa-instruction-card w-full px-4 py-4 text-left text-sm space-y-3"
         >
           <p
-            class="font-semibold text-white border-b border-zinc-700 pb-2"
+            class="pwa-instruction-title font-semibold pb-2"
             x-text="pwaInstallInstructionHeading()"
           ></p>
           <p
@@ -317,7 +316,7 @@
           <button
             type="button"
             @click="skipPwaMandatoryGate()"
-            class="inline-flex items-center justify-center gap-2 w-full py-3.5 px-4 rounded-xl border border-zinc-500/80 bg-zinc-800/90 text-zinc-100 text-sm font-semibold touch-manipulation mobile-tap-target hover:bg-zinc-700 active:scale-[0.99]"
+            class="pwa-secondary-action inline-flex items-center justify-center gap-2 w-full py-3.5 px-4 text-sm font-semibold touch-manipulation mobile-tap-target"
           >
             Tiếp tục trên trình duyệt — không cài app
           </button>
@@ -330,7 +329,7 @@
           <button
             type="button"
             @click="window.location.reload()"
-            class="inline-flex items-center justify-center gap-2 w-full sm:w-auto min-w-[12rem] py-3 px-5 rounded-xl border border-zinc-600 bg-zinc-900 text-zinc-100 text-sm font-semibold touch-manipulation mobile-tap-target hover:bg-zinc-800 active:scale-[0.99]"
+            class="pwa-ghost-action inline-flex items-center justify-center gap-2 w-full sm:w-auto min-w-[12rem] py-3 px-5 text-sm font-semibold touch-manipulation mobile-tap-target"
           >
             <svg
               class="w-5 h-5 shrink-0 text-zinc-300"
@@ -2202,37 +2201,7 @@
                 <button
                   @click="runAction('recommend')"
                   :disabled="actionLoading.recommend"
-                  class="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-60"
-                  style="
-                    background: linear-gradient(
-                      135deg,
-                      #6366f1 0%,
-                      #4f46e5 60%,
-                      #4338ca 100%
-                    );
-                    color: #fff;
-                    box-shadow:
-                      0 2px 8px rgba(79, 70, 229, 0.4),
-                      0 0 0 1px rgba(79, 70, 229, 0.2);
-                  "
-                  onmouseover="
-                    if (!this.disabled) {
-                      this.style.background =
-                        'linear-gradient(135deg,#818cf8 0%,#6366f1 60%,#4f46e5 100%)';
-                      this.style.boxShadow =
-                        '0 4px 16px rgba(79,70,229,0.5), 0 0 0 1px rgba(99,102,241,0.3)';
-                      this.style.transform = 'translateY(-1px)';
-                    }
-                  "
-                  onmouseout="
-                    if (!this.disabled) {
-                      this.style.background =
-                        'linear-gradient(135deg,#6366f1 0%,#4f46e5 60%,#4338ca 100%)';
-                      this.style.boxShadow =
-                        '0 2px 8px rgba(79,70,229,0.4), 0 0 0 1px rgba(79,70,229,0.2)';
-                      this.style.transform = '';
-                    }
-                  "
+                  class="btn-primary w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-60"
                 >
                   <svg
                     :class="actionLoading.recommend ? 'spin' : ''"
@@ -4569,7 +4538,7 @@
       x-show="showPwaInstallBanner && !pwaMandatoryGate"
       x-cloak
       x-transition
-      class="fixed bottom-0 left-0 right-0 z-[60] px-3 pt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-between bg-indigo-600 text-white text-sm shadow-lg safe-pb"
+      class="pwa-install-banner fixed bottom-0 left-0 right-0 z-[60] px-3 pt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-between text-sm safe-pb"
       style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px))"
     >
       <span class="text-center sm:text-left px-1"
@@ -4580,14 +4549,14 @@
         <button
           type="button"
           @click="installPwa()"
-          class="px-4 py-2 rounded-lg bg-white text-indigo-700 font-semibold text-sm touch-manipulation"
+          class="pwa-banner-primary px-4 py-2 font-semibold text-sm touch-manipulation"
         >
           Cài app
         </button>
         <button
           type="button"
           @click="dismissPwaBanner()"
-          class="px-3 py-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-500 text-sm touch-manipulation"
+          class="pwa-banner-secondary px-3 py-2 text-sm touch-manipulation"
         >
           Để sau
         </button>

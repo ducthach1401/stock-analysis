@@ -330,7 +330,7 @@ function app() {
         const m = document.querySelector(
           'meta[name="theme-color"]:not([media])',
         );
-        if (m) m.setAttribute('content', this.darkMode ? '#18181b' : '#4f46e5');
+        if (m) m.setAttribute('content', this.darkMode ? '#0b1211' : '#0f766e');
       } catch {}
       this.updateChartTheme();
     },
@@ -622,6 +622,7 @@ function app() {
     setupPwa() {
       if (typeof window === 'undefined') return;
       this.refreshPwaMandatoryGate();
+      this.lockPortraitOrientation();
       const onViewportOrDisplayMode = () => this.refreshPwaMandatoryGate();
       window.addEventListener('resize', onViewportOrDisplayMode, {
         passive: true,
@@ -653,8 +654,18 @@ function app() {
         this.showPwaInstallBanner = false;
         this.pwaDeferredInstall = null;
         this.refreshPwaMandatoryGate();
+        this.lockPortraitOrientation();
         this.showToast('Đã cài app lên thiết bị', 'success');
       });
+    },
+
+    async lockPortraitOrientation() {
+      if (typeof screen === 'undefined' || !isStandaloneDisplayMode()) return;
+      const orientation = screen.orientation;
+      if (!orientation || typeof orientation.lock !== 'function') return;
+      try {
+        await orientation.lock('portrait');
+      } catch {}
     },
 
     dismissPwaBanner() {

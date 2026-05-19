@@ -82,6 +82,18 @@ function computePwaMandatoryGate() {
   return true;
 }
 
+function isStandaloneDisplayMode() {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+    if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+  } catch {}
+  try {
+    if (window.navigator.standalone === true) return true;
+  } catch {}
+  return false;
+}
+
 function isIosTouchDevice() {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
