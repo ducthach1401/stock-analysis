@@ -181,14 +181,10 @@ export class ScannerService {
           ? 'BEARISH'
           : 'NEUTRAL';
 
+    // Chuẩn hoá sao theo biên độ điểm để khớp trực giác UI Scanner.
+    const absScore = Math.abs(Number(result.score) || 0);
     const stars: 0 | 1 | 2 | 3 =
-      result.recommendation === Recommendation.STRONG_BUY
-        ? 3
-        : result.recommendation === Recommendation.BUY
-          ? 2
-          : direction === 'BEARISH' && result.confidence === 'HIGH'
-            ? 2
-            : 0;
+      absScore >= 7 ? 3 : absScore >= 4.5 ? 2 : absScore >= 2.5 ? 1 : 0;
 
     const topSignal =
       direction === 'BULLISH'
@@ -267,28 +263,6 @@ export class ScannerService {
 
     this.logger.log('⏰ [Cron] Kiểm tra biến động intraday...');
     await this.intradayAlertAll();
-  }
-
-  /**
-   * Phái sinh VN30 (tham chiếu chỉ số): mỗi 5 phút trong phiên — nến ngày hiện tại + quét tín hiệu.
-   * Tắt: DERIVATIVES_VN30_FIVE_MIN_SCAN=false
-   */
-  @Cron('*/5 9-14 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
-  async scheduledDerivativesVn30FiveMinScan() {
-    if (
-      this.config.get<string>('DERIVATIVES_VN30_FIVE_MIN_SCAN', 'true') ===
-      'false'
-    ) {
-      return;
-    }
-    if (!isVnCashMarketSessionOpen()) return;
-    try {
-      await this.stockService.syncIntradaySessionBar('VN30');
-      await this.signalService.analyze('VN30');
-      this.logger.log('⏰ [Cron] Phái sinh VN30: sync phiên + analyze');
-    } catch (e) {
-      this.logger.warn(`[Cron] Phái sinh VN30: ${(e as Error).message}`);
-    }
   }
 
   // ─── Manual triggers ─────────────────────────────────────────────────

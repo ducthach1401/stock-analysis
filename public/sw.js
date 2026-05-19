@@ -1,5 +1,5 @@
 /* global self, caches, fetch */
-const VERSION = 'stock-analysis-sw-v33';
+const VERSION = 'stock-analysis-sw-v39';
 const PRECACHE = [
   '/index.html',
   '/css/app.css',
@@ -38,6 +38,7 @@ function isApiPath(pathname) {
     pathname.startsWith('/positions') ||
     pathname.startsWith('/scanner') ||
     pathname.startsWith('/watchlist') ||
+    pathname.startsWith('/derivatives') ||
     pathname.startsWith('/stock') ||
     pathname.startsWith('/queue') ||
     pathname.startsWith('/api')

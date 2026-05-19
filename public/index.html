@@ -1,17 +1,22 @@
 <!doctype html>
-<html lang="vi" x-data="app()" x-init="init()" :class="darkMode ? 'dark' : ''">
+<html
+  lang="vi"
+  translate="no"
+  class="notranslate"
+  x-data="app()"
+  x-init="init()"
+  :class="darkMode ? 'dark' : ''"
+>
   <head>
     <meta charset="UTF-8" />
+    <meta name="google" content="notranslate" />
+    <meta http-equiv="Content-Language" content="vi" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#0f766e" />
-    <meta
-      name="theme-color"
-      content="#0b1211"
-      media="(prefers-color-scheme: dark)"
-    />
     <meta
       name="description"
       content="Phân tích cổ phiếu VN — tín hiệu, chart, vị thế, watchlist"
@@ -43,7 +48,7 @@
     <script src="/vendor/lightweight-charts-4.2.0.standalone.production.js"></script>
     <link rel="stylesheet" href="/css/app.css" />
   </head>
-  <body class="min-h-screen safe-pb touch-manipulation">
+  <body class="notranslate min-h-screen safe-pb touch-manipulation" translate="no">
     <!-- PWA: phủ toàn màn — Android: beforeinstallprompt; iOS: Web Share + hướng dẫn theo Safari/Chrome/Firefox/Edge/Opera -->
     <div
       x-show="pwaMandatoryGate"
@@ -357,16 +362,16 @@
 
     <!-- Header -->
     <header
-      class="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700 sticky top-0 z-50 safe-pt"
+      class="app-header bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700 sticky top-0 z-50 safe-pt"
     >
       <div
-        class="max-w-7xl mx-auto px-3 sm:px-6 flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 min-h-[3.5rem] py-1.5 sm:py-0 sm:h-14"
+        class="app-header-inner max-w-7xl mx-auto px-3 sm:px-6 flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 min-h-[3.5rem] py-1.5 sm:py-0 sm:h-14"
       >
         <div
-          class="flex items-center gap-2 sm:gap-3 shrink-0 order-1 sm:order-none"
+          class="app-brand flex items-center gap-2 sm:gap-3 shrink-0 order-1 sm:order-none"
         >
           <div
-            class="w-8 h-8 rounded-lg overflow-hidden shrink-0 ring-1 ring-indigo-500/25 dark:ring-indigo-400/30 shadow-sm bg-zinc-900"
+            class="app-brand-icon w-8 h-8 rounded-lg overflow-hidden shrink-0 ring-1 ring-indigo-500/25 dark:ring-indigo-400/30 shadow-sm bg-zinc-900"
           >
             <img
               src="/icons/icon-192.png"
@@ -378,7 +383,7 @@
             />
           </div>
           <span
-            class="font-bold text-gray-900 dark:text-zinc-100 text-base sm:text-lg truncate max-w-[40vw] sm:max-w-none"
+            class="app-brand-title font-bold text-gray-900 dark:text-zinc-100 text-base sm:text-lg truncate max-w-[40vw] sm:max-w-none"
             >Stock Analysis</span
           >
           <span class="badge badge-gray hidden md:inline-flex shrink-0"
@@ -386,25 +391,29 @@
           >
         </div>
         <nav
-          class="flex-1 min-w-0 order-2 sm:order-none w-full basis-full sm:basis-auto sm:w-auto flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide touch-pan-x pb-0.5 sm:pb-0 -mx-1 px-1 sm:mx-0 sm:px-0"
+          class="app-main-nav flex-1 min-w-0 order-2 sm:order-none w-full basis-full sm:basis-auto sm:w-auto flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide touch-pan-x pb-0.5 sm:pb-0 -mx-1 px-1 sm:mx-0 sm:px-0"
         >
           <template x-for="t in mainNavTabs()" :key="t.id">
             <button
               type="button"
               @click="setTab(t.id)"
-              :class="tab === t.id ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-semibold' : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800'"
-              class="px-2.5 sm:px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap"
+              :class="tab === t.id ? 'is-active bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-semibold' : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800'"
+              class="app-nav-button px-2.5 sm:px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap"
+              :title="t.label"
             >
-              <span x-html="t.icon" class="w-4 h-4 shrink-0"></span>
+              <span x-html="t.icon" class="app-nav-icon w-4 h-4 shrink-0"></span>
               <span class="hidden sm:inline" x-text="t.label"></span>
             </button>
           </template>
         </nav>
         <div
-          class="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto order-3 sm:order-none"
+          class="app-header-actions flex items-center gap-1 sm:gap-2 shrink-0 ml-auto order-3 sm:order-none"
         >
           <!-- Menu ☰: Cổ phiếu, Chiến lược, Watchlist, thông báo, làm mới, giao diện -->
-          <div class="relative" @keydown.escape.window="moreMenuOpen = false">
+          <div
+            class="relative app-header-menu-wrap"
+            @keydown.escape.window="moreMenuOpen = false"
+          >
             <button
               type="button"
               id="header-more-btn"
@@ -412,7 +421,7 @@
               :aria-expanded="moreMenuOpen"
               aria-haspopup="true"
               aria-controls="header-more-menu"
-              class="btn-secondary text-xs p-2 sm:px-3 mobile-tap-target"
+              class="app-icon-button app-menu-trigger btn-secondary text-xs p-2 sm:px-3 mobile-tap-target"
               title="Thêm — Cổ phiếu, Chiến lược, Watchlist, thông báo…"
             >
               <svg
@@ -566,7 +575,7 @@
           <template x-if="isAdmin">
             <button
               @click="logout()"
-              class="btn-secondary text-xs flex items-center gap-1.5"
+              class="app-icon-button app-auth-trigger app-auth-logout btn-secondary text-xs flex items-center gap-1.5"
               title="Đăng xuất"
             >
               <svg
@@ -590,7 +599,7 @@
           <template x-if="!isAdmin">
             <button
               @click="loginModal.show = true"
-              class="btn-primary text-xs flex items-center gap-1.5"
+              class="app-icon-button app-auth-trigger app-auth-login btn-primary text-xs flex items-center gap-1.5"
               title="Đăng nhập Admin"
             >
               <svg
@@ -746,8 +755,9 @@
             <template x-if="bestPos">
               <div>
                 <p
-                  class="text-3xl font-bold text-emerald-600 my-1"
-                  x-text="'+' + Number(bestPos.pnlPercent).toFixed(2) + '%'"
+                  class="text-3xl font-bold my-1"
+                  :class="Number(bestPos.pnlPercent) >= 0 ? 'text-emerald-600' : 'text-red-600'"
+                  x-text="(Number(bestPos.pnlPercent) >= 0 ? '+' : '') + Number(bestPos.pnlPercent).toFixed(2) + '%'"
                 ></p>
                 <button
                   type="button"
@@ -822,30 +832,30 @@
                 <b>kỷ luật quản trị rủi ro Minervini</b> và chỉ tái vào khi có
                 setup mới. Một vị thế — <b>bán một lần</b>.
               </p>
-              <div class="overflow-x-auto">
-                <table class="w-full text-sm">
+              <div class="overflow-x-auto open-positions-scroll">
+                <table class="w-full text-sm open-positions-table">
                   <thead>
                     <tr
                       class="text-center text-xs text-gray-500 border-b border-gray-100"
                     >
-                      <th class="pb-2 font-medium px-1">Mã</th>
-                      <th class="pb-2 font-medium px-1">Ngày mua</th>
-                      <th class="pb-2 font-medium px-1">Giá vào</th>
-                      <th class="pb-2 font-medium px-1">Giá hiện tại</th>
-                      <th class="pb-2 font-medium px-1">P&L</th>
-                      <th class="pb-2 font-medium px-1">Target</th>
-                      <th class="pb-2 font-medium px-1">R:R</th>
-                      <th class="pb-2 font-medium px-1 min-w-[10rem]">
+                      <th class="pb-2 font-medium px-2">Mã</th>
+                      <th class="pb-2 font-medium px-2">Ngày mua</th>
+                      <th class="pb-2 font-medium px-2">Giá vào</th>
+                      <th class="pb-2 font-medium px-2">Giá hiện tại</th>
+                      <th class="pb-2 font-medium px-2">P&L</th>
+                      <th class="pb-2 font-medium px-2">Target</th>
+                      <th class="pb-2 font-medium px-2">R:R</th>
+                      <th class="pb-2 font-medium px-2 min-w-[10rem]">
                         Trung bình giá
                       </th>
-                      <th class="pb-2 font-medium px-1">Ngày</th>
-                      <th class="pb-2 font-medium px-1">Tiến độ</th>
+                      <th class="pb-2 font-medium px-2">Ngày</th>
+                      <th class="pb-2 font-medium px-2">Tiến độ</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-50">
                     <template x-for="pos in openPositions" :key="pos.id">
                       <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="py-3">
+                        <td class="py-3 px-2">
                           <div class="flex items-center gap-2">
                             <button
                               type="button"
@@ -862,7 +872,7 @@
                             ></span>
                           </div>
                         </td>
-                        <td class="py-3 text-gray-500 text-xs align-top">
+                        <td class="py-3 px-2 text-gray-500 text-xs align-top">
                           <div>
                             Đầu:
                             <span
@@ -896,28 +906,28 @@
                           </template>
                         </td>
                         <td
-                          class="py-3 text-right font-mono text-gray-700"
+                          class="py-3 px-2 text-right font-mono text-gray-700 whitespace-nowrap"
                           x-text="fmt(pos.entryPrice)"
                         ></td>
                         <td
-                          class="py-3 text-right font-mono font-medium"
+                          class="py-3 px-2 text-right font-mono font-medium whitespace-nowrap"
                           x-text="fmt(pos.lastPrice || pos.entryPrice)"
                         ></td>
-                        <td class="py-3 text-right">
+                        <td class="py-3 px-2 text-right whitespace-nowrap">
                           <span
                             :class="Number(pos.pnlPercent) >= 0 ? 'pnl-positive' : 'pnl-negative'"
                             x-text="(Number(pos.pnlPercent) >= 0 ? '+' : '') + Number(pos.pnlPercent).toFixed(2) + '%'"
                           ></span>
                         </td>
                         <td
-                          class="py-3 text-right font-mono text-emerald-600"
+                          class="py-3 px-2 text-right font-mono text-emerald-600 whitespace-nowrap"
                           x-text="fmt(pos.targetPrice)"
                         ></td>
                         <td
-                          class="py-3 text-right text-gray-500 text-xs"
+                          class="py-3 px-2 text-right text-gray-500 text-xs whitespace-nowrap"
                           x-text="'1:' + Number(pos.riskReward).toFixed(1)"
                         ></td>
-                        <td class="py-3 text-xs text-gray-600 align-top">
+                        <td class="py-3 px-2 text-xs text-gray-600 align-top">
                           <template
                             x-if="pos.averageDownLegs && pos.averageDownLegs.length"
                           >
@@ -946,7 +956,7 @@
                           >
                         </td>
                         <td
-                          class="py-3 text-right text-gray-400 text-xs"
+                          class="py-3 px-2 text-right text-gray-400 text-xs whitespace-nowrap"
                           x-text="pos.daysHeld + 'N'"
                         ></td>
                         <td class="py-3 px-2">
@@ -1556,58 +1566,41 @@
         x-cloak
         @tab-changed.window="if ($event.detail === 'derivatives') onDerivativesTabFocus()"
       >
-        <div class="card space-y-8">
+        <div class="card space-y-6 deriv-layout">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 class="font-semibold text-gray-900 dark:text-zinc-100">
                 📉 Phái sinh VN30
               </h2>
-              <p
-                class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl leading-relaxed"
-              >
-                <b>Nến và tín hiệu</b> dùng chỉ số <b>VN30</b> (API Entrade
-                không cung cấp OHLC từng mã HĐTL công khai). Mỗi khung (5m → 1H)
-                tải <b>cùng cửa sổ ~1 tháng lịch</b> lùi từ hiện tại;
-                <b>kéo trái</b> để nạp thêm lịch sử.
-                <b>Trong phiên T2–T6 (9:30–11:30, 13:00–14:45)</b>, chart + tín
-                hiệu <b>tự làm mới định kỳ</b> (5m/15m ~90s; 1H ~5 phút) — hoặc
-                bấm <b>Làm mới</b>. Server quét <b>VN30 mỗi 5 phút</b> (nến ngày
-                + phân tích DB). Tắt cron:
-                <span class="font-mono"
-                  >DERIVATIVES_VN30_FIVE_MIN_SCAN=false</span
-                >.
+              <p class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl">
+                Dùng dữ liệu chỉ số <b>VN30</b> để quét <b>LONG/SHORT/NO_TRADE</b>
+                mỗi 5 phút trong phiên. Kéo trái để nạp thêm lịch sử nến;
+                quyết định được lưu để review P/L.
               </p>
             </div>
           </div>
 
           <div
-            class="rounded-xl border p-4 sm:p-5 w-full"
+            class="rounded-xl border p-4 sm:p-5 w-full deriv-main-panel"
             style="border-color: var(--border); background: var(--bg-raised)"
           >
             <div
-              class="flex flex-wrap items-baseline justify-between gap-3 mb-3"
+              class="flex flex-wrap items-baseline justify-between gap-2.5 mb-3"
             >
               <div>
                 <h3 class="text-lg font-bold text-gray-900 dark:text-zinc-100">
-                  VN30 — đa khung (5m → 1H)
+                  VN30 Intraday Desk
                 </h3>
-                <p
-                  class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl"
-                >
-                  Cùng nguồn chỉ số <b>VN30</b> (Entrade):
-                  <b>5m · 15m · 1H</b> — cùng độ dài cửa sổ <b>~1 tháng</b> (mỗi
-                  lần tải / đổi khung). <b>Kéo trái</b> nạp thêm nến cũ ngoài
-                  tháng; trục giờ <b>ICT</b>. Phân tích +
-                  <b>Giá cuối / SL / TP</b> (ATR); RSI &amp; MACD — chỉ tham
-                  khảo.
+                <p class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl">
+                  Khung <b>5m · 15m · 1H</b>, chart tự làm mới trong phiên.
                 </p>
               </div>
-              <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <div class="flex flex-wrap items-center gap-1.5 shrink-0 deriv-toolbar">
                 <button
                   type="button"
                   @click="setDerivResolution('5')"
                   :disabled="derivLoading"
-                  class="text-xs px-2.5 py-1.5 rounded-lg"
+                  class="text-xs px-2.5 py-1.5 rounded-lg deriv-chip-btn"
                   :class="derivResolution === '5' ? 'btn-primary' : 'btn-secondary'"
                 >
                   5m
@@ -1616,7 +1609,7 @@
                   type="button"
                   @click="setDerivResolution('15')"
                   :disabled="derivLoading"
-                  class="text-xs px-2.5 py-1.5 rounded-lg"
+                  class="text-xs px-2.5 py-1.5 rounded-lg deriv-chip-btn"
                   :class="derivResolution === '15' ? 'btn-primary' : 'btn-secondary'"
                 >
                   15m
@@ -1625,7 +1618,7 @@
                   type="button"
                   @click="setDerivResolution('1H')"
                   :disabled="derivLoading"
-                  class="text-xs px-2.5 py-1.5 rounded-lg"
+                  class="text-xs px-2.5 py-1.5 rounded-lg deriv-chip-btn"
                   :class="derivResolution === '1H' ? 'btn-primary' : 'btn-secondary'"
                 >
                   1H
@@ -1634,7 +1627,7 @@
                   type="button"
                   @click="loadDerivIntraday({ reset: true })"
                   :disabled="derivLoading"
-                  class="btn-secondary text-xs inline-flex items-center gap-1.5"
+                  class="btn-secondary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
                 >
                   <svg
                     :class="derivLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
@@ -1654,9 +1647,32 @@
                 <button
                   type="button"
                   x-show="isAdmin"
+                  @click="runDerivManualScan()"
+                  :disabled="derivDecisionScanLoading"
+                  class="btn-primary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
+                  title="Quét VN30 5m ngay và gửi Telegram nếu có thay đổi quyết định"
+                >
+                  <svg
+                    :class="derivDecisionScanLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                  Quét ngay
+                </button>
+                <button
+                  type="button"
+                  x-show="isAdmin"
                   @click="syncIndicesOneMonthAndReload()"
                   :disabled="derivLoading || derivSyncMonthLoading"
-                  class="btn-primary text-xs inline-flex items-center gap-1.5"
+                  class="btn-primary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
                   title="Đồng bộ nến ngày VNINDEX + VN30 ~1 tháng vào DB + phân tích tín hiệu (admin)"
                 >
                   <svg
@@ -1689,7 +1705,7 @@
               Chưa có dữ liệu nến. Bấm <b>Làm mới</b> hoặc kiểm tra kết nối /
               API chỉ số.
             </div>
-            <div x-show="!derivLoading && derivBars.length" class="space-y-2">
+            <div x-show="!derivLoading && derivBars.length" class="space-y-3">
               <div
                 class="flex items-center justify-end gap-2 text-xs text-gray-400 font-mono px-0.5"
               >
@@ -1705,7 +1721,7 @@
               </div>
               <div
                 x-show="derivAnalysis && !derivLoading"
-                class="text-xs space-y-2 rounded-lg border p-3 mb-1"
+                class="text-xs space-y-2.5 rounded-xl border p-3 mb-1 shadow-sm deriv-decision-card"
                 style="border-color: var(--border); background: var(--bg-card)"
               >
                 <template x-if="derivAnalysis && derivAnalysis.short">
@@ -1716,139 +1732,117 @@
                 </template>
                 <template x-if="derivAnalysis && !derivAnalysis.short">
                   <div
-                    class="space-y-2 leading-relaxed"
+                    class="space-y-3 leading-relaxed"
                     style="color: var(--text-2)"
                   >
-                    <p class="text-[11px] text-gray-500 dark:text-zinc-500">
-                      Gợi ý giá hệ thống: khối này + đường trên chart (tab
-                      <b>Phái sinh</b>, mục VN30 — đa khung).
-                    </p>
-                    <p class="font-medium text-gray-700 dark:text-zinc-200">
-                      Phân tích nến &amp; điểm tham chiếu (trùng đường trên
-                      chart)
-                    </p>
-                    <p
-                      x-show="derivAnalysis.candleNote"
-                      class="text-gray-600 dark:text-zinc-400"
-                      x-text="derivAnalysis.candleNote"
-                    ></p>
-                    <p>
-                      Giá đóng nến cuối:
-                      <b x-text="derivAnalysis.lastClose"></b> điểm · ATR(14) ≈
-                      <b x-text="derivAnalysis.atr"></b>
-                    </p>
-                    <p
-                      x-show="derivAnalysis.rsiNote"
-                      x-text="derivAnalysis.rsiNote"
-                    ></p>
-                    <p
-                      x-show="derivAnalysis.macdNote"
-                      x-text="derivAnalysis.macdNote"
-                    ></p>
                     <div
-                      class="rounded-lg p-2.5 mt-2 border"
+                      class="rounded-xl p-3 border"
                       :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/10 border-emerald-500/30' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-gray-500/5 border-gray-400/30 dark:border-zinc-600')"
                     >
                       <div
-                        class="font-semibold mb-1 flex flex-wrap items-center gap-2"
+                        class="font-semibold mb-2 flex flex-wrap items-center justify-between gap-2"
                         :class="derivAnalysis.bias === 'long' ? 'text-emerald-800 dark:text-emerald-300' : (derivAnalysis.bias === 'short' ? 'text-rose-800 dark:text-rose-300' : 'text-gray-700 dark:text-zinc-300')"
                       >
-                        <span>Gợi ý hệ thống (một hướng):</span>
+                        <span>Quyết định server (VN30 5m):</span>
                         <span
-                          class="font-mono px-1.5 py-0.5 rounded text-sm"
+                          class="font-mono px-2.5 py-1 rounded-full text-sm border"
                           :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/20' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/20' : 'bg-gray-500/15')"
                           x-text="derivAnalysis.biasLabelVi"
                         ></span>
                       </div>
+                      <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[11px] mb-2">
+                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
+                          <span class="block text-gray-400">Thời điểm</span>
+                          <b x-text="fmtDerivDateTime(derivAnalysis.decidedAt)"></b>
+                        </div>
+                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
+                          <span class="block text-gray-400">Entry</span>
+                          <b x-text="fmtDerivPoints(derivAnalysis.lastClose)"></b>
+                        </div>
+                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
+                          <span class="block text-gray-400">SL</span>
+                          <b x-text="fmtDerivPoints(derivAnalysis.sl)"></b>
+                        </div>
+                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
+                          <span class="block text-gray-400">TP</span>
+                          <b x-text="fmtDerivPoints(derivAnalysis.tp)"></b>
+                        </div>
+                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
+                          <span class="block text-gray-400">Tin cậy</span>
+                          <b x-text="(derivAnalysis.confidence ?? 0) + '%'"></b>
+                        </div>
+                      </div>
                       <p
-                        class="text-[11px] text-gray-600 dark:text-zinc-400 mb-2"
+                        class="text-[11px] text-gray-600 dark:text-zinc-400"
                         x-text="derivAnalysis.biasHint"
                       ></p>
-                      <template
-                        x-if="derivAnalysis.bias === 'long' || derivAnalysis.bias === 'short'"
-                      >
-                        <div class="text-sm space-y-0.5 font-mono tabular-nums">
-                          <div>
-                            SL gợi ý: <span x-text="derivAnalysis.sl"></span>
-                          </div>
-                          <div>
-                            TP gợi ý (~1.5R):
-                            <span x-text="derivAnalysis.tp"></span>
-                          </div>
-                        </div>
-                      </template>
-                      <template x-if="derivAnalysis.bias === 'neutral'">
-                        <p
-                          class="text-[11px] text-amber-800/90 dark:text-amber-300/90"
-                        >
-                          Không đưa cặp SL/TP long/short — chỉ xem đường
-                          <b>Giá cuối</b> trên chart.
-                        </p>
-                      </template>
                     </div>
-                    <p class="text-gray-400 dark:text-zinc-500 mt-1">
-                      SL/TP tính từ ATR×2 và tỷ lệ 1.5R — không phải tư vấn đầu
-                      tư.
+                    <p class="text-[11px] text-gray-400 dark:text-zinc-500 mt-1">
+                      Thuật toán duy nhất: EMA9/EMA21 + VWAP + RSI14 + ATR14 +
+                      breakout/volume 5m. SL/TP dùng ATR, chỉ là công cụ hỗ trợ
+                      quyết định, không phải tư vấn đầu tư.
                     </p>
                   </div>
                 </template>
               </div>
               <div
                 x-show="derivBars.length && !derivLoading"
-                class="text-xs rounded-lg border p-3 space-y-2 leading-relaxed"
+                class="text-xs rounded-lg border p-3 leading-relaxed"
                 style="border-color: var(--border); background: var(--bg-card)"
               >
-                <p
-                  class="font-semibold text-gray-800 dark:text-zinc-100 flex items-center gap-2"
+                <div
+                  x-show="derivDecisionHistory.length"
+                  class="deriv-quick-history mb-2.5"
                 >
-                  <span aria-hidden="true">📘</span> Chiến lược vào lệnh (phái
-                  sinh — ưu tiên xác suất)
-                </p>
-                <p class="text-gray-500 dark:text-zinc-400 text-[11px]">
-                  Cùng tinh thần tab <b>Chiến lược</b> (kiên nhẫn, có kỷ luật),
-                  áp cho VN30: <b>không đánh một chỉ báo</b>, ưu tiên
-                  <b>hội tụ</b> để giảm nhiễu — phái sinh có long/short nên
-                  <b>luôn gắn SL</b> với mức tham chiếu trên chart.
-                </p>
-                <ul
-                  class="list-disc pl-4 text-[11px] space-y-1.5 text-gray-600 dark:text-zinc-300 marker:text-indigo-500"
-                >
-                  <li>
-                    <b>Khung lớn trước</b>: xu hướng ngày xem tab
-                    <b>Thị trường</b> (VN30 nến ngày); trên đây ưu tiên
-                    <b>1H</b> rồi <b>5m–15m</b>; chỉ vào khi
-                    <b>cùng hướng</b> sóng lớn (tránh bắt dao rơi ngược trend).
-                  </li>
-                  <li>
-                    <b>Hội tụ trước khi vào</b>: ưu tiên khi
-                    <b>tín hiệu gần nhất</b> (mục dưới) <b>cùng chiều</b> với
-                    long/short bạn định vào + RSI/MACD
-                    <b>không mâu thuẫn mạnh</b> (ví dụ long mà MACD vừa cắt
-                    xuống 0 → cân nhắc chờ).
-                  </li>
-                  <li>
-                    <b>Kỷ luật giá</b>: SL gần mức ô trên / đường chart; TP
-                    ~1.5R hoặc vùng Hỗ trợ–KC; <b>không gồng</b> nhiều lần cùng
-                    lúc — một lệnh, một lý do thoát.
-                  </li>
-                  <li>
-                    <b>Khi nào đứng ngoài</b>: tín hiệu trái chiều giữa các
-                    khung, hoặc chỉ <b>HOLD / trung lập</b> trên hệ thống —
-                    không bắt buộc phải có lệnh mỗi phiên.
-                  </li>
-                </ul>
-                <p
-                  class="text-[10px] text-gray-400 dark:text-zinc-500 pt-1 border-t"
-                  style="border-color: var(--border-sub)"
-                >
-                  Không đảm bảo win rate; rủi ro phái sinh cao. Tham chiếu thêm
-                  mục
-                  <b class="text-gray-500 dark:text-zinc-400"
-                    >Chiến lược vị thế Minervini</b
-                  >
-                  (tab Chiến lược) cho tư duy quản trị vốn — áp dụng có chọn lọc
-                  cho HĐTL.
-                </p>
+                  <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <p class="font-semibold text-gray-700 dark:text-zinc-200">
+                      Lịch sử nhanh
+                    </p>
+                    <span class="text-[10px] text-gray-400">
+                      6 quyết định gần nhất
+                    </span>
+                  </div>
+                  <div class="space-y-1">
+                    <template
+                      x-for="d in derivDecisionHistory.slice(0, 6)"
+                      :key="'quick-' + d.id"
+                    >
+                      <div class="deriv-quick-item">
+                        <span
+                          class="font-mono px-1.5 py-0.5 rounded-full border text-[10px]"
+                          :class="derivActionTone(d.action)"
+                          x-text="derivActionLabel(d.action)"
+                        ></span>
+                        <span
+                          class="font-mono text-[10px] text-gray-500 dark:text-zinc-400"
+                          x-text="fmtDerivDateTime(d.decidedAt)"
+                        ></span>
+                        <span class="text-[10px] text-gray-400" x-text="'S' + d.score"></span>
+                        <span
+                          class="text-[10px] font-mono ml-auto"
+                          :class="derivOutcomeTone(d.outcome, d.pnlPoints)"
+                          x-text="d.pnlPoints == null ? (d.status === 'OPEN' ? 'OPEN' : '-') : (fmtDerivPoints(d.pnlPoints) + 'đ')"
+                        ></span>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <details class="deriv-help-details">
+                  <summary class="font-semibold text-gray-800 dark:text-zinc-100 cursor-pointer">
+                    Cách hệ thống ra quyết định (mở rộng)
+                  </summary>
+                  <div class="pt-2 space-y-2">
+                    <p class="text-gray-500 dark:text-zinc-400 text-[11px]">
+                      LONG khi giá trên VWAP + EMA9&gt;EMA21 + động lượng đủ mạnh.
+                      SHORT khi điều kiện ngược lại. Nếu tín hiệu chưa rõ hệ thống
+                      trả về KHÔNG VÀO để tránh overtrade.
+                    </p>
+                    <p class="text-[10px] text-gray-400 dark:text-zinc-500">
+                      Lệnh review bằng TP/SL hoặc thoát sau 12 nến 5m. Không đảm
+                      bảo win rate.
+                    </p>
+                  </div>
+                </details>
               </div>
               <div
                 x-ref="derivChartMain"
@@ -1875,67 +1869,93 @@
           </div>
 
           <div
-            class="rounded-xl border p-4 sm:p-5 w-full"
+            class="rounded-xl border p-4 sm:p-5 w-full deriv-history-card"
             style="border-color: var(--border); background: var(--bg-raised)"
           >
             <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
               <h3 class="text-sm font-bold text-gray-900 dark:text-zinc-100">
-                Tín hiệu VN30 (gần đây)
+                Lịch sử quyết định phái sinh
               </h3>
               <button
                 type="button"
-                @click="loadDerivSignalsLatest()"
-                class="btn-secondary text-xs"
+                @click="loadDerivativeDecisions()"
+                :disabled="derivDecisionLoading"
+                class="btn-secondary text-xs inline-flex items-center gap-1.5"
               >
-                Làm mới tín hiệu
+                <span
+                  class="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent"
+                  :class="derivDecisionLoading ? 'spin' : 'hidden'"
+                ></span>
+                Làm mới lịch sử
               </button>
             </div>
             <p class="text-xs text-gray-500 mb-2">
-              Cập nhật khi server phân tích (gồm cron 5 phút trong phiên).
+              Feed quyết định 5 phút gần nhất của hệ thống.
               <span x-show="isAdmin" class="text-gray-400 dark:text-zinc-500"
                 >Admin: <b>Đồng bộ ~1 tháng</b> nằm cạnh nút <b>Làm mới</b> phía
                 trên chart — kéo nến <b>ngày</b> <b>VNINDEX + VN30</b> vào DB +
-                phân tích tín hiệu; chart intraday vẫn lấy Entrade khi làm mới
+                phân tích market; chart intraday vẫn lấy Entrade khi làm mới
                 chart.</span
               >
             </p>
             <div
-              x-show="derivSignalsLatest.length"
-              class="space-y-1.5 max-h-64 overflow-y-auto"
+              x-show="derivDecisionHistory.length"
+              class="space-y-2 max-h-80 overflow-y-auto pr-1"
             >
               <template
-                x-for="s in derivSignalsLatest"
-                :key="String(s.id ?? s.type) + '-' + s.tradingDate"
+                x-for="d in derivDecisionHistory"
+                :key="d.id"
               >
                 <div
-                  class="text-xs flex flex-wrap gap-x-2 gap-y-0.5 leading-snug"
-                  style="color: var(--text-2)"
+                  class="text-xs rounded-lg border p-2.5 deriv-history-item"
+                  style="border-color: var(--border-sub); background: var(--bg-card)"
                 >
-                  <span
-                    class="font-mono text-gray-400 shrink-0"
-                    x-text="s.tradingDate"
-                  ></span>
-                  <span
-                    :class="s.direction === 'BULLISH' ? 'text-emerald-600 dark:text-emerald-400' : (s.direction === 'BEARISH' ? 'text-rose-600 dark:text-rose-400' : 'text-gray-500')"
-                    x-text="s.direction === 'BULLISH' ? '▲' : (s.direction === 'BEARISH' ? '▼' : '·')"
-                  ></span>
-                  <span
-                    class="font-medium"
-                    x-text="signalTypeLabelVi(s.type)"
-                  ></span>
-                  <span
-                    class="text-gray-400 dark:text-zinc-500 line-clamp-2"
-                    x-show="s.description"
-                    x-text="s.description"
-                  ></span>
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span
+                        class="font-mono px-2 py-0.5 rounded-full border"
+                        :class="derivActionTone(d.action)"
+                        x-text="derivActionLabel(d.action)"
+                      ></span>
+                      <span
+                        class="font-mono text-gray-500 dark:text-zinc-400"
+                        x-text="fmtDerivDateTime(d.decidedAt)"
+                      ></span>
+                      <span
+                        class="text-gray-400"
+                        x-text="'score ' + d.score + ' · ' + d.confidence + '%'"
+                      ></span>
+                    </div>
+                    <div
+                      class="font-mono"
+                      :class="derivOutcomeTone(d.outcome, d.pnlPoints)"
+                    >
+                      <span x-text="d.outcome || (d.status === 'OPEN' ? 'OPEN' : '-')"></span>
+                      <span x-show="d.pnlPoints != null">
+                        · <span x-text="fmtDerivPoints(d.pnlPoints)"></span> điểm
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px] text-gray-500 dark:text-zinc-400"
+                  >
+                    <span>Entry <b x-text="fmtDerivPoints(d.entryPrice)"></b></span>
+                    <span>SL <b x-text="fmtDerivPoints(d.stopLoss)"></b></span>
+                    <span>TP <b x-text="fmtDerivPoints(d.takeProfit)"></b></span>
+                    <span>Exit <b x-text="fmtDerivPoints(d.exitPrice)"></b></span>
+                  </div>
+                  <p
+                    class="mt-1.5 text-[11px] text-gray-500 dark:text-zinc-500 line-clamp-1"
+                    x-text="d.reason"
+                  ></p>
                 </div>
               </template>
             </div>
             <p
-              x-show="!derivSignalsLatest.length"
+              x-show="!derivDecisionHistory.length"
               class="text-xs text-amber-700/90 dark:text-amber-400/80 py-2"
             >
-              Chưa có tín hiệu — chạy đồng bộ + phân tích hoặc chờ phiên / cron.
+              Chưa có quyết định — bấm <b>Quét ngay</b> hoặc chờ cron trong phiên.
             </p>
           </div>
 
@@ -2393,6 +2413,7 @@
                     <tr style="color: var(--text-3)">
                       <th class="text-left py-2 pl-3 pr-1 font-medium">Ngày</th>
                       <th class="text-left py-2 px-1 font-medium">Mã</th>
+                      <th class="text-right py-2 px-1 font-medium w-16">Điểm</th>
                       <th
                         class="text-left py-2 px-1 font-medium hidden sm:table-cell"
                       >
@@ -2431,6 +2452,13 @@
                             @click.stop="viewSignals(sig.ticker)"
                             x-text="sig.ticker"
                           ></button>
+                        </td>
+                        <td class="py-2 px-1 text-right">
+                          <span
+                            class="font-mono text-[11px]"
+                            :class="signalScoreClass(signalSummaryByTicker(sig.ticker)?.score)"
+                            x-text="fmtSignalScore(signalSummaryByTicker(sig.ticker)?.score, false)"
+                          ></span>
                         </td>
                         <td
                           class="py-2 px-1 hidden sm:table-cell max-w-[10rem] truncate"
@@ -2471,9 +2499,9 @@
                   @click="viewSignals(stock.ticker)"
                   class="text-left p-2.5 rounded-lg border transition-all group relative w-full"
                   :class="{
-                'border-emerald-200 bg-emerald-50 hover:border-emerald-400': signalSummary[stock.ticker]?.direction === 'BULLISH',
-                'border-red-200 bg-red-50 hover:border-red-400':             signalSummary[stock.ticker]?.direction === 'BEARISH',
-                'border-gray-100 hover:border-indigo-300 hover:bg-indigo-50': !signalSummary[stock.ticker] || signalSummary[stock.ticker]?.direction === 'NEUTRAL',
+                'border-emerald-200 bg-emerald-50 hover:border-emerald-400': signalSummaryByTicker(stock.ticker)?.direction === 'BULLISH',
+                'border-red-200 bg-red-50 hover:border-red-400':             signalSummaryByTicker(stock.ticker)?.direction === 'BEARISH',
+                'border-gray-100 hover:border-indigo-300 hover:bg-indigo-50': !signalSummaryByTicker(stock.ticker) || signalSummaryByTicker(stock.ticker)?.direction === 'NEUTRAL',
               }"
                 >
                   <!-- Row 1: Ticker + score badge -->
@@ -2481,34 +2509,29 @@
                     <span
                       class="font-bold text-sm underline-offset-2 group-hover:underline"
                       :class="{
-                    'text-emerald-700': signalSummary[stock.ticker]?.direction === 'BULLISH',
-                    'text-red-700':     signalSummary[stock.ticker]?.direction === 'BEARISH',
-                    'text-indigo-700':    !signalSummary[stock.ticker] || signalSummary[stock.ticker]?.direction === 'NEUTRAL',
+                    'text-emerald-700': signalSummaryByTicker(stock.ticker)?.direction === 'BULLISH',
+                    'text-red-700':     signalSummaryByTicker(stock.ticker)?.direction === 'BEARISH',
+                    'text-indigo-700':    !signalSummaryByTicker(stock.ticker) || signalSummaryByTicker(stock.ticker)?.direction === 'NEUTRAL',
                   }"
                       x-text="stock.ticker"
                     ></span>
 
-                    <!-- Score + confidence khi có tín hiệu -->
-                    <template x-if="signalSummary[stock.ticker]?.stars > 0">
-                      <div class="flex items-center gap-1">
-                        <span
-                          class="text-xs font-bold tabular-nums"
-                          :class="{
-                        'text-emerald-600': signalSummary[stock.ticker].direction === 'BULLISH',
-                        'text-red-600':     signalSummary[stock.ticker].direction === 'BEARISH',
+                    <div class="flex items-center gap-1">
+                      <span
+                        class="text-[11px] font-bold tabular-nums"
+                        :class="signalScoreClass(signalSummaryByTicker(stock.ticker)?.score)"
+                        x-text="fmtSignalScore(signalSummaryByTicker(stock.ticker)?.score)"
+                      ></span>
+                      <span
+                        class="text-xs leading-none"
+                        x-text="'★'.repeat(signalSummaryByTicker(stock.ticker)?.stars || 0) + '☆'.repeat(3 - (signalSummaryByTicker(stock.ticker)?.stars || 0))"
+                        :class="{
+                        'text-emerald-500': signalSummaryByTicker(stock.ticker)?.direction === 'BULLISH',
+                        'text-red-500':     signalSummaryByTicker(stock.ticker)?.direction === 'BEARISH',
+                        'text-gray-300':    signalSummaryByTicker(stock.ticker)?.direction === 'NEUTRAL' || !signalSummaryByTicker(stock.ticker),
                       }"
-                          x-text="(signalSummary[stock.ticker].score > 0 ? '+' : '') + signalSummary[stock.ticker].score"
-                        ></span>
-                        <span
-                          class="text-xs leading-none"
-                          x-text="'★'.repeat(signalSummary[stock.ticker].stars) + '☆'.repeat(3 - signalSummary[stock.ticker].stars)"
-                          :class="{
-                        'text-emerald-500': signalSummary[stock.ticker].direction === 'BULLISH',
-                        'text-red-500':     signalSummary[stock.ticker].direction === 'BEARISH',
-                      }"
-                        ></span>
-                      </div>
-                    </template>
+                      ></span>
+                    </div>
                   </div>
 
                   <!-- Row 2: Company name (cùng nút → tín hiệu) -->
@@ -2518,33 +2541,40 @@
                   ></div>
 
                   <!-- Row 3: Top signal hoặc sector -->
-                  <template x-if="signalSummary[stock.ticker]?.topSignal">
+                  <template x-if="signalSummaryByTicker(stock.ticker)?.topSignal">
                     <div class="flex items-center gap-1 mt-1">
                       <!-- HIGH confidence badge -->
                       <template
-                        x-if="signalSummary[stock.ticker].confidence === 'HIGH'"
+                        x-if="signalSummaryByTicker(stock.ticker)?.confidence === 'HIGH'"
                       >
                         <span
                           class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          :class="signalSummary[stock.ticker].direction === 'BULLISH' ? 'bg-emerald-500' : 'bg-red-500'"
+                          :class="signalSummaryByTicker(stock.ticker)?.direction === 'BULLISH' ? 'bg-emerald-500' : 'bg-red-500'"
                         ></span>
                       </template>
                       <span
                         class="text-xs font-medium truncate"
                         :class="{
-                      'text-emerald-600': signalSummary[stock.ticker].direction === 'BULLISH',
-                      'text-red-600':     signalSummary[stock.ticker].direction === 'BEARISH',
+                      'text-emerald-600': signalSummaryByTicker(stock.ticker)?.direction === 'BULLISH',
+                      'text-red-600':     signalSummaryByTicker(stock.ticker)?.direction === 'BEARISH',
                     }"
-                        x-text="signalTypeLabelVi(signalSummary[stock.ticker].topSignal)"
+                        x-text="signalTypeLabelVi(signalSummaryByTicker(stock.ticker)?.topSignal)"
                       ></span>
                     </div>
                   </template>
-                  <template x-if="!signalSummary[stock.ticker]?.topSignal">
-                    <div
-                      class="text-xs text-gray-300 mt-0.5"
-                      x-text="stock.sector"
-                    ></div>
-                  </template>
+                  <div class="flex items-center justify-between gap-2 mt-1">
+                    <template x-if="!signalSummaryByTicker(stock.ticker)?.topSignal">
+                      <div
+                        class="text-xs text-gray-300 mt-0.5 truncate"
+                        x-text="stock.sector"
+                      ></div>
+                    </template>
+                    <span
+                      class="badge text-[10px] ml-auto"
+                      :class="confidenceClass(signalSummaryByTicker(stock.ticker)?.confidence || 'LOW')"
+                      x-text="signalSummaryByTicker(stock.ticker)?.confidence || 'LOW'"
+                    ></span>
+                  </div>
                 </button>
               </template>
             </div>

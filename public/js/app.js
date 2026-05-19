@@ -5,14 +5,46 @@ function app() {
   return {
     tab: urlTab || readSavedTab(),
     tabs: [
-      { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-      { id: 'market', label: 'Thị trường', icon: '🏛️' },
-      { id: 'derivatives', label: 'Phái sinh', icon: '📉' },
-      { id: 'scanner', label: 'Scanner', icon: '🔍' },
-      { id: 'signals', label: 'Tín hiệu', icon: '⚡' },
-      { id: 'stocks', label: 'Cổ phiếu', icon: '📈' },
-      { id: 'guide', label: 'Chiến lược', icon: '📘' },
-      { id: 'watchlist', label: 'Watchlist', icon: '⭐' },
+      {
+        id: 'dashboard',
+        label: 'Dashboard',
+        icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m8 10V5m8 14v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 19h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+      },
+      {
+        id: 'market',
+        label: 'Thị trường',
+        icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10h16M6 10v8m4-8v8m4-8v8m4-8v8M3 18h18M12 4l8 4H4l8-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      },
+      {
+        id: 'derivatives',
+        label: 'Phái sinh',
+        icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 9l4 4 3-3 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      },
+      {
+        id: 'scanner',
+        label: 'Scanner',
+        icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+      },
+      {
+        id: 'signals',
+        label: 'Tín hiệu',
+        icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 13h6l-1 9 9-13h-6l1-7z" fill="currentColor"/></svg>',
+      },
+      {
+        id: 'stocks',
+        label: 'Cổ phiếu',
+        icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16M6 15l4-4 3 3 5-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      },
+      {
+        id: 'guide',
+        label: 'Chiến lược',
+        icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 013 3v13H8a3 3 0 01-3-3V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 8h7M8 12h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+      },
+      {
+        id: 'watchlist',
+        label: 'Watchlist',
+        icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 16.9 6.6 19.8l1-6.1-4.4-4.3 6.1-.9L12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+      },
     ],
     loading: false,
     scanning: false,
@@ -80,6 +112,10 @@ function app() {
     derivResolution: '5',
     derivLoading: false,
     derivAnalysis: null,
+    derivDecisionLatest: null,
+    derivDecisionHistory: [],
+    derivDecisionLoading: false,
+    derivDecisionScanLoading: false,
     derivCharts: null,
     /** Intraday: kéo trái tải thêm nến cũ (chunk theo ngày, tới khi API trả rỗng / trùng hết) */
     derivHasMoreOlder: true,
@@ -326,13 +362,19 @@ function app() {
     toggleDark() {
       this.darkMode = !this.darkMode;
       localStorage.setItem('darkMode', this.darkMode);
+      this.applyAppColorScheme();
+      this.updateChartTheme();
+    },
+
+    applyAppColorScheme() {
       try {
         const m = document.querySelector(
           'meta[name="theme-color"]:not([media])',
         );
         if (m) m.setAttribute('content', this.darkMode ? '#0b1211' : '#0f766e');
+        const cs = document.querySelector('meta[name="color-scheme"]');
+        if (cs) cs.setAttribute('content', this.darkMode ? 'dark' : 'light');
       } catch {}
-      this.updateChartTheme();
     },
 
     persistChartSignalLabels() {
@@ -429,6 +471,7 @@ function app() {
     },
 
     async init() {
+      this.applyAppColorScheme();
       // Link ?tab=&ticker= đã áp vào state; lưu session cho lần sau
       if (urlTab) {
         try {
@@ -490,7 +533,7 @@ function app() {
       } else if (this.tab === 'derivatives') {
         await Promise.all([
           this.loadDerivIntraday({ silent: true }),
-          this.loadDerivSignalsLatest(),
+          this.loadDerivativeDecisions(),
         ]);
       }
       this.$nextTick(() => {
@@ -569,7 +612,7 @@ function app() {
       if (this.tab !== 'derivatives') return;
       if (!this._vnCashMarketSessionOpen()) return;
       void this.loadDerivIntraday({ silent: true, reset: true });
-      void this.loadDerivSignalsLatest();
+      void this.loadDerivativeDecisions();
     },
 
     startDerivativesSessionPoll() {
@@ -2087,7 +2130,7 @@ function app() {
         } else {
           this.derivBarsResolution = this.derivResolution;
           this.derivHasMoreOlder = true;
-          this.derivAnalysis = this.computeDerivAnalysis(this.derivBars);
+          this.applyDerivDecisionToAnalysis();
           await this.$nextTick();
           requestAnimationFrame(() => this.renderDerivIntradayPanel());
         }
@@ -2149,7 +2192,7 @@ function app() {
         }
         this.derivBars = merged;
         this.derivHasMoreOlder = true;
-        this.derivAnalysis = this.computeDerivAnalysis(this.derivBars);
+        this.applyDerivDecisionToAnalysis();
         if (scrollSnap && added > 0) {
           this._derivScrollRestore = {
             from: scrollSnap.from,
@@ -2693,8 +2736,129 @@ function app() {
       void this.loadDerivIntraday({ reset: true });
     },
 
+    derivActionLabel(action) {
+      if (action === 'LONG') return 'LONG';
+      if (action === 'SHORT') return 'SHORT';
+      return 'KHÔNG VÀO';
+    },
+
+    derivActionTone(action) {
+      if (action === 'LONG')
+        return 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-300';
+      if (action === 'SHORT')
+        return 'bg-rose-500/10 text-rose-700 border-rose-500/30 dark:text-rose-300';
+      return 'bg-slate-500/10 text-slate-600 border-slate-400/30 dark:text-zinc-300 dark:border-zinc-600';
+    },
+
+    derivOutcomeTone(outcome, pnl) {
+      if (outcome === 'WIN' || Number(pnl) > 0)
+        return 'text-emerald-700 dark:text-emerald-300';
+      if (outcome === 'LOSS' || Number(pnl) < 0)
+        return 'text-rose-700 dark:text-rose-300';
+      return 'text-gray-500 dark:text-zinc-400';
+    },
+
+    fmtDerivPoints(v, digits = 2) {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return '—';
+      return n.toFixed(digits).replace(/\.?0+$/, '');
+    },
+
+    fmtDerivDateTime(v) {
+      if (!v) return '—';
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return '—';
+      return d.toLocaleString('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    },
+
+    applyDerivDecisionToAnalysis() {
+      const d = this.derivDecisionLatest;
+      if (!d) {
+        this.derivAnalysis = {
+          short:
+            'Chưa có quyết định phái sinh từ server. Chờ cron 5 phút hoặc bấm Quét ngay.',
+        };
+        return;
+      }
+      const action = d.action;
+      const bias =
+        action === 'LONG' ? 'long' : action === 'SHORT' ? 'short' : 'neutral';
+      const metrics = d.metadata?.metrics || {};
+      this.derivAnalysis = {
+        lastClose: Number(d.entryPrice ?? metrics.close ?? 0),
+        atr:
+          metrics.atr14 == null || Number.isNaN(Number(metrics.atr14))
+            ? null
+            : Number(metrics.atr14),
+        bias,
+        biasLabelVi: this.derivActionLabel(action),
+        biasHint: d.reason || '',
+        sl: d.stopLoss == null ? null : Number(d.stopLoss),
+        tp: d.takeProfit == null ? null : Number(d.takeProfit),
+        score: d.score,
+        confidence: d.confidence,
+        decidedAt: d.decidedAt,
+        outcome: d.outcome,
+        pnlPoints: d.pnlPoints,
+      };
+    },
+
+    async loadDerivativeDecisions(opts = {}) {
+      const silent = opts.silent === true;
+      if (!silent) this.derivDecisionLoading = true;
+      try {
+        const [latest, history] = await Promise.all([
+          fetch('/derivatives/vn30/decision/latest')
+            .then((r) => r.json())
+            .catch(() => null),
+          fetch('/derivatives/vn30/decisions?limit=40')
+            .then((r) => r.json())
+            .catch(() => []),
+        ]);
+        this.derivDecisionLatest = latest && latest.id ? latest : null;
+        this.derivDecisionHistory = Array.isArray(history) ? history : [];
+        this.applyDerivDecisionToAnalysis();
+        if (this.tab === 'derivatives' && this.derivBars.length) {
+          requestAnimationFrame(() => this.renderDerivIntradayPanel());
+        }
+      } finally {
+        if (!silent) this.derivDecisionLoading = false;
+      }
+    },
+
+    async runDerivManualScan() {
+      if (!this.isAdmin) {
+        this.showToast('Cần đăng nhập admin', 'error');
+        return;
+      }
+      if (this.derivDecisionScanLoading) return;
+      this.derivDecisionScanLoading = true;
+      try {
+        const res = await this.authFetch('/derivatives/vn30/scan?notify=1', {
+          method: 'POST',
+        }).then((r) => r.json());
+        if (!res?.decision) throw new Error('scan_failed');
+        await Promise.all([
+          this.loadDerivativeDecisions({ silent: true }),
+          this.loadDerivIntraday({ silent: true, reset: true }),
+        ]);
+        this.showToast('Đã quét phái sinh VN30', 'success');
+      } catch {
+        this.showToast('Không quét được phái sinh VN30', 'error');
+      } finally {
+        this.derivDecisionScanLoading = false;
+      }
+    },
+
     /** Tab Phái sinh: intraday VN30. */
     onDerivativesTabFocus() {
+      void this.loadDerivativeDecisions({ silent: true });
       this.$nextTick(() => {
         requestAnimationFrame(() => {
           if (
@@ -2743,7 +2907,7 @@ function app() {
           });
         }
         await Promise.all([
-          this.loadDerivSignalsLatest(),
+          this.loadDerivativeDecisions({ silent: true }),
           this.loadMarketCharts({ silent: true }),
         ]);
         if (this.tab === 'derivatives') {
@@ -3752,6 +3916,11 @@ function app() {
 
     get filteredWatchlist() {
       let list = this.watchlist;
+      // Scanner grid chỉ hiển thị cổ phiếu, ẩn 2 chỉ số tham chiếu.
+      list = list.filter((s) => {
+        const t = String(s?.ticker || '').toUpperCase();
+        return t !== 'VNINDEX' && t !== 'VN30';
+      });
       if (this.searchTicker) {
         const q = this.searchTicker.toUpperCase();
         list = list.filter(
@@ -3769,19 +3938,51 @@ function app() {
       };
       const confVal = (s) =>
         ({ HIGH: 3, MEDIUM: 2, LOW: 1 })[s?.confidence] ?? 0;
+      const scoreVal = (s) => {
+        const n = Number(s?.score);
+        return Number.isFinite(n) ? n : -999;
+      };
       return [...list].sort((a, b) => {
-        const ra = rank(a.ticker);
-        const rb = rank(b.ticker);
-        if (ra !== rb) return ra - rb;
-        const sa = this.signalSummary[a.ticker];
-        const sb = this.signalSummary[b.ticker];
+        const sa = this.signalSummaryByTicker(a.ticker);
+        const sb = this.signalSummaryByTicker(b.ticker);
+        // Tốt -> xấu: điểm cao đứng trước.
+        const ds = scoreVal(sb) - scoreVal(sa);
+        if (ds !== 0) return ds;
         const ca = confVal(sa);
         const cb = confVal(sb);
         if (ca !== cb) return cb - ca;
-        const absA = sa ? Math.abs(sa.score) : -1;
-        const absB = sb ? Math.abs(sb.score) : -1;
-        return absB - absA;
+        const starsA = Number(sa?.stars ?? 0);
+        const starsB = Number(sb?.stars ?? 0);
+        if (starsA !== starsB) return starsB - starsA;
+        // Cùng chất lượng tín hiệu thì giữ thứ tự watchlist gốc.
+        const ra = rank(a.ticker);
+        const rb = rank(b.ticker);
+        return ra - rb;
       });
+    },
+
+    signalSummaryByTicker(ticker) {
+      if (!ticker) return null;
+      const t = String(ticker).toUpperCase();
+      return this.signalSummary?.[t] ?? this.signalSummary?.[ticker] ?? null;
+    },
+
+    fmtSignalScore(score, withScale = true) {
+      const n = Number(score);
+      if (!Number.isFinite(n)) return '—';
+      const v = n.toFixed(1);
+      const text = `${n > 0 ? '+' : ''}${v}`;
+      return withScale ? `${text}/10` : text;
+    },
+
+    signalScoreClass(score) {
+      const n = Number(score);
+      if (!Number.isFinite(n) || Math.abs(n) < 0.01) {
+        return 'text-gray-500 dark:text-zinc-400';
+      }
+      return n > 0
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : 'text-red-600 dark:text-red-400';
     },
 
     progressPct(pos) {
