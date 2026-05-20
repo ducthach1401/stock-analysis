@@ -55,7 +55,8 @@ export class DerivativesService {
     private readonly config: ConfigService,
   ) {}
 
-  @Cron('*/5 9-14 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
+  // Quét nhanh hơn: mỗi 1 phút trong phiên để phản ứng mở/đóng lệnh sớm hơn.
+  @Cron('* 9-14 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
   async scheduledVn30FiveMinuteDecision(): Promise<void> {
     if (
       this.config.get<string>('DERIVATIVES_VN30_FIVE_MIN_SCAN', 'true') ===

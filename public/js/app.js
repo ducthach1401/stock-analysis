@@ -2821,6 +2821,12 @@ function app() {
       return n.toFixed(digits).replace(/\.?0+$/, '');
     },
 
+    fmtPct(v, digits = 1) {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return '—';
+      return `${n.toFixed(digits).replace(/\.0+$/, '')}%`;
+    },
+
     fmtDerivDateTime(v) {
       if (!v) return '—';
       const d = new Date(v);
@@ -2901,6 +2907,50 @@ function app() {
       });
     },
 
+    derivPnlBreakdown(items) {
+      const out = {
+        totalCount: Array.isArray(items) ? items.length : 0,
+        pnlCount: 0,
+        winCount: 0,
+        lossCount: 0,
+        flatCount: 0,
+        winPoints: 0,
+        lossPoints: 0,
+        netPoints: 0,
+        winRatePct: 0,
+        lossRatePct: 0,
+        profitSharePct: 0,
+        lossSharePct: 0,
+        netPct: 0,
+      };
+      for (const d of items || []) {
+        const pnl = Number(d?.pnlPoints);
+        if (!Number.isFinite(pnl)) continue;
+        out.pnlCount += 1;
+        out.netPoints += pnl;
+        if (pnl > 0) {
+          out.winCount += 1;
+          out.winPoints += pnl;
+        } else if (pnl < 0) {
+          out.lossCount += 1;
+          out.lossPoints += Math.abs(pnl);
+        } else {
+          out.flatCount += 1;
+        }
+      }
+      if (out.pnlCount > 0) {
+        out.winRatePct = (out.winCount / out.pnlCount) * 100;
+        out.lossRatePct = (out.lossCount / out.pnlCount) * 100;
+      }
+      const volume = out.winPoints + out.lossPoints;
+      if (volume > 0) {
+        out.profitSharePct = (out.winPoints / volume) * 100;
+        out.lossSharePct = (out.lossPoints / volume) * 100;
+        out.netPct = (out.netPoints / volume) * 100;
+      }
+      return out;
+    },
+
     derivDayWinPoints() {
       const day = (this.derivFilterDate || this.vnYmdNow()).trim();
       return (this.derivDecisionHistory || []).reduce((sum, d) => {
@@ -2910,23 +2960,31 @@ function app() {
       }, 0);
     },
 
+    derivDaySummary() {
+      const day = (this.derivFilterDate || this.vnYmdNow()).trim();
+      const rows = (this.derivDecisionHistory || []).filter(
+        (d) => this.derivDecisionDateKey(d?.decidedAt) === day,
+      );
+      return { day, ...this.derivPnlBreakdown(rows) };
+    },
+
     derivMonthSummary() {
       const bucket = new Map();
       for (const d of this.derivDecisionHistory || []) {
         const mk = this.derivDecisionMonthKey(d?.decidedAt);
         if (!mk) continue;
-        const row = bucket.get(mk) || { month: mk, total: 0, win: 0, count: 0 };
-        const pnl = Number(d?.pnlPoints);
-        if (Number.isFinite(pnl)) {
-          row.total += pnl;
-          if (pnl > 0) row.win += pnl;
-        }
-        row.count += 1;
+        const row =
+          bucket.get(mk) ||
+          ({ month: mk, items: [] } as { month: string; items: unknown[] });
+        row.items.push(d);
         bucket.set(mk, row);
       }
-      return Array.from(bucket.values()).sort((a, b) =>
-        b.month.localeCompare(a.month),
-      );
+      return Array.from(bucket.values())
+        .map((row) => ({
+          month: row.month,
+          ...this.derivPnlBreakdown(row.items),
+        }))
+        .sort((a, b) => b.month.localeCompare(a.month));
     },
 
     applyDerivDecisionToAnalysis() {
