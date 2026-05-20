@@ -1615,12 +1615,21 @@
                 <p class="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-2">
                   Lịch sử quyết định phái sinh
                 </p>
-                <div class="grid grid-cols-1 gap-2 mb-2.5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2.5">
                   <label class="text-[11px] text-gray-500 dark:text-zinc-400">
                     Ngày
                     <input
                       type="date"
                       x-model="derivFilterDate"
+                      class="mt-1 w-full rounded-lg border px-2 py-1.5 text-xs"
+                      style="border-color: var(--border-sub); background: var(--bg-card)"
+                    />
+                  </label>
+                  <label class="text-[11px] text-gray-500 dark:text-zinc-400">
+                    Tháng
+                    <input
+                      type="month"
+                      x-model="derivFilterMonth"
                       class="mt-1 w-full rounded-lg border px-2 py-1.5 text-xs"
                       style="border-color: var(--border-sub); background: var(--bg-card)"
                     />
@@ -1656,9 +1665,16 @@
                         </div>
                         <div
                           class="font-mono"
-                          :class="derivOutcomeTone(d.outcome, d.pnlPoints)"
+                          :class="d.status === 'OPEN'
+                            ? 'font-semibold text-sky-700 dark:text-sky-300'
+                            : derivOutcomeTone(d.outcome, d.pnlPoints)"
                         >
-                          <span x-text="d.outcome || (d.status === 'OPEN' ? 'OPEN' : '-')"></span>
+                          <span
+                            :class="d.status === 'OPEN'
+                              ? 'inline-flex items-center px-1.5 py-0.5 rounded-md border border-sky-400/40 bg-sky-500/10'
+                              : ''"
+                            x-text="d.outcome || (d.status === 'OPEN' ? 'OPEN' : '-')"
+                          ></span>
                           <span x-show="d.pnlPoints != null">
                             · <span x-text="fmtDerivPoints(d.pnlPoints)"></span> điểm
                           </span>
@@ -1687,63 +1703,6 @@
                 </p>
               </div>
 
-              <div class="rounded-lg border p-2.5" style="border-color: var(--border-sub); background: var(--bg-card)">
-                <p class="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-2">
-                  Tổng hợp điểm trong ngày và tháng
-                </p>
-                <div
-                  class="mb-2.5 rounded-lg border px-2.5 py-2 text-xs"
-                  style="border-color: var(--border-sub); background: var(--bg-card)"
-                >
-                  <div class="flex items-center justify-between gap-2 mb-1">
-                    <span class="text-gray-500 dark:text-zinc-400">Ngày</span>
-                    <b class="font-mono text-gray-700 dark:text-zinc-200" x-text="derivDaySummary().day || vnYmdNow()"></b>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-gray-500 dark:text-zinc-400">Thắng / Thua / Ròng</span>
-                    <span class="font-mono text-[11px]">
-                      <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(derivDaySummary().winPoints)"></b>
-                      <span class="text-gray-400"> / </span>
-                      <b class="text-rose-700 dark:text-rose-300" x-text="'-' + fmtDerivPoints(derivDaySummary().lossPoints)"></b>
-                      <span class="text-gray-400"> / </span>
-                      <b :class="derivDaySummary().netPoints >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(derivDaySummary().netPoints >= 0 ? '+' : '') + fmtDerivPoints(derivDaySummary().netPoints) + 'đ'"></b>
-                    </span>
-                  </div>
-                  <div class="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-gray-400">
-                    <span x-text="'% lãi/lỗ theo điểm: ' + fmtPct(derivDaySummary().profitSharePct) + ' / ' + fmtPct(derivDaySummary().lossSharePct) + ' · % ròng: ' + fmtPct(derivDaySummary().netPct)"></span>
-                    <span x-text="'Win rate: ' + fmtPct(derivDaySummary().winRatePct) + ' · Loss rate: ' + fmtPct(derivDaySummary().lossRatePct)"></span>
-                  </div>
-                </div>
-                <div
-                  x-show="derivMonthSummary().length"
-                  class="rounded-lg border p-2 text-xs"
-                  style="border-color: var(--border-sub); background: var(--bg-card)"
-                >
-                  <p class="font-semibold text-gray-700 dark:text-zinc-200 mb-1.5">
-                    Tổng hợp theo tháng
-                  </p>
-                  <div class="space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                    <template x-for="m in derivMonthSummary()" :key="'sum-' + m.month">
-                      <div class="rounded-md border px-2 py-1.5" style="border-color: var(--border-sub)">
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-gray-500 dark:text-zinc-300" x-text="fmtDerivMonth(m.month)"></span>
-                          <span class="font-mono text-[11px]">
-                            <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(m.winPoints)"></b>
-                            <span class="text-gray-400"> / </span>
-                            <b class="text-rose-700 dark:text-rose-300" x-text="'-' + fmtDerivPoints(m.lossPoints)"></b>
-                            <span class="text-gray-400"> / </span>
-                            <b :class="m.netPoints >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(m.netPoints >= 0 ? '+' : '') + fmtDerivPoints(m.netPoints) + 'đ'"></b>
-                          </span>
-                        </div>
-                        <div class="mt-1 flex items-center justify-between text-[10px] text-gray-400">
-                          <span x-text="'% lãi/lỗ: ' + fmtPct(m.profitSharePct) + ' / ' + fmtPct(m.lossSharePct) + ' · % ròng: ' + fmtPct(m.netPct)"></span>
-                          <span x-text="'Win rate: ' + fmtPct(m.winRatePct) + ' · Loss rate: ' + fmtPct(m.lossRatePct)"></span>
-                        </div>
-                      </div>
-                    </template>
-                  </div>
-                </div>
-              </div>
             </aside>
 
             <div
@@ -1916,6 +1875,52 @@
                           x-text="derivAnalysis.biasLabelVi"
                         ></span>
                       </div>
+                      <div
+                        class="mb-2 rounded-lg border px-2 py-1.5 text-[11px] bg-white/60 dark:bg-black/15"
+                        style="border-color: var(--border-sub)"
+                      >
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-gray-500 dark:text-zinc-400">Trạng thái lệnh</span>
+                          <span
+                            class="font-mono font-semibold px-2 py-0.5 rounded-md border"
+                            :class="derivDecisionLatest?.status === 'OPEN'
+                              ? 'text-sky-700 border-sky-400/40 bg-sky-500/10 dark:text-sky-300'
+                              : 'text-gray-600 border-gray-400/40 bg-gray-500/10 dark:text-zinc-300'"
+                            x-text="derivDecisionLatest?.status === 'OPEN' ? 'ĐANG MỞ' : 'ĐÃ ĐÓNG'"
+                          ></span>
+                        </div>
+                        <div
+                          x-show="derivDecisionLatest?.status === 'OPEN'"
+                          class="mt-1 flex items-center justify-between gap-2"
+                        >
+                          <span class="text-gray-500 dark:text-zinc-400">P/L hiện tại</span>
+                          <span
+                            class="font-mono font-semibold"
+                            :class="Number(derivDecisionLatest?.pnlPoints) >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'"
+                            x-text="(Number(derivDecisionLatest?.pnlPoints) >= 0 ? '+' : '') + fmtDerivPoints(derivDecisionLatest?.pnlPoints) + ' điểm'"
+                          ></span>
+                        </div>
+                        <div
+                          x-show="derivDecisionLatest?.status === 'OPEN'"
+                          class="mt-1 flex items-center justify-between gap-2"
+                        >
+                          <span class="text-gray-500 dark:text-zinc-400">Điểm hiện tại</span>
+                          <span
+                            class="font-mono font-semibold text-gray-700 dark:text-zinc-200"
+                            x-text="fmtDerivPoints(derivCurrentPoints(derivDecisionLatest))"
+                          ></span>
+                        </div>
+                        <div
+                          x-show="derivDecisionLatest?.status === 'OPEN'"
+                          class="mt-1 flex items-center justify-between gap-2 text-[10px]"
+                        >
+                          <span class="text-gray-500 dark:text-zinc-400">Scan cập nhật P/L</span>
+                          <span
+                            class="font-mono text-gray-600 dark:text-zinc-300"
+                            x-text="fmtDerivDateTime(derivDecisionLatest?.updatedAt || derivDecisionLatest?.decidedAt)"
+                          ></span>
+                        </div>
+                      </div>
                       <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[11px] mb-2">
                         <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
                           <span class="block text-gray-400">Thời điểm</span>
@@ -1950,6 +1955,60 @@
                     </p>
                   </div>
                 </template>
+              </div>
+              <div
+                class="rounded-xl border p-3 text-xs mb-1"
+                style="border-color: var(--border); background: var(--bg-card)"
+              >
+                <p class="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-2">
+                  Tổng hợp theo bộ lọc
+                </p>
+                <div
+                  class="mb-2.5 rounded-lg border px-2.5 py-2 text-xs"
+                  style="border-color: var(--border-sub); background: var(--bg-card)"
+                >
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <span class="text-gray-500 dark:text-zinc-400">Ngày</span>
+                    <b class="font-mono text-gray-700 dark:text-zinc-200" x-text="derivDaySummary().day || vnYmdNow()"></b>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-zinc-400">Thắng / Thua / Ròng</span>
+                    <span class="font-mono text-[11px]">
+                      <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(derivDaySummary().winPoints)"></b>
+                      <span class="text-gray-400"> / </span>
+                      <b class="text-rose-700 dark:text-rose-300" x-text="'-' + fmtDerivPoints(derivDaySummary().lossPoints)"></b>
+                      <span class="text-gray-400"> / </span>
+                      <b :class="derivDaySummary().netPoints >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(derivDaySummary().netPoints >= 0 ? '+' : '') + fmtDerivPoints(derivDaySummary().netPoints) + 'đ'"></b>
+                    </span>
+                  </div>
+                  <div class="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-gray-400">
+                    <span x-text="'% lãi/lỗ theo điểm: ' + fmtPct(derivDaySummary().profitSharePct) + ' / ' + fmtPct(derivDaySummary().lossSharePct) + ' · % ròng: ' + fmtPct(derivDaySummary().netPct)"></span>
+                    <span x-text="'Win rate: ' + fmtPct(derivDaySummary().winRatePct) + ' · Loss rate: ' + fmtPct(derivDaySummary().lossRatePct)"></span>
+                  </div>
+                </div>
+                <div
+                  class="rounded-lg border p-2 text-xs"
+                  style="border-color: var(--border-sub); background: var(--bg-card)"
+                >
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <span class="text-gray-500 dark:text-zinc-400">Tháng</span>
+                    <b class="font-mono text-gray-700 dark:text-zinc-200" x-text="fmtDerivMonth(derivMonthSummary().month)"></b>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-zinc-400">Thắng / Thua / Ròng</span>
+                    <span class="font-mono text-[11px]">
+                      <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(derivMonthSummary().winPoints)"></b>
+                      <span class="text-gray-400"> / </span>
+                      <b class="text-rose-700 dark:text-rose-300" x-text="'-' + fmtDerivPoints(derivMonthSummary().lossPoints)"></b>
+                      <span class="text-gray-400"> / </span>
+                      <b :class="derivMonthSummary().netPoints >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(derivMonthSummary().netPoints >= 0 ? '+' : '') + fmtDerivPoints(derivMonthSummary().netPoints) + 'đ'"></b>
+                    </span>
+                  </div>
+                  <div class="mt-1 flex items-center justify-between text-[10px] text-gray-400">
+                    <span x-text="'% lãi/lỗ: ' + fmtPct(derivMonthSummary().profitSharePct) + ' / ' + fmtPct(derivMonthSummary().lossSharePct) + ' · % ròng: ' + fmtPct(derivMonthSummary().netPct)"></span>
+                    <span x-text="'Win rate: ' + fmtPct(derivMonthSummary().winRatePct) + ' · Loss rate: ' + fmtPct(derivMonthSummary().lossRatePct)"></span>
+                  </div>
+                </div>
               </div>
               <div
                 x-show="derivBars.length && !derivLoading"

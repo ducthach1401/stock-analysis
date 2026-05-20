@@ -81,6 +81,7 @@ export class DerivativesService {
     }
     this.running = true;
     try {
+      const runAt = new Date();
       const bars = await this.fetchRecentFiveMinuteBars();
       if (opts.source === 'cron' && !this.latestBarIsToday(bars)) {
         this.logger.log('Phái sinh VN30: bỏ qua cron vì chưa có nến hôm nay');
@@ -93,16 +94,33 @@ export class DerivativesService {
       await this.settleOpenDecisions(bars);
       const activeOpenDecision = await this.latestOpenDecision();
       if (activeOpenDecision) {
+        await this.touchDecisionScan(activeOpenDecision.id);
+        const latest = bars[bars.length - 1];
+        const latestPrice = latest
+          ? this.round2(this.price(latest.close))
+          : null;
         this.logger.log(
           `Phái sinh VN30: giữ lệnh ${activeOpenDecision.action} @ ${activeOpenDecision.entryPrice ?? 'n/a'} (chưa đóng) — không mở lệnh mới`,
         );
         return {
-          decision: activeOpenDecision,
+          decision: this.withFloatingPnl(activeOpenDecision, latestPrice),
           bars: bars.length,
           skipped: 'OPEN_DECISION_ACTIVE',
         };
       }
-      const decision = this.makeDecision(bars);
+      const decision = this.makeDecision(bars, runAt);
+      const latestSaved = await this.latestPersistedDecision();
+      if (latestSaved && this.isDuplicateDecision(latestSaved, decision)) {
+        const latest = bars[bars.length - 1];
+        const latestPrice = latest
+          ? this.round2(this.price(latest.close))
+          : null;
+        return {
+          decision: this.withFloatingPnl(latestSaved, latestPrice),
+          bars: bars.length,
+          skipped: 'DUPLICATE_DECISION',
+        };
+      }
       const saved = await this.decisionRepo.save(
         this.decisionRepo.create(decision),
       );
@@ -125,10 +143,13 @@ export class DerivativesService {
   }
 
   async latestDecision(): Promise<DerivativeDecision | null> {
-    return this.decisionRepo.findOne({
+    const decision = await this.decisionRepo.findOne({
       where: { symbol: 'VN30' },
       order: { decidedAt: 'DESC' },
     });
+    if (!decision) return null;
+    const latestPrice = await this.latestMarkPrice();
+    return this.withFloatingPnl(decision, latestPrice);
   }
 
   private latestOpenDecision(): Promise<DerivativeDecision | null> {
@@ -138,13 +159,42 @@ export class DerivativesService {
     });
   }
 
-  async recentDecisions(limit = 50): Promise<DerivativeDecision[]> {
-    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 200);
-    return this.decisionRepo.find({
+  private latestPersistedDecision(): Promise<DerivativeDecision | null> {
+    return this.decisionRepo.findOne({
       where: { symbol: 'VN30' },
       order: { decidedAt: 'DESC' },
-      take: safeLimit,
     });
+  }
+
+  private async touchDecisionScan(id: number): Promise<void> {
+    await this.decisionRepo
+      .createQueryBuilder()
+      .update(DerivativeDecision)
+      .set({ updatedAt: () => 'CURRENT_TIMESTAMP' } as never)
+      .where('id = :id', { id })
+      .execute();
+  }
+
+  async recentDecisions(limit = 50): Promise<DerivativeDecision[]> {
+    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 200);
+    const fetchTake = Math.min(1200, Math.max(300, safeLimit * 10));
+    const rows = await this.decisionRepo.find({
+      where: { symbol: 'VN30' },
+      order: { decidedAt: 'DESC' },
+      take: fetchTake,
+    });
+    const latestPrice = await this.latestMarkPrice();
+    const dedupKeys = new Set<string>();
+    const filtered: DerivativeDecision[] = [];
+    for (const row of rows) {
+      if (row.action === DerivativeDecisionAction.NO_TRADE) continue;
+      const key = `${row.symbol}|${row.action}|${row.decidedAt.toISOString()}`;
+      if (dedupKeys.has(key)) continue;
+      dedupKeys.add(key);
+      filtered.push(this.withFloatingPnl(row, latestPrice));
+      if (filtered.length >= safeLimit) break;
+    }
+    return filtered;
   }
 
   private async fetchRecentFiveMinuteBars(): Promise<IntradayIndexBarDto[]> {
@@ -155,11 +205,63 @@ export class DerivativesService {
       '5',
       from.toISOString(),
       to.toISOString(),
+      true,
     );
     return bars
       .filter((b) => this.isValidBar(b))
       .sort((a, b) => Number(a.time) - Number(b.time))
       .slice(-LOOKBACK_BARS);
+  }
+
+  private async latestMarkPrice(): Promise<number | null> {
+    try {
+      const bars = await this.fetchRecentFiveMinuteBars();
+      const latest = bars[bars.length - 1];
+      if (!latest) return null;
+      return this.round2(this.price(latest.close));
+    } catch {
+      return null;
+    }
+  }
+
+  private withFloatingPnl(
+    decision: DerivativeDecision,
+    latestPrice: number | null,
+  ): DerivativeDecision {
+    if (
+      decision.status !== DerivativeDecisionStatus.OPEN ||
+      decision.entryPrice == null ||
+      latestPrice == null
+    ) {
+      return decision;
+    }
+    if (
+      decision.action !== DerivativeDecisionAction.LONG &&
+      decision.action !== DerivativeDecisionAction.SHORT
+    ) {
+      return decision;
+    }
+    const entry = Number(decision.entryPrice);
+    if (!Number.isFinite(entry)) return decision;
+    const pnl =
+      decision.action === DerivativeDecisionAction.LONG
+        ? latestPrice - entry
+        : entry - latestPrice;
+    return {
+      ...decision,
+      pnlPoints: this.round2(pnl),
+    };
+  }
+
+  private isDuplicateDecision(
+    previous: DerivativeDecision,
+    next: Omit<DerivativeDecision, 'id' | 'createdAt' | 'updatedAt'>,
+  ): boolean {
+    return (
+      previous.symbol === next.symbol &&
+      previous.action === next.action &&
+      previous.decidedAt.getTime() === next.decidedAt.getTime()
+    );
   }
 
   private isValidBar(b: IntradayIndexBarDto): boolean {
@@ -177,12 +279,12 @@ export class DerivativesService {
 
   private makeDecision(
     bars: IntradayIndexBarDto[],
+    runAt: Date,
   ): Omit<DerivativeDecision, 'id' | 'createdAt' | 'updatedAt'> {
-    const fallbackTime = new Date();
     const insufficient = bars.length < MIN_BARS;
     const snapshot = insufficient ? null : this.indicators(bars);
     const latest = bars[bars.length - 1];
-    const decidedAt = snapshot?.latestTime ?? fallbackTime;
+    const decidedAt = runAt;
     const tradingDate = snapshot?.tradingDate ?? vnCalendarTodayYmd();
     const contractCode = nearestVn30FuturesContract(tradingDate)?.id ?? null;
 

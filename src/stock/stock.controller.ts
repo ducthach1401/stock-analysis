@@ -49,12 +49,15 @@ export class StockController {
     @Query('resolution') resolution?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('nocache') noCache?: string,
   ) {
+    const bypassCache = noCache === '1' || noCache === 'true';
     return this.stockService.fetchIntradayIndexOhlc(
       ticker,
       resolution,
       from,
       to,
+      bypassCache,
     );
   }
 

@@ -431,7 +431,7 @@
 	      transform: translateY(-1px);
 	    }
 	    .deriv-history-list {
-	      max-height: min(34vh, 20rem);
+	      max-height: min(56vh, 36rem);
 	      overflow-y: auto;
 	    }
 	    .dark .deriv-main-panel,
@@ -488,7 +488,7 @@
 	        overscroll-behavior: contain;
 	      }
 	      .deriv-history-list {
-	        max-height: min(30vh, 17rem);
+	        max-height: min(46vh, 30rem);
 	      }
 	    }
 

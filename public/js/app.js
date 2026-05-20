@@ -116,6 +116,7 @@ function app() {
     derivDecisionLatest: null,
     derivDecisionHistory: [],
     derivFilterDate: '',
+    derivFilterMonth: '',
     derivDecisionLoading: false,
     derivDecisionScanLoading: false,
     derivCharts: null,
@@ -596,8 +597,8 @@ function app() {
     /** Chu kỳ làm mới trong phiên: 5m/15m nhanh; 1H nhẹ hơn. */
     derivativesPollIntervalMs() {
       const r = this.derivResolution;
-      if (r === '5' || r === '15') return 90 * 1000;
-      if (r === '1H') return 5 * 60 * 1000;
+      if (r === '5' || r === '15') return 25 * 1000;
+      if (r === '1H') return 90 * 1000;
       return 15 * 60 * 1000;
     },
 
@@ -614,9 +615,16 @@ function app() {
 
     tickDerivativesSessionSync() {
       if (this.tab !== 'derivatives') return;
+      void this.loadDerivativeDecisions({ silent: true, forceNetwork: true });
+      // Quyết định/lệnh luôn đồng bộ realtime (kể cả ngoài phiên) để UI tự phản ánh OPEN/CLOSED.
       if (!this._vnCashMarketSessionOpen()) return;
-      void this.loadDerivIntraday({ silent: true, reset: true });
-      void this.loadDerivativeDecisions();
+      // Chart intraday chỉ kéo nhanh trong phiên để tránh tải mạng không cần thiết.
+      void this.loadDerivIntraday({
+        silent: true,
+        reset: false,
+        fast: true,
+        forceNetwork: true,
+      });
     },
 
     startDerivativesSessionPoll() {
@@ -2157,13 +2165,29 @@ function app() {
       } catch {}
     },
 
+    withNoCache(url) {
+      const sep = url.includes('?') ? '&' : '?';
+      return `${url}${sep}_ts=${Date.now()}`;
+    },
+
+    derivResolutionSeconds() {
+      const r = this.derivResolution;
+      if (r === '5') return 5 * 60;
+      if (r === '15') return 15 * 60;
+      if (r === '1H') return 60 * 60;
+      return 5 * 60;
+    },
+
     async loadDerivIntraday(opts = {}) {
       const silent = opts.silent === true;
       const reset = opts.reset !== false;
+      const forceNetwork = opts.forceNetwork === true;
+      const fast = opts.fast === true;
+      const noCacheParam = forceNetwork ? '&nocache=1' : '';
       if (!silent) this.derivLoading = true;
       try {
         this._derivScrollRestore = null;
-        if (reset) {
+        if (reset && !forceNetwork) {
           this.derivHasMoreOlder = true;
           const cached = this.readDerivBarsCache();
           if (cached?.bars?.length) {
@@ -2175,6 +2199,44 @@ function app() {
             requestAnimationFrame(() => this.renderDerivIntradayPanel());
           }
         }
+        const canFastRefresh =
+          fast &&
+          Array.isArray(this.derivBars) &&
+          this.derivBars.length > 0 &&
+          this.derivBarsResolution === this.derivResolution;
+        if (canFastRefresh) {
+          const lastSec = Number(this.derivBars[this.derivBars.length - 1]?.time);
+          const overlapSec = this.derivResolutionSeconds() * 24;
+          const fromFast = new Date((lastSec - overlapSec) * 1000);
+          const toFast = new Date();
+          const res = `resolution=${encodeURIComponent(this.derivResolution)}`;
+          const fastUrl = this.withNoCache(
+            `/stocks/VN30/intraday-index?${res}&from=${encodeURIComponent(fromFast.toISOString())}&to=${encodeURIComponent(toFast.toISOString())}${noCacheParam}`,
+          );
+          const rawFast = await fetch(fastUrl, { cache: 'no-store' })
+            .then((r) => r.json())
+            .catch(() => []);
+          const arrFast = Array.isArray(rawFast) ? rawFast : [];
+          if (arrFast.length) {
+            const byTime = new Map(this.derivBars.map((b) => [Number(b.time), b]));
+            for (const b of arrFast) {
+              const t = Number(b?.time);
+              if (Number.isFinite(t)) byTime.set(t, b);
+            }
+            const targetFromSec =
+              (Date.now() - this.derivChartWindowMs()) / 1000;
+            const merged = [...byTime.values()]
+              .filter((b) => Number(b.time) >= targetFromSec)
+              .sort((a, b) => Number(a.time) - Number(b.time));
+            this.derivBars = merged;
+            this.derivBarsResolution = this.derivResolution;
+            this.writeDerivBarsCache();
+          }
+          this.applyDerivDecisionToAnalysis();
+          await this.$nextTick();
+          requestAnimationFrame(() => this.renderDerivIntradayPanel());
+          return;
+        }
         /** ~31 ngày lịch lùi từ hiện tại; API Entrade thường giới hạn ~50 nến/request — lặp lùi theo `to` cho tới khi đủ cửa sổ hoặc hết dữ liệu. */
         const to = new Date();
         const targetFrom = new Date(to.getTime() - this.derivChartWindowMs());
@@ -2184,9 +2246,10 @@ function app() {
         let guard = 0;
         while (guard++ < 200) {
           const prevSize = byTime.size;
-          const raw = await fetch(
-            `/stocks/VN30/intraday-index?${res}&from=${encodeURIComponent(targetFrom.toISOString())}&to=${encodeURIComponent(reqTo.toISOString())}`,
-          )
+          const url = this.withNoCache(
+            `/stocks/VN30/intraday-index?${res}&from=${encodeURIComponent(targetFrom.toISOString())}&to=${encodeURIComponent(reqTo.toISOString())}${noCacheParam}`,
+          );
+          const raw = await fetch(url, { cache: 'no-store' })
             .then((r) => r.json())
             .catch(() => []);
           const arr = Array.isArray(raw) ? raw : [];
@@ -2710,26 +2773,43 @@ function app() {
       this.derivCharts = { main: chart, rsi: rsiChart, macd: macdChart };
       this._derivChartRuntime = derivRt;
       const isDerivAlive = () => this.derivCharts?.main === chart;
+      const applyDerivDefaultViewport = () => {
+        const nBars = barData.length;
+        if (!nBars) return;
+        const last = nBars - 1;
+        // Nến hiện tại nằm khoảng 2/3 chart: rightPad ~= 1/3 total span.
+        const coreBars = Math.min(140, Math.max(70, Math.round(nBars * 0.42)));
+        const rightPad = Math.max(24, Math.round(coreBars * 0.5));
+        const totalSpan = coreBars + rightPad;
+        const to = last + rightPad;
+        const from = to - totalSpan;
+        chart.timeScale().setVisibleLogicalRange({ from, to });
+      };
       if (dRestore && dRestore.added > 0) {
         chart.timeScale().setVisibleLogicalRange({
           from: dRestore.from + dRestore.added,
           to: dRestore.to + dRestore.added,
         });
       } else {
-        chart.timeScale().fitContent();
+        applyDerivDefaultViewport();
       }
       derivRt.postTimer = setTimeout(() => {
         if (!isDerivAlive()) return;
         const range = chart.timeScale().getVisibleLogicalRange();
         const rightOffset = range
-          ? Math.round((range.to - range.from) * 0.22)
-          : 12;
+          ? Math.max(20, Math.round((range.to - range.from) * 0.24))
+          : 24;
         [chart, rsiChart, macdChart].forEach((c) => {
           if (c)
             try {
               c.timeScale().applyOptions({ rightOffset });
             } catch {}
         });
+        if (!dRestore) {
+          try {
+            applyDerivDefaultViewport();
+          } catch {}
+        }
         const synced = chart.timeScale().getVisibleLogicalRange();
         if (synced && rsiChart)
           try {
@@ -2888,6 +2968,17 @@ function app() {
       return n.toFixed(digits).replace(/\.?0+$/, '');
     },
 
+    derivCurrentPoints(decision) {
+      const d = decision || null;
+      if (!d || d.status !== 'OPEN') return null;
+      const entry = Number(d.entryPrice);
+      const pnl = Number(d.pnlPoints);
+      if (!Number.isFinite(entry) || !Number.isFinite(pnl)) return null;
+      if (d.action === 'LONG') return entry + pnl;
+      if (d.action === 'SHORT') return entry - pnl;
+      return null;
+    },
+
     fmtPct(v, digits = 1) {
       const n = Number(v);
       if (!Number.isFinite(n)) return '—';
@@ -2962,14 +3053,26 @@ function app() {
       if (!this.derivFilterDate) {
         this.derivFilterDate = latestDay;
       }
+      if (!this.derivFilterMonth) {
+        this.derivFilterMonth = latestDay.slice(0, 7);
+      }
+    },
+
+    derivEffectiveMonthFilter() {
+      const explicitMonth = (this.derivFilterMonth || '').trim();
+      if (explicitMonth) return explicitMonth;
+      const day = (this.derivFilterDate || '').trim();
+      return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day.slice(0, 7) : '';
     },
 
     derivFilteredHistory() {
       const day = (this.derivFilterDate || '').trim();
+      const month = this.derivEffectiveMonthFilter();
       return (this.derivDecisionHistory || []).filter((d) => {
         const dDay = this.derivDecisionDateKey(d?.decidedAt);
         if (!dDay) return false;
         if (day && dDay !== day) return false;
+        if (!day && month && !dDay.startsWith(month)) return false;
         return true;
       });
     },
@@ -3036,22 +3139,12 @@ function app() {
     },
 
     derivMonthSummary() {
-      const bucket = new Map();
-      for (const d of this.derivDecisionHistory || []) {
-        const mk = this.derivDecisionMonthKey(d?.decidedAt);
-        if (!mk) continue;
-        const row =
-          bucket.get(mk) ||
-          { month: mk, items: [] };
-        row.items.push(d);
-        bucket.set(mk, row);
-      }
-      return Array.from(bucket.values())
-        .map((row) => ({
-          month: row.month,
-          ...this.derivPnlBreakdown(row.items),
-        }))
-        .sort((a, b) => b.month.localeCompare(a.month));
+      const month =
+        this.derivEffectiveMonthFilter() || this.vnYmdNow().slice(0, 7);
+      const rows = (this.derivDecisionHistory || []).filter(
+        (d) => this.derivDecisionMonthKey(d?.decidedAt) === month,
+      );
+      return { month, ...this.derivPnlBreakdown(rows) };
     },
 
     applyDerivDecisionToAnalysis() {
@@ -3088,13 +3181,20 @@ function app() {
 
     async loadDerivativeDecisions(opts = {}) {
       const silent = opts.silent === true;
+      const forceNetwork = opts.forceNetwork === true;
       if (!silent) this.derivDecisionLoading = true;
       try {
+        const latestUrl = forceNetwork
+          ? this.withNoCache('/derivatives/vn30/decision/latest')
+          : '/derivatives/vn30/decision/latest';
+        const historyUrl = forceNetwork
+          ? this.withNoCache('/derivatives/vn30/decisions?limit=200')
+          : '/derivatives/vn30/decisions?limit=200';
         const [latest, history] = await Promise.all([
-          fetch('/derivatives/vn30/decision/latest')
+          fetch(latestUrl, { cache: 'no-store' })
             .then((r) => r.json())
             .catch(() => null),
-          fetch('/derivatives/vn30/decisions?limit=200')
+          fetch(historyUrl, { cache: 'no-store' })
             .then((r) => r.json())
             .catch(() => []),
         ]);
@@ -3123,8 +3223,13 @@ function app() {
         }).then((r) => r.json());
         if (!res?.decision) throw new Error('scan_failed');
         await Promise.all([
-          this.loadDerivativeDecisions({ silent: true }),
-          this.loadDerivIntraday({ silent: true, reset: true }),
+          this.loadDerivativeDecisions({ silent: true, forceNetwork: true }),
+          this.loadDerivIntraday({
+            silent: true,
+            reset: false,
+            fast: true,
+            forceNetwork: true,
+          }),
         ]);
         this.showToast('Đã quét phái sinh VN30', 'success');
       } catch {

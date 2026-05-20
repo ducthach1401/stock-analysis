@@ -265,6 +265,7 @@ export class StockService implements OnModuleDestroy {
     resolution?: string,
     from?: string,
     to?: string,
+    noCache = false,
   ): Promise<IntradayIndexBarDto[]> {
     const upper = ticker.toUpperCase();
     if (!isMarketIndexTicker(upper)) {
@@ -287,15 +288,19 @@ export class StockService implements OnModuleDestroy {
       ? new Date(from)
       : new Date(toD.getTime() - defaultDays * 24 * 60 * 60 * 1000);
     const cacheKey = this.intradayCacheKey(upper, res, fromD, toD);
-    const cached = await this.readIntradayCache(cacheKey);
-    if (cached) return cached;
+    if (!noCache) {
+      const cached = await this.readIntradayCache(cacheKey);
+      if (cached) return cached;
+    }
     const fresh = await this.dnseService.fetchIntradayIndexOhlc(
       upper,
       res,
       fromD,
       toD,
     );
-    await this.writeIntradayCache(cacheKey, fresh, toD);
+    if (!noCache) {
+      await this.writeIntradayCache(cacheKey, fresh, toD);
+    }
     return fresh;
   }
 
