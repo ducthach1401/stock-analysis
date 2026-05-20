@@ -42,10 +42,24 @@ type IndicatorSnapshot = {
   tradingDate: string;
 };
 
+type DailyDerivativeSummary = {
+  tradingDate: string;
+  openedToday: number;
+  closedToday: number;
+  openFromToday: number;
+  openCurrent: number;
+  wins: number;
+  losses: number;
+  timeExits: number;
+  realizedPnlPoints: number;
+  winRatePct: number;
+};
+
 @Injectable()
 export class DerivativesService {
   private readonly logger = new Logger(DerivativesService.name);
   private running = false;
+  private lastDailySummarySentAt: string | null = null;
 
   constructor(
     @InjectRepository(DerivativeDecision)
@@ -66,6 +80,26 @@ export class DerivativesService {
     }
     if (!isVnCashMarketSessionOpen()) return;
     await this.scanVn30({ source: 'cron' });
+  }
+
+  @Cron('0 15 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
+  async scheduledDailyTelegramSummary(): Promise<void> {
+    if (
+      this.config.get<string>('DERIVATIVES_TELEGRAM_NOTIFY', 'true') ===
+        'false' ||
+      this.config.get<string>(
+        'DERIVATIVES_TELEGRAM_NOTIFY_DAILY_SUMMARY',
+        'true',
+      ) === 'false'
+    ) {
+      return;
+    }
+    const tradingDate = vnCalendarTodayYmd();
+    if (this.lastDailySummarySentAt === tradingDate) return;
+    const summary = await this.buildDailySummary(tradingDate);
+    if (!summary) return;
+    await this.notifyDailySummary(summary);
+    this.lastDailySummarySentAt = tradingDate;
   }
 
   async scanVn30(
@@ -126,7 +160,7 @@ export class DerivativesService {
       );
       const shouldNotify = await this.shouldNotify(saved, opts.forceNotify);
       if (shouldNotify) {
-        await this.notifyDecision(saved, opts.source ?? 'manual');
+        await this.notifyDecision(saved, opts.source ?? 'manual', runAt);
         saved.notified = true;
         await this.decisionRepo.save(saved);
       }
@@ -611,8 +645,11 @@ export class DerivativesService {
   private async notifyDecision(
     decision: DerivativeDecision,
     source: string,
+    runAt?: Date,
   ): Promise<void> {
-    const time = this.formatVnTime(decision.decidedAt);
+    const eventAt =
+      runAt && !Number.isNaN(runAt.getTime()) ? runAt : decision.decidedAt;
+    const time = this.formatVnTime(eventAt);
     const actionIcon =
       decision.action === DerivativeDecisionAction.LONG
         ? '🟢'
@@ -643,6 +680,108 @@ export class DerivativesService {
         pnl +
         `\n🧠 <b>Lý do</b>: ${this.escapeHtml(decision.reason)}`,
     });
+  }
+
+  private async buildDailySummary(
+    tradingDate: string,
+  ): Promise<DailyDerivativeSummary | null> {
+    const dayRows = await this.decisionRepo.find({
+      where: { symbol: 'VN30', tradingDate },
+      order: { decidedAt: 'ASC' },
+      take: 1500,
+    });
+    const currentOpenRows = await this.decisionRepo.find({
+      where: { symbol: 'VN30', status: DerivativeDecisionStatus.OPEN },
+      order: { decidedAt: 'ASC' },
+      take: 300,
+    });
+    if (!dayRows.length && !currentOpenRows.length) return null;
+
+    const dedupRows = this.deduplicateTradeRows(dayRows);
+    const openedToday = dedupRows.length;
+    const closedRows = dedupRows.filter(
+      (row) => row.status === DerivativeDecisionStatus.CLOSED,
+    );
+    const pnlRows = closedRows.filter(
+      (row) => row.pnlPoints != null && Number.isFinite(Number(row.pnlPoints)),
+    );
+    const realizedPnlPoints = this.round2(
+      pnlRows.reduce((sum, row) => sum + Number(row.pnlPoints), 0),
+    );
+    const wins = closedRows.filter(
+      (row) => row.outcome === DerivativeDecisionOutcome.WIN,
+    ).length;
+    const losses = closedRows.filter(
+      (row) => row.outcome === DerivativeDecisionOutcome.LOSS,
+    ).length;
+    const timeExits = closedRows.filter(
+      (row) => row.outcome === DerivativeDecisionOutcome.TIME_EXIT,
+    ).length;
+    const closedToday = closedRows.length;
+    const openFromToday = dedupRows.filter(
+      (row) => row.status === DerivativeDecisionStatus.OPEN,
+    ).length;
+    const openCurrent = this.deduplicateTradeRows(currentOpenRows).length;
+    const decidedTotal = wins + losses + timeExits;
+    const winRatePct =
+      decidedTotal > 0 ? this.round2((wins / decidedTotal) * 100) : 0;
+
+    return {
+      tradingDate,
+      openedToday,
+      closedToday,
+      openFromToday,
+      openCurrent,
+      wins,
+      losses,
+      timeExits,
+      realizedPnlPoints,
+      winRatePct,
+    };
+  }
+
+  private deduplicateTradeRows(
+    rows: DerivativeDecision[],
+  ): DerivativeDecision[] {
+    const map = new Map<string, DerivativeDecision>();
+    for (const row of rows) {
+      if (
+        row.action !== DerivativeDecisionAction.LONG &&
+        row.action !== DerivativeDecisionAction.SHORT
+      ) {
+        continue;
+      }
+      const key = `${row.symbol}|${row.action}|${row.decidedAt.toISOString()}`;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, row);
+        continue;
+      }
+      if (existing.status === DerivativeDecisionStatus.CLOSED) continue;
+      if (row.status === DerivativeDecisionStatus.CLOSED) {
+        map.set(key, row);
+      }
+    }
+    return Array.from(map.values());
+  }
+
+  private async notifyDailySummary(
+    summary: DailyDerivativeSummary,
+  ): Promise<void> {
+    const pnlText = this.formatSigned(summary.realizedPnlPoints);
+    const openIcon = summary.openCurrent > 0 ? '🟠' : '🟢';
+    await this.telegramService.sendMessage({
+      parseMode: 'HTML',
+      text:
+        `📘 <b>Tổng kết phái sinh VN30 ngày ${summary.tradingDate}</b>\n` +
+        `💰 <b>P/L đã chốt</b>: <b>${pnlText} điểm</b>\n` +
+        `📈 <b>Win / Loss / TimeExit</b>: <b>${summary.wins} / ${summary.losses} / ${summary.timeExits}</b>  |  🎯 <b>Win rate</b>: <b>${summary.winRatePct}%</b>\n` +
+        `📝 <b>Lệnh mở mới trong ngày</b>: <b>${summary.openedToday}</b>  |  ✅ <b>Đã đóng</b>: <b>${summary.closedToday}</b>  |  🔓 <b>Chưa đóng (trong ngày)</b>: <b>${summary.openFromToday}</b>\n` +
+        `${openIcon} <b>Số lệnh đang OPEN hiện tại</b>: <b>${summary.openCurrent}</b>`,
+    });
+    this.logger.log(
+      `Đã gửi tổng kết ngày ${summary.tradingDate}: pnl=${summary.realizedPnlPoints}, openCurrent=${summary.openCurrent}`,
+    );
   }
 
   private metadata(
@@ -772,6 +911,13 @@ export class DerivativesService {
 
   private round2(v: number): number {
     return Math.round((v + Number.EPSILON) * 100) / 100;
+  }
+
+  private formatSigned(v: number): string {
+    if (!Number.isFinite(v)) return '0';
+    const rounded = this.round2(v);
+    if (rounded > 0) return `+${rounded}`;
+    return `${rounded}`;
   }
 
   private vnDateFromUnix(unixSec: number): string {
