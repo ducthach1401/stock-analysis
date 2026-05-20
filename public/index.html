@@ -1611,7 +1611,7 @@
                   chart.</span
                 >
               </p>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2.5">
+              <div class="grid grid-cols-1 gap-2 mb-2.5">
                 <label class="text-[11px] text-gray-500 dark:text-zinc-400">
                   Ngày
                   <input
@@ -1621,57 +1621,10 @@
                     style="border-color: var(--border-sub); background: var(--bg-card)"
                   />
                 </label>
-                <label class="text-[11px] text-gray-500 dark:text-zinc-400">
-                  Tháng
-                  <select
-                    x-model="derivFilterMonth"
-                    class="mt-1 w-full rounded-lg border px-2 py-1.5 text-xs"
-                    style="border-color: var(--border-sub); background: var(--bg-card)"
-                  >
-                    <option value="">Tất cả tháng</option>
-                    <template x-for="m in derivMonthSummary()" :key="'m-' + m.month">
-                      <option :value="m.month" x-text="fmtDerivMonth(m.month)"></option>
-                    </template>
-                  </select>
-                </label>
-              </div>
-              <div
-                class="mb-2.5 rounded-lg border px-2.5 py-2 text-xs"
-                style="border-color: var(--border-sub); background: var(--bg-card)"
-              >
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-gray-500 dark:text-zinc-400">Tổng điểm thắng trong ngày</span>
-                  <b
-                    class="font-mono text-emerald-700 dark:text-emerald-300"
-                    x-text="'+' + fmtDerivPoints(derivDayWinPoints()) + ' điểm'"
-                  ></b>
-                </div>
-                <p class="mt-1 text-[10px] text-gray-400" x-text="'Ngày: ' + (derivFilterDate || vnYmdNow())"></p>
-              </div>
-              <div
-                x-show="derivMonthSummary().length"
-                class="mb-2.5 rounded-lg border p-2 text-xs"
-                style="border-color: var(--border-sub); background: var(--bg-card)"
-              >
-                <p class="font-semibold text-gray-700 dark:text-zinc-200 mb-1.5">
-                  Tổng hợp theo tháng
-                </p>
-                <div class="space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                  <template x-for="m in derivMonthSummary()" :key="'sum-' + m.month">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-gray-500 dark:text-zinc-400" x-text="fmtDerivMonth(m.month)"></span>
-                      <span class="font-mono text-[11px]">
-                        <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(m.win)"></b>
-                        <span class="text-gray-400"> / </span>
-                        <b :class="m.total >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(m.total >= 0 ? '+' : '') + fmtDerivPoints(m.total)"></b>
-                      </span>
-                    </div>
-                  </template>
-                </div>
               </div>
               <div
                 x-show="derivFilteredHistory().length"
-                class="space-y-2 max-h-[70vh] overflow-y-auto pr-1"
+                class="space-y-2 max-h-[70vh] overflow-y-auto pr-1 mb-2.5"
               >
                 <template
                   x-for="d in derivFilteredHistory()"
@@ -1724,10 +1677,44 @@
               </div>
               <p
                 x-show="!derivFilteredHistory().length"
-                class="text-xs text-amber-700/90 dark:text-amber-400/80 py-2"
+                class="text-xs text-amber-700/90 dark:text-amber-400/80 py-2 mb-2.5"
               >
                 Không có quyết định trong bộ lọc hiện tại.
               </p>
+              <div
+                class="mb-2.5 rounded-lg border px-2.5 py-2 text-xs"
+                style="border-color: var(--border-sub); background: var(--bg-card)"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-zinc-400">Tổng điểm thắng trong ngày</span>
+                  <b
+                    class="font-mono text-emerald-700 dark:text-emerald-300"
+                    x-text="'+' + fmtDerivPoints(derivDayWinPoints()) + ' điểm'"
+                  ></b>
+                </div>
+                <p class="mt-1 text-[10px] text-gray-400" x-text="'Ngày: ' + (derivFilterDate || vnYmdNow())"></p>
+              </div>
+              <div
+                x-show="derivMonthSummary().length"
+                class="mb-2.5 rounded-lg border p-2 text-xs"
+                style="border-color: var(--border-sub); background: var(--bg-card)"
+              >
+                <p class="font-semibold text-gray-700 dark:text-zinc-200 mb-1.5">
+                  Tổng hợp theo tháng
+                </p>
+                <div class="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  <template x-for="m in derivMonthSummary()" :key="'sum-' + m.month">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-zinc-400" x-text="fmtDerivMonth(m.month)"></span>
+                      <span class="font-mono text-[11px]">
+                        <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(m.win)"></b>
+                        <span class="text-gray-400"> / </span>
+                        <b :class="m.total >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(m.total >= 0 ? '+' : '') + fmtDerivPoints(m.total)"></b>
+                      </span>
+                    </div>
+                  </template>
+                </div>
+              </div>
             </aside>
 
             <div

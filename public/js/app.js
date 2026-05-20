@@ -115,7 +115,6 @@ function app() {
     derivDecisionLatest: null,
     derivDecisionHistory: [],
     derivFilterDate: '',
-    derivFilterMonth: '',
     derivDecisionLoading: false,
     derivDecisionScanLoading: false,
     derivCharts: null,
@@ -474,7 +473,6 @@ function app() {
 
     async init() {
       this.applyAppColorScheme();
-      if (!this.derivFilterDate) this.derivFilterDate = this.vnYmdNow();
       // Link ?tab=&ticker= đã áp vào state; lưu session cho lần sau
       if (urlTab) {
         try {
@@ -2813,14 +2811,21 @@ function app() {
       return day ? day.slice(0, 7) : '';
     },
 
+    ensureDerivDefaultFilterDate() {
+      const latest = this.derivDecisionHistory?.[0];
+      const latestDay = this.derivDecisionDateKey(latest?.decidedAt);
+      if (!latestDay) return;
+      if (!this.derivFilterDate) {
+        this.derivFilterDate = latestDay;
+      }
+    },
+
     derivFilteredHistory() {
       const day = (this.derivFilterDate || '').trim();
-      const month = (this.derivFilterMonth || '').trim();
       return (this.derivDecisionHistory || []).filter((d) => {
         const dDay = this.derivDecisionDateKey(d?.decidedAt);
         if (!dDay) return false;
         if (day && dDay !== day) return false;
-        if (month && !dDay.startsWith(month)) return false;
         return true;
       });
     },
@@ -2899,6 +2904,7 @@ function app() {
         ]);
         this.derivDecisionLatest = latest && latest.id ? latest : null;
         this.derivDecisionHistory = Array.isArray(history) ? history : [];
+        this.ensureDerivDefaultFilterDate();
         this.applyDerivDecisionToAnalysis();
         if (this.tab === 'derivatives' && this.derivBars.length) {
           requestAnimationFrame(() => this.renderDerivIntradayPanel());

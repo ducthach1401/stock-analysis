@@ -358,14 +358,19 @@
 	    .deriv-workspace {
 	      display: grid;
 	      grid-template-columns: 1fr;
+	      grid-template-areas:
+	        'main'
+	        'sidebar';
 	      gap: 1rem;
 	      align-items: start;
 	    }
 	    .deriv-history-sidebar {
 	      align-self: start;
+	      grid-area: sidebar;
 	    }
 	    .deriv-main-panel {
 	      box-shadow: 0 8px 22px rgba(15,23,42,0.05);
+	      grid-area: main;
 	    }
 	    .deriv-toolbar {
 	      padding: 0.2rem;
@@ -443,7 +448,8 @@
 	    }
 	    @media (min-width: 1140px) {
 	      .deriv-workspace {
-	        grid-template-columns: minmax(300px, 370px) minmax(0, 1fr);
+	        grid-template-columns: minmax(0, 1fr) minmax(300px, 370px);
+	        grid-template-areas: 'main sidebar';
 	        gap: 1.15rem;
 	      }
 	      .deriv-history-sidebar {

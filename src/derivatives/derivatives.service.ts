@@ -466,23 +466,35 @@ export class DerivativesService {
     source: string,
   ): Promise<void> {
     const time = this.formatVnTime(decision.decidedAt);
+    const actionIcon =
+      decision.action === DerivativeDecisionAction.LONG
+        ? '🟢'
+        : decision.action === DerivativeDecisionAction.SHORT
+          ? '🔴'
+          : '🟡';
+    const actionLabel =
+      decision.action === DerivativeDecisionAction.LONG
+        ? 'LONG'
+        : decision.action === DerivativeDecisionAction.SHORT
+          ? 'SHORT'
+          : 'NO TRADE';
     const linePrice =
       decision.entryPrice == null
         ? ''
-        : `\nEntry: <b>${decision.entryPrice}</b> | SL: <b>${decision.stopLoss ?? '-'}</b> | TP: <b>${decision.takeProfit ?? '-'}</b>`;
+        : `\n🎯 <b>Entry</b>: <code>${decision.entryPrice}</code>  |  🛡️ <b>SL</b>: <code>${decision.stopLoss ?? '-'}</code>  |  🏁 <b>TP</b>: <code>${decision.takeProfit ?? '-'}</code>`;
     const pnl =
       decision.pnlPoints == null
         ? ''
-        : `\nP/L review: <b>${decision.pnlPoints}</b> điểm (${decision.outcome ?? '-'})`;
+        : `\n💰 <b>P/L review</b>: <code>${decision.pnlPoints}</code> điểm (${decision.outcome ?? '-'})`;
     await this.telegramService.sendMessage({
       parseMode: 'HTML',
       text:
-        `<b>Phái sinh VN30 5m</b> (${source})\n` +
-        `Thời điểm: <b>${time}</b>\n` +
-        `Quyết định: <b>${decision.action}</b> | confidence <b>${decision.confidence}%</b> | score <b>${decision.score}</b>` +
+        `📊 <b>Phái sinh VN30 5m</b> <i>(${source})</i>\n` +
+        `🕒 <b>Thời điểm</b>: <b>${time}</b>\n` +
+        `${actionIcon} <b>Quyết định</b>: <b>${actionLabel}</b>  |  🎚️ <b>Confidence</b>: <b>${decision.confidence}%</b>  |  🧮 <b>Score</b>: <b>${decision.score}</b>` +
         linePrice +
         pnl +
-        `\nLý do: ${this.escapeHtml(decision.reason)}`,
+        `\n🧠 <b>Lý do</b>: ${this.escapeHtml(decision.reason)}`,
     });
   }
 
