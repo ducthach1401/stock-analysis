@@ -355,6 +355,15 @@
 	    .deriv-layout {
 	      gap: 1.15rem;
 	    }
+	    .deriv-workspace {
+	      display: grid;
+	      grid-template-columns: 1fr;
+	      gap: 1rem;
+	      align-items: start;
+	    }
+	    .deriv-history-sidebar {
+	      align-self: start;
+	    }
 	    .deriv-main-panel {
 	      box-shadow: 0 8px 22px rgba(15,23,42,0.05);
 	    }
@@ -431,6 +440,18 @@
 	    }
 	    .dark .deriv-history-item:hover {
 	      border-color: rgba(94,234,212,0.36);
+	    }
+	    @media (min-width: 1140px) {
+	      .deriv-workspace {
+	        grid-template-columns: minmax(300px, 370px) minmax(0, 1fr);
+	        gap: 1.15rem;
+	      }
+	      .deriv-history-sidebar {
+	        position: sticky;
+	        top: calc(3.5rem + 0.75rem);
+	        max-height: calc(100vh - 5.25rem);
+	        overflow: hidden;
+	      }
 	    }
 
 	    /* ── Tailwind utility overrides for dark mode ─────────── */

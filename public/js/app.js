@@ -114,6 +114,8 @@ function app() {
     derivAnalysis: null,
     derivDecisionLatest: null,
     derivDecisionHistory: [],
+    derivFilterDate: '',
+    derivFilterMonth: '',
     derivDecisionLoading: false,
     derivDecisionScanLoading: false,
     derivCharts: null,
@@ -472,6 +474,7 @@ function app() {
 
     async init() {
       this.applyAppColorScheme();
+      if (!this.derivFilterDate) this.derivFilterDate = this.vnYmdNow();
       // Link ?tab=&ticker= đã áp vào state; lưu session cho lần sau
       if (urlTab) {
         try {
@@ -2777,6 +2780,79 @@ function app() {
       });
     },
 
+    fmtDerivMonth(v) {
+      if (!v) return '—';
+      const [y, m] = String(v).split('-');
+      if (!y || !m) return String(v);
+      return `${m}/${y}`;
+    },
+
+    vnYmdNow() {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+    },
+
+    derivDecisionDateKey(v) {
+      if (!v) return '';
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return '';
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(d);
+    },
+
+    derivDecisionMonthKey(v) {
+      const day = this.derivDecisionDateKey(v);
+      return day ? day.slice(0, 7) : '';
+    },
+
+    derivFilteredHistory() {
+      const day = (this.derivFilterDate || '').trim();
+      const month = (this.derivFilterMonth || '').trim();
+      return (this.derivDecisionHistory || []).filter((d) => {
+        const dDay = this.derivDecisionDateKey(d?.decidedAt);
+        if (!dDay) return false;
+        if (day && dDay !== day) return false;
+        if (month && !dDay.startsWith(month)) return false;
+        return true;
+      });
+    },
+
+    derivDayWinPoints() {
+      const day = (this.derivFilterDate || this.vnYmdNow()).trim();
+      return (this.derivDecisionHistory || []).reduce((sum, d) => {
+        if (this.derivDecisionDateKey(d?.decidedAt) !== day) return sum;
+        const pnl = Number(d?.pnlPoints);
+        return Number.isFinite(pnl) && pnl > 0 ? sum + pnl : sum;
+      }, 0);
+    },
+
+    derivMonthSummary() {
+      const bucket = new Map();
+      for (const d of this.derivDecisionHistory || []) {
+        const mk = this.derivDecisionMonthKey(d?.decidedAt);
+        if (!mk) continue;
+        const row = bucket.get(mk) || { month: mk, total: 0, win: 0, count: 0 };
+        const pnl = Number(d?.pnlPoints);
+        if (Number.isFinite(pnl)) {
+          row.total += pnl;
+          if (pnl > 0) row.win += pnl;
+        }
+        row.count += 1;
+        bucket.set(mk, row);
+      }
+      return Array.from(bucket.values()).sort((a, b) =>
+        b.month.localeCompare(a.month),
+      );
+    },
+
     applyDerivDecisionToAnalysis() {
       const d = this.derivDecisionLatest;
       if (!d) {
@@ -2817,7 +2893,7 @@ function app() {
           fetch('/derivatives/vn30/decision/latest')
             .then((r) => r.json())
             .catch(() => null),
-          fetch('/derivatives/vn30/decisions?limit=40')
+          fetch('/derivatives/vn30/decisions?limit=200')
             .then((r) => r.json())
             .catch(() => []),
         ]);

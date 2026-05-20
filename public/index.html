@@ -1580,13 +1580,163 @@
             </div>
           </div>
 
-          <div
-            class="rounded-xl border p-4 sm:p-5 w-full deriv-main-panel"
-            style="border-color: var(--border); background: var(--bg-raised)"
-          >
-            <div
-              class="flex flex-wrap items-baseline justify-between gap-2.5 mb-3"
+          <div class="deriv-workspace">
+            <aside
+              class="rounded-xl border p-4 sm:p-5 w-full deriv-history-card deriv-history-sidebar"
+              style="border-color: var(--border); background: var(--bg-raised)"
             >
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <h3 class="text-sm font-bold text-gray-900 dark:text-zinc-100">
+                  Lịch sử quyết định phái sinh
+                </h3>
+                <button
+                  type="button"
+                  @click="loadDerivativeDecisions()"
+                  :disabled="derivDecisionLoading"
+                  class="btn-secondary text-xs inline-flex items-center gap-1.5"
+                >
+                  <span
+                    class="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent"
+                    :class="derivDecisionLoading ? 'spin' : 'hidden'"
+                  ></span>
+                  Làm mới lịch sử
+                </button>
+              </div>
+              <p class="text-xs text-gray-500 mb-2">
+                Feed quyết định 5 phút gần nhất của hệ thống.
+                <span x-show="isAdmin" class="text-gray-400 dark:text-zinc-500"
+                  >Admin: <b>Đồng bộ ~1 tháng</b> nằm cạnh nút <b>Làm mới</b> phía
+                  trên chart — kéo nến <b>ngày</b> <b>VNINDEX + VN30</b> vào DB +
+                  phân tích market; chart intraday vẫn lấy Entrade khi làm mới
+                  chart.</span
+                >
+              </p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2.5">
+                <label class="text-[11px] text-gray-500 dark:text-zinc-400">
+                  Ngày
+                  <input
+                    type="date"
+                    x-model="derivFilterDate"
+                    class="mt-1 w-full rounded-lg border px-2 py-1.5 text-xs"
+                    style="border-color: var(--border-sub); background: var(--bg-card)"
+                  />
+                </label>
+                <label class="text-[11px] text-gray-500 dark:text-zinc-400">
+                  Tháng
+                  <select
+                    x-model="derivFilterMonth"
+                    class="mt-1 w-full rounded-lg border px-2 py-1.5 text-xs"
+                    style="border-color: var(--border-sub); background: var(--bg-card)"
+                  >
+                    <option value="">Tất cả tháng</option>
+                    <template x-for="m in derivMonthSummary()" :key="'m-' + m.month">
+                      <option :value="m.month" x-text="fmtDerivMonth(m.month)"></option>
+                    </template>
+                  </select>
+                </label>
+              </div>
+              <div
+                class="mb-2.5 rounded-lg border px-2.5 py-2 text-xs"
+                style="border-color: var(--border-sub); background: var(--bg-card)"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-zinc-400">Tổng điểm thắng trong ngày</span>
+                  <b
+                    class="font-mono text-emerald-700 dark:text-emerald-300"
+                    x-text="'+' + fmtDerivPoints(derivDayWinPoints()) + ' điểm'"
+                  ></b>
+                </div>
+                <p class="mt-1 text-[10px] text-gray-400" x-text="'Ngày: ' + (derivFilterDate || vnYmdNow())"></p>
+              </div>
+              <div
+                x-show="derivMonthSummary().length"
+                class="mb-2.5 rounded-lg border p-2 text-xs"
+                style="border-color: var(--border-sub); background: var(--bg-card)"
+              >
+                <p class="font-semibold text-gray-700 dark:text-zinc-200 mb-1.5">
+                  Tổng hợp theo tháng
+                </p>
+                <div class="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  <template x-for="m in derivMonthSummary()" :key="'sum-' + m.month">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-zinc-400" x-text="fmtDerivMonth(m.month)"></span>
+                      <span class="font-mono text-[11px]">
+                        <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(m.win)"></b>
+                        <span class="text-gray-400"> / </span>
+                        <b :class="m.total >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(m.total >= 0 ? '+' : '') + fmtDerivPoints(m.total)"></b>
+                      </span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <div
+                x-show="derivFilteredHistory().length"
+                class="space-y-2 max-h-[70vh] overflow-y-auto pr-1"
+              >
+                <template
+                  x-for="d in derivFilteredHistory()"
+                  :key="d.id"
+                >
+                  <div
+                    class="text-xs rounded-lg border p-2.5 deriv-history-item"
+                    style="border-color: var(--border-sub); background: var(--bg-card)"
+                  >
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span
+                          class="font-mono px-2 py-0.5 rounded-full border"
+                          :class="derivActionTone(d.action)"
+                          x-text="derivActionLabel(d.action)"
+                        ></span>
+                        <span
+                          class="font-mono text-gray-500 dark:text-zinc-400"
+                          x-text="fmtDerivDateTime(d.decidedAt)"
+                        ></span>
+                        <span
+                          class="text-gray-400"
+                          x-text="'score ' + d.score + ' · ' + d.confidence + '%'"
+                        ></span>
+                      </div>
+                      <div
+                        class="font-mono"
+                        :class="derivOutcomeTone(d.outcome, d.pnlPoints)"
+                      >
+                        <span x-text="d.outcome || (d.status === 'OPEN' ? 'OPEN' : '-')"></span>
+                        <span x-show="d.pnlPoints != null">
+                          · <span x-text="fmtDerivPoints(d.pnlPoints)"></span> điểm
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px] text-gray-500 dark:text-zinc-400"
+                    >
+                      <span>Entry <b x-text="fmtDerivPoints(d.entryPrice)"></b></span>
+                      <span>SL <b x-text="fmtDerivPoints(d.stopLoss)"></b></span>
+                      <span>TP <b x-text="fmtDerivPoints(d.takeProfit)"></b></span>
+                      <span>Exit <b x-text="fmtDerivPoints(d.exitPrice)"></b></span>
+                    </div>
+                    <p
+                      class="mt-1.5 text-[11px] text-gray-500 dark:text-zinc-500 line-clamp-1"
+                      x-text="d.reason"
+                    ></p>
+                  </div>
+                </template>
+              </div>
+              <p
+                x-show="!derivFilteredHistory().length"
+                class="text-xs text-amber-700/90 dark:text-amber-400/80 py-2"
+              >
+                Không có quyết định trong bộ lọc hiện tại.
+              </p>
+            </aside>
+
+            <div
+              class="rounded-xl border p-4 sm:p-5 w-full deriv-main-panel"
+              style="border-color: var(--border); background: var(--bg-raised)"
+            >
+              <div
+                class="flex flex-wrap items-baseline justify-between gap-2.5 mb-3"
+              >
               <div>
                 <h3 class="text-lg font-bold text-gray-900 dark:text-zinc-100">
                   VN30 Intraday Desk
@@ -1790,43 +1940,6 @@
                 class="text-xs rounded-lg border p-3 leading-relaxed"
                 style="border-color: var(--border); background: var(--bg-card)"
               >
-                <div
-                  x-show="derivDecisionHistory.length"
-                  class="deriv-quick-history mb-2.5"
-                >
-                  <div class="flex items-center justify-between gap-2 mb-1.5">
-                    <p class="font-semibold text-gray-700 dark:text-zinc-200">
-                      Lịch sử nhanh
-                    </p>
-                    <span class="text-[10px] text-gray-400">
-                      6 quyết định gần nhất
-                    </span>
-                  </div>
-                  <div class="space-y-1">
-                    <template
-                      x-for="d in derivDecisionHistory.slice(0, 6)"
-                      :key="'quick-' + d.id"
-                    >
-                      <div class="deriv-quick-item">
-                        <span
-                          class="font-mono px-1.5 py-0.5 rounded-full border text-[10px]"
-                          :class="derivActionTone(d.action)"
-                          x-text="derivActionLabel(d.action)"
-                        ></span>
-                        <span
-                          class="font-mono text-[10px] text-gray-500 dark:text-zinc-400"
-                          x-text="fmtDerivDateTime(d.decidedAt)"
-                        ></span>
-                        <span class="text-[10px] text-gray-400" x-text="'S' + d.score"></span>
-                        <span
-                          class="text-[10px] font-mono ml-auto"
-                          :class="derivOutcomeTone(d.outcome, d.pnlPoints)"
-                          x-text="d.pnlPoints == null ? (d.status === 'OPEN' ? 'OPEN' : '-') : (fmtDerivPoints(d.pnlPoints) + 'đ')"
-                        ></span>
-                      </div>
-                    </template>
-                  </div>
-                </div>
                 <details class="deriv-help-details">
                   <summary class="font-semibold text-gray-800 dark:text-zinc-100 cursor-pointer">
                     Cách hệ thống ra quyết định (mở rộng)
@@ -1866,97 +1979,7 @@
                 style="height: 128px"
               ></div>
             </div>
-          </div>
-
-          <div
-            class="rounded-xl border p-4 sm:p-5 w-full deriv-history-card"
-            style="border-color: var(--border); background: var(--bg-raised)"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <h3 class="text-sm font-bold text-gray-900 dark:text-zinc-100">
-                Lịch sử quyết định phái sinh
-              </h3>
-              <button
-                type="button"
-                @click="loadDerivativeDecisions()"
-                :disabled="derivDecisionLoading"
-                class="btn-secondary text-xs inline-flex items-center gap-1.5"
-              >
-                <span
-                  class="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent"
-                  :class="derivDecisionLoading ? 'spin' : 'hidden'"
-                ></span>
-                Làm mới lịch sử
-              </button>
             </div>
-            <p class="text-xs text-gray-500 mb-2">
-              Feed quyết định 5 phút gần nhất của hệ thống.
-              <span x-show="isAdmin" class="text-gray-400 dark:text-zinc-500"
-                >Admin: <b>Đồng bộ ~1 tháng</b> nằm cạnh nút <b>Làm mới</b> phía
-                trên chart — kéo nến <b>ngày</b> <b>VNINDEX + VN30</b> vào DB +
-                phân tích market; chart intraday vẫn lấy Entrade khi làm mới
-                chart.</span
-              >
-            </p>
-            <div
-              x-show="derivDecisionHistory.length"
-              class="space-y-2 max-h-80 overflow-y-auto pr-1"
-            >
-              <template
-                x-for="d in derivDecisionHistory"
-                :key="d.id"
-              >
-                <div
-                  class="text-xs rounded-lg border p-2.5 deriv-history-item"
-                  style="border-color: var(--border-sub); background: var(--bg-card)"
-                >
-                  <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <span
-                        class="font-mono px-2 py-0.5 rounded-full border"
-                        :class="derivActionTone(d.action)"
-                        x-text="derivActionLabel(d.action)"
-                      ></span>
-                      <span
-                        class="font-mono text-gray-500 dark:text-zinc-400"
-                        x-text="fmtDerivDateTime(d.decidedAt)"
-                      ></span>
-                      <span
-                        class="text-gray-400"
-                        x-text="'score ' + d.score + ' · ' + d.confidence + '%'"
-                      ></span>
-                    </div>
-                    <div
-                      class="font-mono"
-                      :class="derivOutcomeTone(d.outcome, d.pnlPoints)"
-                    >
-                      <span x-text="d.outcome || (d.status === 'OPEN' ? 'OPEN' : '-')"></span>
-                      <span x-show="d.pnlPoints != null">
-                        · <span x-text="fmtDerivPoints(d.pnlPoints)"></span> điểm
-                      </span>
-                    </div>
-                  </div>
-                  <div
-                    class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px] text-gray-500 dark:text-zinc-400"
-                  >
-                    <span>Entry <b x-text="fmtDerivPoints(d.entryPrice)"></b></span>
-                    <span>SL <b x-text="fmtDerivPoints(d.stopLoss)"></b></span>
-                    <span>TP <b x-text="fmtDerivPoints(d.takeProfit)"></b></span>
-                    <span>Exit <b x-text="fmtDerivPoints(d.exitPrice)"></b></span>
-                  </div>
-                  <p
-                    class="mt-1.5 text-[11px] text-gray-500 dark:text-zinc-500 line-clamp-1"
-                    x-text="d.reason"
-                  ></p>
-                </div>
-              </template>
-            </div>
-            <p
-              x-show="!derivDecisionHistory.length"
-              class="text-xs text-amber-700/90 dark:text-amber-400/80 py-2"
-            >
-              Chưa có quyết định — bấm <b>Quét ngay</b> hoặc chờ cron trong phiên.
-            </p>
           </div>
 
           <p
