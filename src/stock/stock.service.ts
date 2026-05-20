@@ -347,7 +347,8 @@ export class StockService implements OnModuleDestroy {
     bars: IntradayIndexBarDto[],
     to: Date,
   ): Promise<void> {
-    if (!this.intradayCacheEnabled || !this.redisClient || !bars?.length) return;
+    if (!this.intradayCacheEnabled || !this.redisClient || !bars?.length)
+      return;
     try {
       if (this.redisClient.status === 'wait') await this.redisClient.connect();
       await this.redisClient.set(
