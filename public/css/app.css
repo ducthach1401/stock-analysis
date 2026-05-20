@@ -430,6 +430,10 @@
 	      border-color: var(--accent);
 	      transform: translateY(-1px);
 	    }
+	    .deriv-history-list {
+	      max-height: min(42vh, 25rem);
+	      overflow-y: auto;
+	    }
 	    .dark .deriv-main-panel,
 	    .dark .deriv-history-card,
 	    .dark .deriv-decision-card {
@@ -480,6 +484,9 @@
 	        top: calc(3.5rem + 0.75rem);
 	        max-height: calc(100vh - 5.25rem);
 	        overflow: hidden;
+	      }
+	      .deriv-history-list {
+	        max-height: min(46vh, 27rem);
 	      }
 	    }
 
