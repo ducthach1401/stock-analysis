@@ -1,5 +1,12 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import Redis from 'ioredis';
 import { Repository } from 'typeorm';
 import { vnCalendarTodayYmd } from '../common/vn-trading-days';
 import { isMarketIndexTicker } from '../scanner/watchlist';
@@ -22,8 +29,10 @@ export const SYNC_PRICE_REVISION_RELATIVE = 0.025;
 const ANALYZE_FROM_AFTER_FULL_RESYNC = '2010-01-01';
 
 @Injectable()
-export class StockService {
+export class StockService implements OnModuleDestroy {
   private readonly logger = new Logger(StockService.name);
+  private readonly redisClient: Redis | null;
+  private readonly intradayCacheEnabled: boolean;
 
   constructor(
     @InjectRepository(StockPrice)
@@ -31,7 +40,35 @@ export class StockService {
     private readonly telegramService: TelegramService,
     private readonly telegramNotifyPolicy: TelegramNotifyPolicyService,
     private readonly dnseService: DnseService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    const host = this.config.get<string>('REDIS_HOST', '').trim();
+    const port = Number(this.config.get<number>('REDIS_PORT', 6379));
+    if (!host || !Number.isFinite(port) || port <= 0) {
+      this.redisClient = null;
+      this.intradayCacheEnabled = false;
+      return;
+    }
+    this.redisClient = new Redis({
+      host,
+      port,
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+    });
+    this.intradayCacheEnabled = true;
+  }
+
+  async onModuleDestroy() {
+    if (!this.redisClient) return;
+    try {
+      await this.redisClient.quit();
+    } catch {
+      try {
+        this.redisClient.disconnect();
+      } catch {}
+    }
+  }
 
   async deleteAllPricesForTicker(ticker: string): Promise<void> {
     await this.stockPriceRepo.delete({ ticker: ticker.toUpperCase() });
@@ -251,8 +288,79 @@ export class StockService {
     const fromD = from
       ? new Date(from)
       : new Date(toD.getTime() - defaultDays * 24 * 60 * 60 * 1000);
+    const cacheKey = this.intradayCacheKey(upper, res, fromD, toD);
+    const cached = await this.readIntradayCache(cacheKey);
+    if (cached) return cached;
+    const fresh = await this.dnseService.fetchIntradayIndexOhlc(
+      upper,
+      res,
+      fromD,
+      toD,
+    );
+    await this.writeIntradayCache(cacheKey, fresh, toD);
+    return fresh;
+  }
 
-    return this.dnseService.fetchIntradayIndexOhlc(upper, res, fromD, toD);
+  private intradayCacheKey(
+    ticker: string,
+    resolution: string,
+    from: Date,
+    to: Date,
+  ): string {
+    return `intraday:index:${ticker}:${resolution}:${this.bucketIso(from)}:${this.bucketIso(to)}`;
+  }
+
+  private bucketIso(d: Date): string {
+    const ms = d.getTime();
+    if (!Number.isFinite(ms)) return 'invalid';
+    const minuteBucket = Math.floor(ms / 60000) * 60000;
+    return new Date(minuteBucket).toISOString();
+  }
+
+  private intradayCacheTtlSeconds(to: Date): number {
+    const ageMs = Date.now() - to.getTime();
+    if (ageMs > 2 * 24 * 60 * 60 * 1000) return 12 * 60 * 60;
+    if (ageMs > 12 * 60 * 60 * 1000) return 60 * 60;
+    return 90;
+  }
+
+  private async readIntradayCache(
+    key: string,
+  ): Promise<IntradayIndexBarDto[] | null> {
+    if (!this.intradayCacheEnabled || !this.redisClient) return null;
+    try {
+      if (this.redisClient.status === 'wait') await this.redisClient.connect();
+      const raw = await this.redisClient.get(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as IntradayIndexBarDto[]) : null;
+    } catch (e) {
+      this.logger.debug(
+        `Redis intraday cache miss/error (${key}): ${(e as Error).message}`,
+      );
+      return null;
+    }
+  }
+
+  private async writeIntradayCache(
+    key: string,
+    bars: IntradayIndexBarDto[],
+    to: Date,
+  ): Promise<void> {
+    if (!this.intradayCacheEnabled || !this.redisClient || !bars?.length) return;
+    try {
+      if (this.redisClient.status === 'wait') await this.redisClient.connect();
+      await this.redisClient.set(
+        key,
+        JSON.stringify(bars),
+        'EX',
+        this.intradayCacheTtlSeconds(to),
+      );
+    } catch (e) {
+      this.logger.debug(
+        `Redis intraday cache write fail (${key}): ${(e as Error).message}`,
+      );
+    }
   }
 
   // Sync lịch sử vào MySQL (INSERT IGNORE theo ticker + tradingDate)

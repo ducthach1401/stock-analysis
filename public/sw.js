@@ -1,5 +1,5 @@
 /* global self, caches, fetch */
-const VERSION = 'stock-analysis-sw-v39';
+const VERSION = 'stock-analysis-sw-v40';
 const PRECACHE = [
   '/index.html',
   '/css/app.css',
@@ -47,6 +47,12 @@ function isApiPath(pathname) {
 
 function isAppShellAsset(request) {
   return ['style', 'script', 'worker', 'manifest', 'image', 'font'].includes(
+    request.destination,
+  );
+}
+
+function isHotReloadAsset(request) {
+  return ['style', 'script', 'worker', 'manifest', 'document'].includes(
     request.destination,
   );
 }
@@ -99,6 +105,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       networkFirst(request).catch(() => caches.match('/index.html')),
     );
+    return;
+  }
+
+  if (isHotReloadAsset(request)) {
+    event.respondWith(networkFirst(request));
     return;
   }
 

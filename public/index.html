@@ -1611,108 +1611,119 @@
                   chart.</span
                 >
               </p>
-              <div class="grid grid-cols-1 gap-2 mb-2.5">
-                <label class="text-[11px] text-gray-500 dark:text-zinc-400">
-                  Ngày
-                  <input
-                    type="date"
-                    x-model="derivFilterDate"
-                    class="mt-1 w-full rounded-lg border px-2 py-1.5 text-xs"
-                    style="border-color: var(--border-sub); background: var(--bg-card)"
-                  />
-                </label>
-              </div>
-              <div
-                x-show="derivFilteredHistory().length"
-                class="space-y-2 max-h-[70vh] overflow-y-auto pr-1 mb-2.5"
-              >
-                <template
-                  x-for="d in derivFilteredHistory()"
-                  :key="d.id"
+              <div class="rounded-lg border p-2.5 mb-2.5" style="border-color: var(--border-sub); background: var(--bg-card)">
+                <p class="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-2">
+                  Lịch sử quyết định phái sinh
+                </p>
+                <div class="grid grid-cols-1 gap-2 mb-2.5">
+                  <label class="text-[11px] text-gray-500 dark:text-zinc-400">
+                    Ngày
+                    <input
+                      type="date"
+                      x-model="derivFilterDate"
+                      class="mt-1 w-full rounded-lg border px-2 py-1.5 text-xs"
+                      style="border-color: var(--border-sub); background: var(--bg-card)"
+                    />
+                  </label>
+                </div>
+                <div
+                  x-show="derivFilteredHistory().length"
+                  class="space-y-2 max-h-[70vh] overflow-y-auto pr-1"
                 >
-                  <div
-                    class="text-xs rounded-lg border p-2.5 deriv-history-item"
-                    style="border-color: var(--border-sub); background: var(--bg-card)"
+                  <template
+                    x-for="d in derivFilteredHistory()"
+                    :key="d.id"
                   >
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <span
-                          class="font-mono px-2 py-0.5 rounded-full border"
-                          :class="derivActionTone(d.action)"
-                          x-text="derivActionLabel(d.action)"
-                        ></span>
-                        <span
-                          class="font-mono text-gray-500 dark:text-zinc-400"
-                          x-text="fmtDerivDateTime(d.decidedAt)"
-                        ></span>
-                        <span
-                          class="text-gray-400"
-                          x-text="'score ' + d.score + ' · ' + d.confidence + '%'"
-                        ></span>
+                    <div
+                      class="text-xs rounded-lg border p-2.5 deriv-history-item"
+                      style="border-color: var(--border-sub); background: var(--bg-card)"
+                    >
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span
+                            class="font-mono px-2 py-0.5 rounded-full border"
+                            :class="derivActionTone(d.action)"
+                            x-text="derivActionLabel(d.action)"
+                          ></span>
+                          <span
+                            class="font-mono text-gray-500 dark:text-zinc-400"
+                            x-text="fmtDerivDateTime(d.decidedAt)"
+                          ></span>
+                          <span
+                            class="text-gray-400"
+                            x-text="'score ' + d.score + ' · ' + d.confidence + '%'"
+                          ></span>
+                        </div>
+                        <div
+                          class="font-mono"
+                          :class="derivOutcomeTone(d.outcome, d.pnlPoints)"
+                        >
+                          <span x-text="d.outcome || (d.status === 'OPEN' ? 'OPEN' : '-')"></span>
+                          <span x-show="d.pnlPoints != null">
+                            · <span x-text="fmtDerivPoints(d.pnlPoints)"></span> điểm
+                          </span>
+                        </div>
                       </div>
                       <div
-                        class="font-mono"
-                        :class="derivOutcomeTone(d.outcome, d.pnlPoints)"
+                        class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px] text-gray-500 dark:text-zinc-400"
                       >
-                        <span x-text="d.outcome || (d.status === 'OPEN' ? 'OPEN' : '-')"></span>
-                        <span x-show="d.pnlPoints != null">
-                          · <span x-text="fmtDerivPoints(d.pnlPoints)"></span> điểm
-                        </span>
+                        <span>Entry <b x-text="fmtDerivPoints(d.entryPrice)"></b></span>
+                        <span>SL <b x-text="fmtDerivPoints(d.stopLoss)"></b></span>
+                        <span>TP <b x-text="fmtDerivPoints(d.takeProfit)"></b></span>
+                        <span>Exit <b x-text="fmtDerivPoints(d.exitPrice)"></b></span>
                       </div>
-                    </div>
-                    <div
-                      class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px] text-gray-500 dark:text-zinc-400"
-                    >
-                      <span>Entry <b x-text="fmtDerivPoints(d.entryPrice)"></b></span>
-                      <span>SL <b x-text="fmtDerivPoints(d.stopLoss)"></b></span>
-                      <span>TP <b x-text="fmtDerivPoints(d.takeProfit)"></b></span>
-                      <span>Exit <b x-text="fmtDerivPoints(d.exitPrice)"></b></span>
-                    </div>
-                    <p
-                      class="mt-1.5 text-[11px] text-gray-500 dark:text-zinc-500 line-clamp-1"
-                      x-text="d.reason"
-                    ></p>
-                  </div>
-                </template>
-              </div>
-              <p
-                x-show="!derivFilteredHistory().length"
-                class="text-xs text-amber-700/90 dark:text-amber-400/80 py-2 mb-2.5"
-              >
-                Không có quyết định trong bộ lọc hiện tại.
-              </p>
-              <div
-                class="mb-2.5 rounded-lg border px-2.5 py-2 text-xs"
-                style="border-color: var(--border-sub); background: var(--bg-card)"
-              >
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-gray-500 dark:text-zinc-400">Tổng điểm thắng trong ngày</span>
-                  <b
-                    class="font-mono text-emerald-700 dark:text-emerald-300"
-                    x-text="'+' + fmtDerivPoints(derivDayWinPoints()) + ' điểm'"
-                  ></b>
-                </div>
-                <p class="mt-1 text-[10px] text-gray-400" x-text="'Ngày: ' + (derivFilterDate || vnYmdNow())"></p>
-              </div>
-              <div
-                x-show="derivMonthSummary().length"
-                class="mb-2.5 rounded-lg border p-2 text-xs"
-                style="border-color: var(--border-sub); background: var(--bg-card)"
-              >
-                <p class="font-semibold text-gray-700 dark:text-zinc-200 mb-1.5">
-                  Tổng hợp theo tháng
-                </p>
-                <div class="space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                  <template x-for="m in derivMonthSummary()" :key="'sum-' + m.month">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-gray-500 dark:text-zinc-400" x-text="fmtDerivMonth(m.month)"></span>
-                      <span class="font-mono text-[11px]">
-                        <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(m.win)"></b>
-                        <span class="text-gray-400"> / </span>
-                        <b :class="m.total >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(m.total >= 0 ? '+' : '') + fmtDerivPoints(m.total)"></b>
-                      </span>
+                      <p
+                        class="mt-1.5 text-[11px] text-gray-500 dark:text-zinc-500 line-clamp-1"
+                        x-text="normalizeViText(d.reason)"
+                      ></p>
                     </div>
                   </template>
+                </div>
+                <p
+                  x-show="!derivFilteredHistory().length"
+                  class="text-xs text-amber-700/90 dark:text-amber-400/80 py-2"
+                >
+                  Không có quyết định trong bộ lọc hiện tại.
+                </p>
+              </div>
+
+              <div class="rounded-lg border p-2.5" style="border-color: var(--border-sub); background: var(--bg-card)">
+                <p class="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-2">
+                  Tổng hợp điểm trong ngày và tháng
+                </p>
+                <div
+                  class="mb-2.5 rounded-lg border px-2.5 py-2 text-xs"
+                  style="border-color: var(--border-sub); background: var(--bg-card)"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-zinc-400">Tổng điểm thắng trong ngày</span>
+                    <b
+                      class="font-mono text-emerald-700 dark:text-emerald-300"
+                      x-text="'+' + fmtDerivPoints(derivDayWinPoints()) + ' điểm'"
+                    ></b>
+                  </div>
+                  <p class="mt-1 text-[10px] text-gray-400" x-text="'Ngày: ' + (derivFilterDate || vnYmdNow())"></p>
+                </div>
+                <div
+                  x-show="derivMonthSummary().length"
+                  class="rounded-lg border p-2 text-xs"
+                  style="border-color: var(--border-sub); background: var(--bg-card)"
+                >
+                  <p class="font-semibold text-gray-700 dark:text-zinc-200 mb-1.5">
+                    Tổng hợp theo tháng
+                  </p>
+                  <div class="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                    <template x-for="m in derivMonthSummary()" :key="'sum-' + m.month">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-gray-500 dark:text-zinc-400" x-text="fmtDerivMonth(m.month)"></span>
+                        <span class="font-mono text-[11px]">
+                          <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(m.win)"></b>
+                          <span class="text-gray-400"> / </span>
+                          <b :class="m.total >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(m.total >= 0 ? '+' : '') + fmtDerivPoints(m.total)"></b>
+                        </span>
+                      </div>
+                    </template>
+                  </div>
                 </div>
               </div>
             </aside>
@@ -1911,7 +1922,7 @@
                       </div>
                       <p
                         class="text-[11px] text-gray-600 dark:text-zinc-400"
-                        x-text="derivAnalysis.biasHint"
+                        x-text="normalizeViText(derivAnalysis.biasHint)"
                       ></p>
                     </div>
                     <p class="text-[11px] text-gray-400 dark:text-zinc-500 mt-1">

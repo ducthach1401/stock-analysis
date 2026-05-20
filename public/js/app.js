@@ -2077,6 +2077,43 @@ function app() {
       this.derivCharts = null;
     },
 
+    derivCacheKey() {
+      return `derivIntradayCache:VN30:${this.derivResolution}`;
+    },
+
+    readDerivBarsCache() {
+      try {
+        const raw = localStorage.getItem(this.derivCacheKey());
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const bars = Array.isArray(parsed?.bars) ? parsed.bars : [];
+        if (!bars.length) return null;
+        return {
+          bars: bars
+            .filter((b) => Number.isFinite(Number(b?.time)))
+            .sort((a, b) => Number(a.time) - Number(b.time)),
+          hasMoreOlder: parsed?.hasMoreOlder !== false,
+        };
+      } catch {
+        return null;
+      }
+    },
+
+    writeDerivBarsCache() {
+      try {
+        const bars = Array.isArray(this.derivBars) ? this.derivBars : [];
+        if (!bars.length) return;
+        localStorage.setItem(
+          this.derivCacheKey(),
+          JSON.stringify({
+            bars,
+            hasMoreOlder: this.derivHasMoreOlder !== false,
+            cachedAt: new Date().toISOString(),
+          }),
+        );
+      } catch {}
+    },
+
     async loadDerivIntraday(opts = {}) {
       const silent = opts.silent === true;
       const reset = opts.reset !== false;
@@ -2085,6 +2122,15 @@ function app() {
         this._derivScrollRestore = null;
         if (reset) {
           this.derivHasMoreOlder = true;
+          const cached = this.readDerivBarsCache();
+          if (cached?.bars?.length) {
+            this.derivBars = cached.bars;
+            this.derivBarsResolution = this.derivResolution;
+            this.derivHasMoreOlder = cached.hasMoreOlder;
+            this.applyDerivDecisionToAnalysis();
+            await this.$nextTick();
+            requestAnimationFrame(() => this.renderDerivIntradayPanel());
+          }
         }
         /** ~31 ngày lịch lùi từ hiện tại; API Entrade thường giới hạn ~50 nến/request — lặp lùi theo `to` cho tới khi đủ cửa sổ hoặc hết dữ liệu. */
         const to = new Date();
@@ -2116,10 +2162,10 @@ function app() {
           reqTo = new Date(batchMin * 1000 - 1000);
           if (reqTo.getTime() < targetFrom.getTime()) break;
         }
-        this.derivBars = [...byTime.values()].sort(
+        const fetchedBars = [...byTime.values()].sort(
           (a, b) => Number(a.time) - Number(b.time),
         );
-        if (!this.derivBars.length) {
+        if (!fetchedBars.length && !this.derivBars.length) {
           this.derivBarsResolution = null;
           this.derivHasMoreOlder = false;
           this.derivAnalysis = {
@@ -2128,7 +2174,16 @@ function app() {
           };
           this.destroyDerivCharts();
           await this.$nextTick();
+        } else if (fetchedBars.length) {
+          this.derivBars = fetchedBars;
+          this.derivBarsResolution = this.derivResolution;
+          this.derivHasMoreOlder = true;
+          this.writeDerivBarsCache();
+          this.applyDerivDecisionToAnalysis();
+          await this.$nextTick();
+          requestAnimationFrame(() => this.renderDerivIntradayPanel());
         } else {
+          // Không lấy được thêm dữ liệu mạng, giữ snapshot cache đang hiển thị.
           this.derivBarsResolution = this.derivResolution;
           this.derivHasMoreOlder = true;
           this.applyDerivDecisionToAnalysis();
@@ -2193,6 +2248,7 @@ function app() {
         }
         this.derivBars = merged;
         this.derivHasMoreOlder = true;
+        this.writeDerivBarsCache();
         this.applyDerivDecisionToAnalysis();
         if (scrollSnap && added > 0) {
           this._derivScrollRestore = {
@@ -2776,6 +2832,21 @@ function app() {
         hour: '2-digit',
         minute: '2-digit',
       });
+    },
+
+    normalizeViText(v) {
+      if (v == null) return '';
+      const s = String(v);
+      // Heuristic: chuỗi bị decode sai UTF-8 thường chứa các cụm này.
+      const likelyMojibake = /(Ã.|Æ.|Ä.|áº|á»|â€|Â.)/.test(s);
+      if (!likelyMojibake) return s;
+      try {
+        const bytes = Uint8Array.from(s, (ch) => ch.charCodeAt(0) & 0xff);
+        const fixed = new TextDecoder('utf-8').decode(bytes);
+        return fixed || s;
+      } catch {
+        return s;
+      }
     },
 
     fmtDerivMonth(v) {
