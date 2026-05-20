@@ -64,9 +64,7 @@ export class StockService implements OnModuleDestroy {
     try {
       await this.redisClient.quit();
     } catch {
-      try {
-        this.redisClient.disconnect();
-      } catch {}
+      this.redisClient.disconnect();
     }
   }
 
@@ -332,7 +330,7 @@ export class StockService implements OnModuleDestroy {
       if (this.redisClient.status === 'wait') await this.redisClient.connect();
       const raw = await this.redisClient.get(key);
       if (!raw) return null;
-      const parsed = JSON.parse(raw);
+      const parsed: unknown = JSON.parse(raw);
       return Array.isArray(parsed) ? (parsed as IntradayIndexBarDto[]) : null;
     } catch (e) {
       this.logger.debug(
