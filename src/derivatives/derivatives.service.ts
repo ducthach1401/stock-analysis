@@ -91,6 +91,17 @@ export class DerivativesService {
         };
       }
       await this.settleOpenDecisions(bars);
+      const activeOpenDecision = await this.latestOpenDecision();
+      if (activeOpenDecision) {
+        this.logger.log(
+          `Phái sinh VN30: giữ lệnh ${activeOpenDecision.action} @ ${activeOpenDecision.entryPrice ?? 'n/a'} (chưa đóng) — không mở lệnh mới`,
+        );
+        return {
+          decision: activeOpenDecision,
+          bars: bars.length,
+          skipped: 'OPEN_DECISION_ACTIVE',
+        };
+      }
       const decision = this.makeDecision(bars);
       const saved = await this.decisionRepo.save(
         this.decisionRepo.create(decision),
@@ -116,6 +127,13 @@ export class DerivativesService {
   async latestDecision(): Promise<DerivativeDecision | null> {
     return this.decisionRepo.findOne({
       where: { symbol: 'VN30' },
+      order: { decidedAt: 'DESC' },
+    });
+  }
+
+  private latestOpenDecision(): Promise<DerivativeDecision | null> {
+    return this.decisionRepo.findOne({
+      where: { symbol: 'VN30', status: DerivativeDecisionStatus.OPEN },
       order: { decidedAt: 'DESC' },
     });
   }
@@ -446,11 +464,37 @@ export class DerivativesService {
         previous?.action === DerivativeDecisionAction.SHORT
       );
     }
+    if (
+      decision.action === DerivativeDecisionAction.LONG ||
+      decision.action === DerivativeDecisionAction.SHORT
+    ) {
+      const sameSideOpenNotified = await this.findOpenNotifiedDecision(
+        decision.action,
+        decision.decidedAt,
+      );
+      if (sameSideOpenNotified) return false;
+    }
     const previous = await this.previousDecisionBefore(decision.decidedAt);
     if (!previous) return decision.action !== DerivativeDecisionAction.NO_TRADE;
     if (previous.action !== decision.action) return true;
     if (decision.action === DerivativeDecisionAction.NO_TRADE) return false;
-    return decision.confidence >= 85 && decision.score >= 5;
+    // Cùng hướng LONG/SHORT đã thông báo trước đó thì không nhắc lại mở lệnh.
+    return false;
+  }
+
+  private findOpenNotifiedDecision(
+    action: DerivativeDecisionAction.LONG | DerivativeDecisionAction.SHORT,
+    at: Date,
+  ): Promise<DerivativeDecision | null> {
+    return this.decisionRepo
+      .createQueryBuilder('d')
+      .where('d.symbol = :symbol', { symbol: 'VN30' })
+      .andWhere('d.action = :action', { action })
+      .andWhere('d.status = :status', { status: DerivativeDecisionStatus.OPEN })
+      .andWhere('d.notified = :notified', { notified: true })
+      .andWhere('d.decidedAt < :at', { at })
+      .orderBy('d.decidedAt', 'DESC')
+      .getOne();
   }
 
   private previousDecisionBefore(at: Date): Promise<DerivativeDecision | null> {

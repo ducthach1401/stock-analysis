@@ -104,6 +104,7 @@ function app() {
     _marketScrollRestore: null,
     /** { vni: { main, rsi, macd }, vn30: { ... } } */
     marketCharts: {},
+    _marketChartRuntime: { vni: null, vn30: null },
     /** Phái sinh VN30 — nến chỉ số intraday (5m / 15m), tham chiếu vào lệnh */
     derivBars: [],
     /** Khớp `derivBars` với lần tải (đổi khung → tải lại). */
@@ -123,6 +124,7 @@ function app() {
     derivOlderLoading: false,
     derivSyncMonthLoading: false,
     _derivScrollRestore: null,
+    _derivChartRuntime: null,
     /** Trong phiên: tự làm mới chart + tín hiệu định kỳ khi đang mở tab Phái sinh */
     _derivativesPollTimer: null,
     _derivativesPollFirst: null,
@@ -130,6 +132,7 @@ function app() {
     lwChart: null,
     rsiChart: null,
     macdChart: null,
+    _mainChartRuntime: null,
     indicators: { rsi: null, macd: null, macdSignal: null, macdHist: null },
     actionLoading: {
       sync: false,
@@ -1297,25 +1300,45 @@ function app() {
       return deduped;
     },
 
+    destroyMainCharts() {
+      const rt = this._mainChartRuntime;
+      if (rt) {
+        if (rt.postTimer) clearTimeout(rt.postTimer);
+        if (rt.panTimer) clearTimeout(rt.panTimer);
+        if (rt.roTimer) clearTimeout(rt.roTimer);
+        try {
+          rt.ro?.disconnect();
+        } catch {}
+      }
+      this._mainChartRuntime = null;
+      if (this.lwChart) {
+        try {
+          this.lwChart.remove();
+        } catch {}
+        this.lwChart = null;
+      }
+      if (this.rsiChart) {
+        try {
+          this.rsiChart.remove();
+        } catch {}
+        this.rsiChart = null;
+      }
+      if (this.macdChart) {
+        try {
+          this.macdChart.remove();
+        } catch {}
+        this.macdChart = null;
+      }
+    },
+
     renderChart(ticker) {
       const container = this.$refs.chartContainer;
       const rsiContainer = this.$refs.rsiContainer;
       const macdContainer = this.$refs.macdContainer;
       if (!container || !this.barData.length) return;
 
-      // Destroy existing charts
-      if (this.lwChart) {
-        this.lwChart.remove();
-        this.lwChart = null;
-      }
-      if (this.rsiChart) {
-        this.rsiChart.remove();
-        this.rsiChart = null;
-      }
-      if (this.macdChart) {
-        this.macdChart.remove();
-        this.macdChart = null;
-      }
+      // Destroy existing charts + listeners/timers
+      this.destroyMainCharts();
 
       // ── Shared chart options (respects dark mode) ────────────────────────
       const dark = this.darkMode;
@@ -1639,6 +1662,7 @@ function app() {
       this._chartScrollRestore = null;
       const tkr = (ticker || this.signalTicker || '').toUpperCase();
       const nBars = this.barData.length;
+      const mainRt = { ro: null, roTimer: null, panTimer: null, postTimer: null };
       const applyMainRange = () => {
         if (scrollRestore && scrollRestore.added > 0) {
           const a = scrollRestore.added;
@@ -1668,14 +1692,18 @@ function app() {
         chart.timeScale().fitContent();
       };
       applyMainRange();
-      setTimeout(() => {
-        if (!this.lwChart) return;
+      const isMainAlive = () => this.lwChart === chart;
+      mainRt.postTimer = setTimeout(() => {
+        if (!isMainAlive()) return;
         const range = this.lwChart.timeScale().getVisibleLogicalRange();
         const rightOffset = range
           ? Math.round((range.to - range.from) * 0.27)
           : 15;
         [this.lwChart, this.rsiChart, this.macdChart].forEach((c) => {
-          if (c) c.timeScale().applyOptions({ rightOffset });
+          if (c)
+            try {
+              c.timeScale().applyOptions({ rightOffset });
+            } catch {}
         });
         const synced = this.lwChart.timeScale().getVisibleLogicalRange();
         if (synced && tkr) {
@@ -1692,10 +1720,13 @@ function app() {
       let syncing = false;
       const syncAll = (source, others) => {
         source.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-          if (syncing || !range) return;
+          if (!isMainAlive() || syncing || !range) return;
           syncing = true;
           others.forEach((c) => {
-            if (c) c.timeScale().setVisibleLogicalRange(range);
+            if (c)
+              try {
+                c.timeScale().setVisibleLogicalRange(range);
+              } catch {}
           });
           syncing = false;
         });
@@ -1707,8 +1738,8 @@ function app() {
 
       // Lazy load nến cũ chỉ khi đã zoom/pan (không kích hoạt khi fitContent hiển thị cả khối nến — tránh vòng lặp tải + render)
       const tSym = (ticker || this.signalTicker || '').toUpperCase();
-      let chartPanTimer = null;
       chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (!isMainAlive()) return;
         if (!range || !tSym || !this.barData?.length) return;
         this.chartViewport = { ticker: tSym, from: range.from, to: range.to };
         if (this.chartOlderLoading) return;
@@ -1716,18 +1747,18 @@ function app() {
         const span = range.to - range.from;
         if (span >= barCount * 0.92) return;
         if (range.from > 14) return;
-        clearTimeout(chartPanTimer);
-        chartPanTimer = setTimeout(
+        clearTimeout(mainRt.panTimer);
+        mainRt.panTimer = setTimeout(
           () => this.maybeLoadOlderChartBars(tSym),
           500,
         );
       });
 
       // Responsive resize (debounce — tránh lag khi layout đổi)
-      let roTimer = null;
       const ro = new ResizeObserver(() => {
-        clearTimeout(roTimer);
-        roTimer = setTimeout(() => {
+        clearTimeout(mainRt.roTimer);
+        mainRt.roTimer = setTimeout(() => {
+          if (!isMainAlive()) return;
           if (this.lwChart)
             this.lwChart.applyOptions({ width: container.clientWidth });
           if (this.rsiChart)
@@ -1741,6 +1772,8 @@ function app() {
         }, 120);
       });
       ro.observe(container);
+      mainRt.ro = ro;
+      this._mainChartRuntime = mainRt;
     },
 
     // ── Indicator calculations ──────────────────────────────────────────────
@@ -2067,6 +2100,16 @@ function app() {
     },
 
     destroyDerivCharts() {
+      const rt = this._derivChartRuntime;
+      if (rt) {
+        if (rt.postTimer) clearTimeout(rt.postTimer);
+        if (rt.panTimer) clearTimeout(rt.panTimer);
+        if (rt.roTimer) clearTimeout(rt.roTimer);
+        try {
+          rt.ro?.disconnect();
+        } catch {}
+      }
+      this._derivChartRuntime = null;
       const prev = this.derivCharts;
       if (!prev) return;
       try {
@@ -2663,6 +2706,10 @@ function app() {
 
       const dRestore = this._derivScrollRestore;
       if (dRestore) this._derivScrollRestore = null;
+      const derivRt = { ro: null, roTimer: null, panTimer: null, postTimer: null };
+      this.derivCharts = { main: chart, rsi: rsiChart, macd: macdChart };
+      this._derivChartRuntime = derivRt;
+      const isDerivAlive = () => this.derivCharts?.main === chart;
       if (dRestore && dRestore.added > 0) {
         chart.timeScale().setVisibleLogicalRange({
           from: dRestore.from + dRestore.added,
@@ -2671,28 +2718,39 @@ function app() {
       } else {
         chart.timeScale().fitContent();
       }
-      setTimeout(() => {
+      derivRt.postTimer = setTimeout(() => {
+        if (!isDerivAlive()) return;
         const range = chart.timeScale().getVisibleLogicalRange();
         const rightOffset = range
           ? Math.round((range.to - range.from) * 0.22)
           : 12;
         [chart, rsiChart, macdChart].forEach((c) => {
-          if (c) c.timeScale().applyOptions({ rightOffset });
+          if (c)
+            try {
+              c.timeScale().applyOptions({ rightOffset });
+            } catch {}
         });
         const synced = chart.timeScale().getVisibleLogicalRange();
         if (synced && rsiChart)
-          rsiChart.timeScale().setVisibleLogicalRange(synced);
+          try {
+            rsiChart.timeScale().setVisibleLogicalRange(synced);
+          } catch {}
         if (synced && macdChart)
-          macdChart.timeScale().setVisibleLogicalRange(synced);
+          try {
+            macdChart.timeScale().setVisibleLogicalRange(synced);
+          } catch {}
       }, 50);
 
       let syncing = false;
       const syncAll = (source, others) => {
         source.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-          if (syncing || !range) return;
+          if (!isDerivAlive() || syncing || !range) return;
           syncing = true;
           others.forEach((c) => {
-            if (c) c.timeScale().setVisibleLogicalRange(range);
+            if (c)
+              try {
+                c.timeScale().setVisibleLogicalRange(range);
+              } catch {}
           });
           syncing = false;
         });
@@ -2702,22 +2760,22 @@ function app() {
       if (rsiChart) syncAll(rsiChart, [chart, macdChart]);
       if (macdChart) syncAll(macdChart, [chart, rsiChart]);
 
-      let derivPanTimer = null;
       chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (!isDerivAlive()) return;
         if (!range || !barData?.length) return;
         if (this.derivOlderLoading || !this.derivHasMoreOlder) return;
         const barCount = barData.length;
         const span = range.to - range.from;
         if (span >= barCount * 0.92) return;
         if (range.from > 14) return;
-        clearTimeout(derivPanTimer);
-        derivPanTimer = setTimeout(() => this.maybeLoadOlderDerivBars(), 500);
+        clearTimeout(derivRt.panTimer);
+        derivRt.panTimer = setTimeout(() => this.maybeLoadOlderDerivBars(), 500);
       });
 
-      let roTimer = null;
       const ro = new ResizeObserver(() => {
-        clearTimeout(roTimer);
-        roTimer = setTimeout(() => {
+        clearTimeout(derivRt.roTimer);
+        derivRt.roTimer = setTimeout(() => {
+          if (!isDerivAlive()) return;
           const nh = Math.max(280, Math.round(mainEl.clientHeight) || 420);
           const rh = rsiEl
             ? Math.max(96, Math.round(rsiEl.clientHeight) || 120)
@@ -2739,11 +2797,20 @@ function app() {
         }, 120);
       });
       ro.observe(mainEl);
-
-      this.derivCharts = { main: chart, rsi: rsiChart, macd: macdChart };
+      derivRt.ro = ro;
     },
 
     destroyMarketSlot(slot) {
+      const rt = this._marketChartRuntime?.[slot];
+      if (rt) {
+        if (rt.postTimer) clearTimeout(rt.postTimer);
+        if (rt.panTimer) clearTimeout(rt.panTimer);
+        if (rt.roTimer) clearTimeout(rt.roTimer);
+        try {
+          rt.ro?.disconnect();
+        } catch {}
+        this._marketChartRuntime[slot] = null;
+      }
       const prev = this.marketCharts[slot];
       if (!prev) return;
       try {
@@ -2975,7 +3042,7 @@ function app() {
         if (!mk) continue;
         const row =
           bucket.get(mk) ||
-          ({ month: mk, items: [] } as { month: string; items: unknown[] });
+          { month: mk, items: [] };
         row.items.push(d);
         bucket.set(mk, row);
       }
@@ -3613,6 +3680,10 @@ function app() {
           ? this._marketScrollRestore
           : null;
       if (mktRestore) this._marketScrollRestore = null;
+      const marketRt = { ro: null, roTimer: null, panTimer: null, postTimer: null };
+      this.marketCharts[slot] = { main: chart, rsi: rsiChart, macd: macdChart };
+      this._marketChartRuntime[slot] = marketRt;
+      const isMarketAlive = () => this.marketCharts?.[slot]?.main === chart;
       if (mktRestore && mktRestore.added > 0) {
         chart.timeScale().setVisibleLogicalRange({
           from: mktRestore.from + mktRestore.added,
@@ -3621,28 +3692,39 @@ function app() {
       } else {
         chart.timeScale().fitContent();
       }
-      setTimeout(() => {
+      marketRt.postTimer = setTimeout(() => {
+        if (!isMarketAlive()) return;
         const range = chart.timeScale().getVisibleLogicalRange();
         const rightOffset = range
           ? Math.round((range.to - range.from) * 0.22)
           : 12;
         [chart, rsiChart, macdChart].forEach((c) => {
-          if (c) c.timeScale().applyOptions({ rightOffset });
+          if (c)
+            try {
+              c.timeScale().applyOptions({ rightOffset });
+            } catch {}
         });
         const synced = chart.timeScale().getVisibleLogicalRange();
         if (synced && rsiChart)
-          rsiChart.timeScale().setVisibleLogicalRange(synced);
+          try {
+            rsiChart.timeScale().setVisibleLogicalRange(synced);
+          } catch {}
         if (synced && macdChart)
-          macdChart.timeScale().setVisibleLogicalRange(synced);
+          try {
+            macdChart.timeScale().setVisibleLogicalRange(synced);
+          } catch {}
       }, 50);
 
       let syncing = false;
       const syncAll = (source, others) => {
         source.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-          if (syncing || !range) return;
+          if (!isMarketAlive() || syncing || !range) return;
           syncing = true;
           others.forEach((c) => {
-            if (c) c.timeScale().setVisibleLogicalRange(range);
+            if (c)
+              try {
+                c.timeScale().setVisibleLogicalRange(range);
+              } catch {}
           });
           syncing = false;
         });
@@ -3652,8 +3734,8 @@ function app() {
       if (rsiChart) syncAll(rsiChart, [chart, macdChart]);
       if (macdChart) syncAll(macdChart, [chart, rsiChart]);
 
-      let marketPanTimer = null;
       chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (!isMarketAlive()) return;
         if (!range || !barData?.length) return;
         const loading =
           slot === 'vni'
@@ -3666,17 +3748,17 @@ function app() {
         const span = range.to - range.from;
         if (span >= barCount * 0.92) return;
         if (range.from > 14) return;
-        clearTimeout(marketPanTimer);
-        marketPanTimer = setTimeout(
+        clearTimeout(marketRt.panTimer);
+        marketRt.panTimer = setTimeout(
           () => this.maybeLoadOlderMarketBars(slot),
           500,
         );
       });
 
-      let roTimer = null;
       const ro = new ResizeObserver(() => {
-        clearTimeout(roTimer);
-        roTimer = setTimeout(() => {
+        clearTimeout(marketRt.roTimer);
+        marketRt.roTimer = setTimeout(() => {
+          if (!isMarketAlive()) return;
           const nh = Math.max(280, Math.round(mainEl.clientHeight) || 420);
           chart.applyOptions({ width: mainEl.clientWidth, height: nh });
           if (rsiChart)
@@ -3686,8 +3768,7 @@ function app() {
         }, 120);
       });
       ro.observe(mainEl);
-
-      this.marketCharts[slot] = { main: chart, rsi: rsiChart, macd: macdChart };
+      marketRt.ro = ro;
     },
 
     viewSignals(ticker) {
