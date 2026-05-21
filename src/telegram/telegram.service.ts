@@ -34,18 +34,18 @@ export class TelegramService {
     this.apiUrl = `https://api.telegram.org/bot${this.botToken}`;
   }
 
-  async sendMessage(message: TelegramMessage): Promise<void> {
+  async sendMessage(message: TelegramMessage): Promise<boolean> {
     if (!this.isProduction) {
       this.logger.debug(
         'Telegram: bỏ qua gửi (chỉ bật khi NODE_ENV=production)',
       );
-      return;
+      return false;
     }
     return new Promise((resolve, reject) => {
       this.queue.push(async () => {
         try {
-          await this.sendWithRetry(message);
-          resolve();
+          const sent = await this.sendWithRetry(message);
+          resolve(sent);
         } catch (err) {
           reject(err instanceof Error ? err : new Error(String(err)));
         }
@@ -75,7 +75,7 @@ export class TelegramService {
   private async sendWithRetry(
     message: TelegramMessage,
     attempt = 0,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const chatId = message.chatId ?? this.defaultChatId;
     const text = this.truncate(message.text);
     const parse_mode = message.parseMode ?? 'HTML';
@@ -87,6 +87,7 @@ export class TelegramService {
         { timeout: 15000 },
       );
       this.logger.log(`Message sent to chat ${chatId}`);
+      return true;
     } catch (err) {
       const error = err as AxiosError<{
         description?: string;
@@ -143,6 +144,7 @@ export class TelegramService {
         `Telegram gửi thất bại hoàn toàn sau ${attempt + 1} lần: ` +
           `${tgDesc || netCode || 'unknown error'}`,
       );
+      return false;
     }
   }
 

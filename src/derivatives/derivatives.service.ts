@@ -98,8 +98,8 @@ export class DerivativesService {
     if (this.lastDailySummarySentAt === tradingDate) return;
     const summary = await this.buildDailySummary(tradingDate);
     if (!summary) return;
-    await this.notifyDailySummary(summary);
-    this.lastDailySummarySentAt = tradingDate;
+    const sent = await this.notifyDailySummary(summary);
+    if (sent) this.lastDailySummarySentAt = tradingDate;
   }
 
   async scanVn30(
@@ -160,9 +160,15 @@ export class DerivativesService {
       );
       const shouldNotify = await this.shouldNotify(saved, opts.forceNotify);
       if (shouldNotify) {
-        await this.notifyDecision(saved, opts.source ?? 'manual', runAt);
-        saved.notified = true;
-        await this.decisionRepo.save(saved);
+        const sent = await this.notifyDecision(
+          saved,
+          opts.source ?? 'manual',
+          runAt,
+        );
+        if (sent) {
+          saved.notified = true;
+          await this.decisionRepo.save(saved);
+        }
       }
       this.logger.log(
         `Phái sinh VN30 ${saved.action} score=${saved.score} conf=${saved.confidence}% @ ${saved.entryPrice ?? 'n/a'}`,
@@ -646,7 +652,7 @@ export class DerivativesService {
     decision: DerivativeDecision,
     source: string,
     runAt?: Date,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const eventAt =
       runAt && !Number.isNaN(runAt.getTime()) ? runAt : decision.decidedAt;
     const time = this.formatVnTime(eventAt);
@@ -670,7 +676,7 @@ export class DerivativesService {
       decision.pnlPoints == null
         ? ''
         : `\n💰 <b>P/L review</b>: <code>${decision.pnlPoints}</code> điểm (${decision.outcome ?? '-'})`;
-    await this.telegramService.sendMessage({
+    return this.telegramService.sendMessage({
       parseMode: 'HTML',
       text:
         `📊 <b>Phái sinh VN30 5m</b> <i>(${source})</i>\n` +
@@ -767,10 +773,10 @@ export class DerivativesService {
 
   private async notifyDailySummary(
     summary: DailyDerivativeSummary,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const pnlText = this.formatSigned(summary.realizedPnlPoints);
     const openIcon = summary.openCurrent > 0 ? '🟠' : '🟢';
-    await this.telegramService.sendMessage({
+    const sent = await this.telegramService.sendMessage({
       parseMode: 'HTML',
       text:
         `📘 <b>Tổng kết phái sinh VN30 ngày ${summary.tradingDate}</b>\n` +
@@ -779,9 +785,12 @@ export class DerivativesService {
         `📝 <b>Lệnh mở mới trong ngày</b>: <b>${summary.openedToday}</b>  |  ✅ <b>Đã đóng</b>: <b>${summary.closedToday}</b>  |  🔓 <b>Chưa đóng (trong ngày)</b>: <b>${summary.openFromToday}</b>\n` +
         `${openIcon} <b>Số lệnh đang OPEN hiện tại</b>: <b>${summary.openCurrent}</b>`,
     });
-    this.logger.log(
-      `Đã gửi tổng kết ngày ${summary.tradingDate}: pnl=${summary.realizedPnlPoints}, openCurrent=${summary.openCurrent}`,
-    );
+    if (sent) {
+      this.logger.log(
+        `Đã gửi tổng kết ngày ${summary.tradingDate}: pnl=${summary.realizedPnlPoints}, openCurrent=${summary.openCurrent}`,
+      );
+    }
+    return sent;
   }
 
   private metadata(
