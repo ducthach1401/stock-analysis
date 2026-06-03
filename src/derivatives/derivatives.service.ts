@@ -125,7 +125,10 @@ export class DerivativesService {
           skipped: 'NO_TODAY_BAR',
         };
       }
-      await this.settleOpenDecisions(bars);
+      const closedDecisions = await this.settleOpenDecisions(bars);
+      for (const closedDecision of closedDecisions) {
+        await this.notifyClosedDecision(closedDecision, opts.source ?? 'manual');
+      }
       const activeOpenDecision = await this.latestOpenDecision();
       if (activeOpenDecision) {
         await this.touchDecisionScan(activeOpenDecision.id);
@@ -489,8 +492,8 @@ export class DerivativesService {
 
   private async settleOpenDecisions(
     bars: IntradayIndexBarDto[],
-  ): Promise<void> {
-    if (!bars.length) return;
+  ): Promise<DerivativeDecision[]> {
+    if (!bars.length) return [];
     const open = await this.decisionRepo.find({
       where: {
         symbol: 'VN30',
@@ -499,7 +502,8 @@ export class DerivativesService {
       order: { decidedAt: 'ASC' },
       take: 200,
     });
-    if (!open.length) return;
+    if (!open.length) return [];
+    const closedDecisions: DerivativeDecision[] = [];
 
     for (const d of open) {
       if (
@@ -515,6 +519,7 @@ export class DerivativesService {
         d.exitPrice = d.entryPrice;
         d.outcomeReason = 'Không có điểm vào hợp lệ.';
         await this.decisionRepo.save(d);
+        closedDecisions.push(d);
         continue;
       }
       const after = bars.filter(
@@ -578,7 +583,9 @@ export class DerivativesService {
       d.outcome = outcome;
       d.outcomeReason = reason;
       await this.decisionRepo.save(d);
+      closedDecisions.push(d);
     }
+    return closedDecisions;
   }
 
   private async shouldNotify(
@@ -602,8 +609,9 @@ export class DerivativesService {
     ) {
       const previous = await this.previousDecisionBefore(decision.decidedAt);
       return (
-        previous?.action === DerivativeDecisionAction.LONG ||
-        previous?.action === DerivativeDecisionAction.SHORT
+        previous?.status === DerivativeDecisionStatus.OPEN &&
+        (previous.action === DerivativeDecisionAction.LONG ||
+          previous.action === DerivativeDecisionAction.SHORT)
       );
     }
     if (
@@ -620,8 +628,8 @@ export class DerivativesService {
     if (!previous) return decision.action !== DerivativeDecisionAction.NO_TRADE;
     if (previous.action !== decision.action) return true;
     if (decision.action === DerivativeDecisionAction.NO_TRADE) return false;
-    // Cùng hướng LONG/SHORT đã thông báo trước đó thì không nhắc lại mở lệnh.
-    return false;
+    // Nếu lệnh trước cùng hướng nhưng đã đóng, đây là một trade cycle mới và cần báo lại.
+    return previous.status === DerivativeDecisionStatus.CLOSED;
   }
 
   private findOpenNotifiedDecision(
@@ -685,6 +693,45 @@ export class DerivativesService {
         linePrice +
         pnl +
         `\n🧠 <b>Lý do</b>: ${this.escapeHtml(decision.reason)}`,
+    });
+  }
+
+  private async notifyClosedDecision(
+    decision: DerivativeDecision,
+    source: string,
+  ): Promise<boolean> {
+    if (
+      this.config.get<string>('DERIVATIVES_TELEGRAM_NOTIFY', 'true') === 'false'
+    ) {
+      return false;
+    }
+    if (
+      decision.action !== DerivativeDecisionAction.LONG &&
+      decision.action !== DerivativeDecisionAction.SHORT
+    ) {
+      return false;
+    }
+    if (decision.exitAt == null || decision.exitPrice == null) {
+      return false;
+    }
+    const entryTime = this.formatVnTime(decision.decidedAt);
+    const exitTime = this.formatVnTime(decision.exitAt);
+    const actionIcon =
+      decision.action === DerivativeDecisionAction.LONG ? '🟢' : '🔴';
+    const actionLabel =
+      decision.action === DerivativeDecisionAction.LONG ? 'LONG' : 'SHORT';
+    const outcomeLabel = decision.outcome ?? 'CLOSED';
+    const pnlText =
+      decision.pnlPoints == null ? '-' : `${this.formatSigned(decision.pnlPoints)} điểm`;
+    return this.telegramService.sendMessage({
+      parseMode: 'HTML',
+      text:
+        `📕 <b>Phái sinh VN30 5m - Chốt lệnh</b> <i>(${source})</i>\n` +
+        `${actionIcon} <b>Vị thế</b>: <b>${actionLabel}</b>  |  🏁 <b>Kết quả</b>: <b>${outcomeLabel}</b>\n` +
+        `🕒 <b>Mở</b>: <b>${entryTime}</b>  |  🕒 <b>Đóng</b>: <b>${exitTime}</b>\n` +
+        `🎯 <b>Entry</b>: <code>${decision.entryPrice ?? '-'}</code>  |  🚪 <b>Exit</b>: <code>${decision.exitPrice}</code>\n` +
+        `💰 <b>P/L</b>: <b>${pnlText}</b>\n` +
+        `🧠 <b>Lý do thoát</b>: ${this.escapeHtml(decision.outcomeReason ?? decision.reason)}`,
     });
   }
 

@@ -82,7 +82,8 @@ export class TelegramNotifyPolicyService {
       type === 'recommend_manual' ||
       type === 'position_close' ||
       type === 'breakout_close_confirm' ||
-      type === 'position_track'
+      type === 'position_track' ||
+      type === 'signal_notify'
     );
   }
 

@@ -451,10 +451,6 @@ export class ScannerService {
         const rec = result.recommendation;
         const rank = tickerCapLiquidityRank(stock.ticker);
         const conf = REC_CONF_ORDER[result.confidence] ?? 0;
-        const isStrongBuyQuality =
-          rec === Recommendation.STRONG_BUY &&
-          result.confidence === 'HIGH' &&
-          !isMarketIndexTicker(stock.ticker);
         const isStrongSellQuality =
           rec === Recommendation.STRONG_SELL &&
           result.confidence === 'HIGH' &&
@@ -475,7 +471,7 @@ export class ScannerService {
           if (
             allowDailyTradeSignals &&
             includeBuyTelegram &&
-            isStrongBuyQuality
+            !isMarketIndexTicker(stock.ticker)
           ) {
             buyRows.push({
               rank,

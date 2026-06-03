@@ -7,13 +7,13 @@ import { SignalType } from '../signal/entities/signal.entity';
 /** `all` = mọi MUA/STRONG_BUY như trước. `safe` = chỉ gợi ý chất lượng cao, thiên về nền dài / an toàn. */
 export type TelegramBuyNotifyMode = 'all' | 'safe';
 
-/** Mặc định `safe` — gọn, ít nhiễu. Đặt `TELEGRAM_BUY_NOTIFY_MODE=all` để gửi mọi MUA như trước. */
+/** Mặc định `all` để không lỡ tín hiệu MUA. Đặt `safe` nếu muốn lọc ít nhiễu hơn. */
 export function parseTelegramBuyNotifyMode(
   raw: string | undefined,
 ): TelegramBuyNotifyMode {
   const v = (raw ?? '').trim().toLowerCase();
-  if (v === 'all') return 'all';
-  return 'safe';
+  if (v === 'safe') return 'safe';
+  return 'all';
 }
 
 /**

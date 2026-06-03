@@ -9,7 +9,7 @@ function makeService(env: Record<string, string>): TelegramNotifyPolicyService {
 }
 
 describe('TelegramNotifyPolicyService', () => {
-  it('balanced: cho phép recommend/close/track/close-confirm; chặn intraday/startup/signal/stock', () => {
+  it('balanced: cho phép recommend/close/track/close-confirm/signal; chặn intraday/startup/stock', () => {
     const svc = makeService({ TELEGRAM_NOTIFY_PROFILE: 'balanced' });
     expect(svc.shouldSend({ type: 'recommend_summary' })).toBe(true);
     expect(svc.shouldSend({ type: 'recommend_manual' })).toBe(true);
@@ -18,7 +18,7 @@ describe('TelegramNotifyPolicyService', () => {
     expect(svc.shouldSend({ type: 'breakout_close_confirm' })).toBe(true);
     expect(svc.shouldSend({ type: 'breakout_intraday' })).toBe(false);
     expect(svc.shouldSend({ type: 'startup' })).toBe(false);
-    expect(svc.shouldSend({ type: 'signal_notify' })).toBe(false);
+    expect(svc.shouldSend({ type: 'signal_notify' })).toBe(true);
     expect(svc.shouldSend({ type: 'stock_alert' })).toBe(false);
   });
 
