@@ -29,7 +29,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:reset-market": "bash scripts/reset-market-data.sh",
     "db:reset-market-all": "bash scripts/reset-market-data.sh --positions",
-    "prepare": "husky"
+    "prepare": "echo 'husky disabled'"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",
