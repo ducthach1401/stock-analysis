@@ -147,18 +147,26 @@ Hoặc dùng PM2: `yarn start:pm2` (xem `ecosystem.config.js`).
 ### CI/CD (GitHub Actions)
 
 - **CI** (`.github/workflows/ci.yml`): PR / push `main` hoặc `master` — Prettier, ESLint, `yarn test:ci`, `yarn build`.
-- **Deploy staging** (`.github/workflows/deploy-staging.yml`): push nhánh **`staging`** (hoặc *workflow_dispatch*) → SSH → trong `STAGING_DEPLOY_PATH` chạy `git fetch` / `checkout staging` / `git pull --ff-only origin staging` rồi `bash deploy.sh`.
+- **Deploy staging** (`.github/workflows/deploy-staging.yml`): push nhánh **`staging`** (hoặc *workflow_dispatch*) → SSH tới server staging qua secrets GitHub Actions → trong `STAGING_DEPLOY_PATH` chạy `git fetch` / `checkout staging` / `git pull --ff-only origin staging` rồi `bash deploy.sh`.
 
 **Secrets** (Settings → Secrets and variables → Actions):
 
 | Secret | Ý nghĩa |
 |--------|---------|
 | `STAGING_HOST` | Hostname / IP máy deploy |
-| `STAGING_USER` | User SSH |
+| `STAGING_PORT` | SSH port, hiện tại là `2222` |
+| `STAGING_USER` | User SSH, hiện tại là `ubuntu` |
 | `STAGING_SSH_KEY` | Private key (toàn bộ PEM), public key đặt trong `~/.ssh/authorized_keys` trên server |
-| `STAGING_DEPLOY_PATH` | Root **clone git** trên server (có `.git`, có `deploy.sh`) — ví dụ `/opt/stock-analysis` |
+| `STAGING_DEPLOY_PATH` | Root clone git trên server, hiện tại là `/home/ubuntu/documents/stock-analysis` |
 
-Trên server: tạo `deploy.sh` (tham khảo `scripts/deploy.sh.example`), `chmod +x deploy.sh`. SSH cổng khác 22: sửa workflow, thêm input `port` cho `appleboy/ssh-action`.
+Giá trị staging hiện tại:
+
+- `STAGING_HOST=bighand.tokyo`
+- `STAGING_PORT=2222`
+- `STAGING_USER=ubuntu`
+- `STAGING_DEPLOY_PATH=/home/ubuntu/documents/stock-analysis`
+
+Trên server: đảm bảo repo đã được clone sẵn ở đường dẫn trên, có file `deploy.sh`, và `chmod +x deploy.sh`.
 
 ---
 

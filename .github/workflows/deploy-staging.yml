@@ -21,6 +21,7 @@ jobs:
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
+          port: ${{ secrets.STAGING_PORT }}
           key: ${{ secrets.STAGING_SSH_KEY }}
           script_stop: true
           script: |
