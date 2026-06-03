@@ -3,10 +3,11 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
+COPY package.json yarn.lock nest-cli.json tsconfig.json tsconfig.build.json ./
+RUN yarn install --frozen-lockfile --non-interactive
 
-COPY . .
+COPY src ./src
+COPY public ./public
 RUN yarn build
 
 # Stage 2: Production
@@ -19,7 +20,7 @@ ENV NODE_ENV=production
 RUN yarn global add pm2
 
 COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile --production && yarn cache clean
+RUN yarn install --frozen-lockfile --production --non-interactive && yarn cache clean
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public

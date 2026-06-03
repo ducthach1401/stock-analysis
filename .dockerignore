@@ -8,6 +8,8 @@ build
 # Git — không cần trong image, giảm context rất nhiều
 .git
 .gitignore
+.github
+.husky
 
 # Env (compose nạp lúc chạy)
 .env
@@ -30,12 +32,17 @@ test
 .cursor
 .idea
 .vscode
+.agents
+.codex
 *.swp
 *.swo
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Docs / local-only files
+README.md
 
 # Compose / script deploy — không COPY trong Dockerfile
 docker-compose*.yml
