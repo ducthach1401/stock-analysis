@@ -4,7 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
-  isVnCashMarketSessionOpen,
+  isVnFuturesSessionOpen,
   vnCalendarTodayYmd,
 } from '../common/vn-trading-days';
 import { IntradayIndexBarDto } from '../stock/dto/intraday-bar.dto';
@@ -19,18 +19,41 @@ import {
 } from './entities/derivative-decision.entity';
 import { nearestVn30FuturesContract } from './vn30-contracts.util';
 
-const ALGORITHM = 'VN30_EMA_VWAP_RSI_ATR_5M_V1';
+/**
+ * Phiên bản thuật toán — LƯU vào cột `algorithm` của bảng `derivative_decisions`.
+ * Mỗi quyết định được gắn tag version để sau này phân tích/so sánh theo từng đời thuật toán
+ * (xem `yarn analytics:derivatives`, `yarn backtest:vn30`). KHI ĐỔI LOGIC → BUMP version + ghi changelog.
+ *
+ * Changelog:
+ *  - V1: 5 điều kiện định hướng (score X/5), SL/TP cố định theo ATR (1.2/2.0), TIME_EXIT sau 12 nến.
+ *        Không có gate; bug isDuplicateDecision spam NO_TRADE mỗi phút. (dữ liệu lịch sử tới 2026-06)
+ *  - V2: thêm gate (ATR≥1.5, không vào sau 14:15, dừng sau 2 lỗ/ngày), 6 điều kiện (≥5/6),
+ *        thêm lọc EMA50 + EMA slope 5 nến, RSI≥50 (bỏ trần), fix duplicate theo slot 5 phút,
+ *        đóng cuối phiên 14:45. (chưa từng chạy live — không có bản ghi trong DB)
+ *  - V3: trần RSI mềm (LONG 50–75 / SHORT 25–50), SL dời hòa vốn khi lãi 1R, trailing stop khi lãi >2R,
+ *        outcome phân loại theo P/L thực (hòa vốn = trung tính). (đang chạy)
+ */
+const ALGORITHM = 'VN30_EMA_VWAP_RSI_ATR_5M_V3';
 const LOOKBACK_BARS = 120;
 const SETTLE_AFTER_BARS = 12;
 const MIN_BARS = 60;
 const ATR_PERIOD = 14;
 const RISK_ATR_MULT = 1.2;
 const REWARD_ATR_MULT = 2;
+const MIN_ATR_POINTS = 1.5; // Không trade khi thị trường quá ít biến động
+const NO_TRADE_AFTER_HHMM = 1415; // 14:15 VN — quá gần đóng cửa
+const MAX_DAILY_LOSSES = 2; // Dừng sau 2 lần lỗ/ngày
+const CHECKS_REQUIRED = 5; // Cần 5/6 điều kiện thỏa mãn
+const RSI_MAX_LONG = 75; // Không đu LONG khi đã quá mua (data V1: LONG ở RSI 74-81 toàn lỗ)
+const RSI_MIN_SHORT = 25; // Không đu SHORT khi đã quá bán
+const BREAKEVEN_TRIGGER_R = 1; // Lãi đạt 1R → dời SL về hòa vốn
+const TRAIL_AFTER_R = 1; // Lãi vượt 2R → trailing stop cách đỉnh/đáy 1R
 
 type IndicatorSnapshot = {
   close: number;
   ema9: number;
   ema21: number;
+  ema50: number;
   emaSlope: number;
   rsi14: number | null;
   atr14: number | null;
@@ -78,8 +101,20 @@ export class DerivativesService {
     ) {
       return;
     }
-    if (!isVnCashMarketSessionOpen()) return;
+    if (!isVnFuturesSessionOpen()) return;
     await this.scanVn30({ source: 'cron' });
+  }
+
+  // Đóng tất cả vị thế phái sinh còn OPEN khi hết phiên 14:45 để tránh rollover sang ngày sau.
+  @Cron('45 14 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
+  async scheduledEndOfSessionClose(): Promise<void> {
+    if (
+      this.config.get<string>('DERIVATIVES_VN30_FIVE_MIN_SCAN', 'true') ===
+      'false'
+    ) {
+      return;
+    }
+    await this.closeAllOpenAtEndOfSession();
   }
 
   @Cron('0 15 * * 1-5', { timeZone: 'Asia/Ho_Chi_Minh' })
@@ -110,8 +145,11 @@ export class DerivativesService {
     skipped?: string;
   }> {
     if (this.running) {
-      const latest = await this.latestDecision();
-      if (latest) return { decision: latest, bars: 0 };
+      const latest = await this.decisionRepo.findOne({
+        where: { symbol: 'VN30' },
+        order: { decidedAt: 'DESC' },
+      });
+      return { decision: latest ?? null, bars: 0, skipped: 'ALREADY_RUNNING' };
     }
     this.running = true;
     try {
@@ -127,7 +165,10 @@ export class DerivativesService {
       }
       const closedDecisions = await this.settleOpenDecisions(bars);
       for (const closedDecision of closedDecisions) {
-        await this.notifyClosedDecision(closedDecision, opts.source ?? 'manual');
+        await this.notifyClosedDecision(
+          closedDecision,
+          opts.source ?? 'manual',
+        );
       }
       const activeOpenDecision = await this.latestOpenDecision();
       if (activeOpenDecision) {
@@ -145,7 +186,7 @@ export class DerivativesService {
           skipped: 'OPEN_DECISION_ACTIVE',
         };
       }
-      const decision = this.makeDecision(bars, runAt);
+      const decision = await this.makeDecision(bars, runAt);
       const latestSaved = await this.latestPersistedDecision();
       if (latestSaved && this.isDuplicateDecision(latestSaved, decision)) {
         const latest = bars[bars.length - 1];
@@ -183,6 +224,61 @@ export class DerivativesService {
     } finally {
       this.running = false;
     }
+  }
+
+  private async closeAllOpenAtEndOfSession(): Promise<void> {
+    const open = await this.decisionRepo.find({
+      where: { symbol: 'VN30', status: DerivativeDecisionStatus.OPEN },
+      order: { decidedAt: 'ASC' },
+    });
+    if (!open.length) return;
+
+    let exitPrice: number | null = null;
+    let exitAt = new Date();
+    try {
+      const bars = await this.fetchRecentFiveMinuteBars();
+      const latest = bars[bars.length - 1];
+      if (latest) {
+        exitPrice = this.round2(this.price(latest.close));
+        exitAt = new Date(Number(latest.time) * 1000);
+      }
+    } catch (e) {
+      this.logger.warn(
+        `Đóng cuối phiên: không lấy được giá cuối — ${(e as Error).message}`,
+      );
+    }
+
+    for (const d of open) {
+      if (
+        d.action === DerivativeDecisionAction.NO_TRADE ||
+        d.entryPrice == null
+      ) {
+        d.status = DerivativeDecisionStatus.CLOSED;
+        d.outcome = DerivativeDecisionOutcome.NO_TRADE;
+        d.pnlPoints = 0;
+        d.exitAt = exitAt;
+        d.exitPrice = exitPrice;
+        d.outcomeReason = 'Đóng cuối phiên (NO_TRADE).';
+        await this.decisionRepo.save(d);
+        continue;
+      }
+      const ep = exitPrice ?? Number(d.entryPrice);
+      d.status = DerivativeDecisionStatus.CLOSED;
+      d.exitAt = exitAt;
+      d.exitPrice = this.round2(ep);
+      d.pnlPoints = this.round2(
+        d.action === DerivativeDecisionAction.LONG
+          ? ep - Number(d.entryPrice)
+          : Number(d.entryPrice) - ep,
+      );
+      d.outcome = DerivativeDecisionOutcome.TIME_EXIT;
+      d.outcomeReason = 'Đóng cuối phiên 14:45 — tránh rollover sang ngày sau.';
+      await this.decisionRepo.save(d);
+      await this.notifyClosedDecision(d, 'end_of_session');
+    }
+    this.logger.log(
+      `Đóng cuối phiên: ${open.length} vị thế phái sinh đã được đóng @ ${exitPrice ?? 'n/a'}`,
+    );
   }
 
   async latestDecision(): Promise<DerivativeDecision | null> {
@@ -300,11 +396,13 @@ export class DerivativesService {
     previous: DerivativeDecision,
     next: Omit<DerivativeDecision, 'id' | 'createdAt' | 'updatedAt'>,
   ): boolean {
-    return (
-      previous.symbol === next.symbol &&
-      previous.action === next.action &&
-      previous.decidedAt.getTime() === next.decidedAt.getTime()
-    );
+    if (previous.symbol !== next.symbol || previous.action !== next.action)
+      return false;
+    // Chỉ lưu tối đa 1 decision cùng action trong mỗi cửa sổ 5 phút.
+    const FIVE_MIN_MS = 5 * 60 * 1000;
+    const prevSlot = Math.floor(previous.decidedAt.getTime() / FIVE_MIN_MS);
+    const nextSlot = Math.floor(next.decidedAt.getTime() / FIVE_MIN_MS);
+    return prevSlot === nextSlot;
   }
 
   private isValidBar(b: IntradayIndexBarDto): boolean {
@@ -320,10 +418,10 @@ export class DerivativesService {
     return this.vnDateFromUnix(Number(latest.time)) === vnCalendarTodayYmd();
   }
 
-  private makeDecision(
+  private async makeDecision(
     bars: IntradayIndexBarDto[],
     runAt: Date,
-  ): Omit<DerivativeDecision, 'id' | 'createdAt' | 'updatedAt'> {
+  ): Promise<Omit<DerivativeDecision, 'id' | 'createdAt' | 'updatedAt'>> {
     const insufficient = bars.length < MIN_BARS;
     const snapshot = insufficient ? null : this.indicators(bars);
     const latest = bars[bars.length - 1];
@@ -331,68 +429,90 @@ export class DerivativesService {
     const tradingDate = snapshot?.tradingDate ?? vnCalendarTodayYmd();
     const contractCode = nearestVn30FuturesContract(tradingDate)?.id ?? null;
 
-    if (!snapshot || snapshot.atr14 == null || snapshot.atr14 <= 0) {
-      return {
-        symbol: 'VN30',
-        contractCode,
+    const noTrade = (reason: string) =>
+      this.noTradeResult(
+        reason,
         decidedAt,
         tradingDate,
-        resolution: '5',
-        algorithm: ALGORITHM,
-        action: DerivativeDecisionAction.NO_TRADE,
-        status: DerivativeDecisionStatus.CLOSED,
-        entryPrice: latest ? this.price(latest.close) : null,
-        stopLoss: null,
-        takeProfit: null,
-        riskReward: null,
-        score: 0,
-        confidence: 0,
-        reason: insufficient
+        contractCode,
+        latest,
+        snapshot,
+      );
+
+    // Gate 0: dữ liệu / ATR cơ bản
+    if (!snapshot || snapshot.atr14 == null || snapshot.atr14 <= 0) {
+      return noTrade(
+        insufficient
           ? `Không vào lệnh: thiếu nến 5m (${bars.length}/${MIN_BARS}).`
           : 'Không vào lệnh: ATR chưa đủ tin cậy để đặt SL/TP.',
-        metadata: this.metadata([], snapshot),
-        exitAt: decidedAt,
-        exitPrice: latest ? this.price(latest.close) : null,
-        pnlPoints: 0,
-        outcome: DerivativeDecisionOutcome.NO_TRADE,
-        outcomeReason: 'NO_TRADE không tính P/L.',
-        notified: false,
-      };
+      );
     }
 
+    // Gate 1: ATR tối thiểu — tránh vào lệnh khi thị trường quá ít biến động
+    if (snapshot.atr14 < MIN_ATR_POINTS) {
+      return noTrade(
+        `Không vào lệnh: ATR14 ${this.round2(snapshot.atr14)} < ${MIN_ATR_POINTS} điểm — thị trường ít biến động.`,
+      );
+    }
+
+    // Gate 2: Không mở lệnh mới sau 14:15 — quá ít thời gian đạt TP trước khi đóng phiên
+    if (this.isLateSession(snapshot.latestTime)) {
+      return noTrade(
+        'Không vào lệnh sau 14:15 — quá ít thời gian đạt TP trước khi đóng phiên.',
+      );
+    }
+
+    // Gate 3: Dừng giao dịch sau MAX_DAILY_LOSSES lần lỗ trong ngày
+    const lossesToday = await this.todayLossCount(tradingDate);
+    if (lossesToday >= MAX_DAILY_LOSSES) {
+      return noTrade(
+        `Dừng giao dịch — đã ${lossesToday} lần lỗ hôm nay (giới hạn ${MAX_DAILY_LOSSES}).`,
+      );
+    }
+
+    // 6 điều kiện định hướng — mutually exclusive giữa LONG và SHORT
     const longChecks = [
-      snapshot.close > snapshot.vwap,
-      snapshot.ema9 > snapshot.ema21,
-      snapshot.emaSlope > 0,
-      snapshot.rsi14 != null && snapshot.rsi14 >= 52 && snapshot.rsi14 <= 72,
-      snapshot.close > snapshot.prevHigh12 || snapshot.volumeRatio20 >= 1.15,
+      snapshot.close > snapshot.vwap, // 1. Giá trên VWAP ngày
+      snapshot.ema9 > snapshot.ema21, // 2. EMA9 dẫn EMA21 (uptrend ngắn hạn)
+      snapshot.emaSlope > 0, // 3. EMA9 đang tăng (slope 25 phút)
+      snapshot.rsi14 != null &&
+        snapshot.rsi14 >= 50 &&
+        snapshot.rsi14 <= RSI_MAX_LONG, // 4. RSI bullish nhưng chưa quá mua (50–75)
+      snapshot.close > snapshot.prevHigh12, // 5. Break đỉnh 60 phút gần nhất
+      snapshot.close > snapshot.ema50, // 6. Giá trên EMA50 (trend trung hạn ~4H)
     ];
     const shortChecks = [
       snapshot.close < snapshot.vwap,
       snapshot.ema9 < snapshot.ema21,
       snapshot.emaSlope < 0,
-      snapshot.rsi14 != null && snapshot.rsi14 >= 28 && snapshot.rsi14 <= 48,
-      snapshot.close < snapshot.prevLow12 || snapshot.volumeRatio20 >= 1.15,
+      snapshot.rsi14 != null &&
+        snapshot.rsi14 <= 50 &&
+        snapshot.rsi14 >= RSI_MIN_SHORT, // RSI bearish nhưng chưa quá bán (25–50)
+      snapshot.close < snapshot.prevLow12,
+      snapshot.close < snapshot.ema50,
     ];
+
     const longScore = longChecks.filter(Boolean).length;
     const shortScore = shortChecks.filter(Boolean).length;
     const notes = this.explainSnapshot(snapshot);
     let action = DerivativeDecisionAction.NO_TRADE;
-    let score = Math.max(longScore, shortScore);
-    if (longScore >= 4 && longScore >= shortScore + 1) {
+    let score = longScore - shortScore;
+
+    if (longScore >= CHECKS_REQUIRED && longScore > shortScore) {
       action = DerivativeDecisionAction.LONG;
+      score = longScore;
       notes.unshift(
-        'LONG: giá trên VWAP, EMA9 dẫn EMA21 và động lượng đủ mạnh.',
+        `LONG: ${longScore}/6 điều kiện tăng thỏa mãn (EMA trend, VWAP, RSI, breakout, EMA50).`,
       );
-    } else if (shortScore >= 4 && shortScore >= longScore + 1) {
+    } else if (shortScore >= CHECKS_REQUIRED && shortScore > longScore) {
       action = DerivativeDecisionAction.SHORT;
+      score = shortScore;
       notes.unshift(
-        'SHORT: giá dưới VWAP, EMA9 dưới EMA21 và động lượng nghiêng xuống.',
+        `SHORT: ${shortScore}/6 điều kiện giảm thỏa mãn (EMA trend, VWAP, RSI, breakdown, EMA50).`,
       );
     } else {
-      score = longScore - shortScore;
       notes.unshift(
-        `NO_TRADE: điểm LONG ${longScore}/5, SHORT ${shortScore}/5 chưa lệch đủ rõ.`,
+        `NO_TRADE: LONG ${longScore}/6, SHORT ${shortScore}/6 — chưa đạt ngưỡng ${CHECKS_REQUIRED}/6.`,
       );
     }
 
@@ -411,8 +531,10 @@ export class DerivativesService {
           : null;
     const confidence =
       action === DerivativeDecisionAction.NO_TRADE
-        ? Math.min(55, 25 + Math.abs(longScore - shortScore) * 10)
-        : Math.min(92, 45 + Math.max(longScore, shortScore) * 10);
+        ? Math.min(55, 20 + Math.abs(longScore - shortScore) * 8)
+        : score === 6
+          ? 95
+          : Math.min(90, 50 + score * 8);
 
     return {
       symbol: 'VN30',
@@ -452,6 +574,67 @@ export class DerivativesService {
     };
   }
 
+  private noTradeResult(
+    reason: string,
+    decidedAt: Date,
+    tradingDate: string,
+    contractCode: string | null,
+    latest: IntradayIndexBarDto | undefined,
+    snapshot: IndicatorSnapshot | null,
+  ): Omit<DerivativeDecision, 'id' | 'createdAt' | 'updatedAt'> {
+    const price = latest ? this.price(latest.close) : null;
+    return {
+      symbol: 'VN30',
+      contractCode,
+      decidedAt,
+      tradingDate,
+      resolution: '5',
+      algorithm: ALGORITHM,
+      action: DerivativeDecisionAction.NO_TRADE,
+      status: DerivativeDecisionStatus.CLOSED,
+      entryPrice: price,
+      stopLoss: null,
+      takeProfit: null,
+      riskReward: null,
+      score: 0,
+      confidence: 0,
+      reason,
+      metadata: this.metadata([], snapshot),
+      exitAt: decidedAt,
+      exitPrice: price,
+      pnlPoints: 0,
+      outcome: DerivativeDecisionOutcome.NO_TRADE,
+      outcomeReason: 'NO_TRADE không tính P/L.',
+      notified: false,
+    };
+  }
+
+  private isLateSession(latestTime: Date): boolean {
+    const hhmm = parseInt(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+        .format(latestTime)
+        .replace(':', ''),
+      10,
+    );
+    return hhmm >= NO_TRADE_AFTER_HHMM;
+  }
+
+  private todayLossCount(tradingDate: string): Promise<number> {
+    return this.decisionRepo.count({
+      where: {
+        symbol: 'VN30',
+        tradingDate,
+        status: DerivativeDecisionStatus.CLOSED,
+        outcome: DerivativeDecisionOutcome.LOSS,
+      },
+    });
+  }
+
   private indicators(bars: IntradayIndexBarDto[]): IndicatorSnapshot {
     const closes = bars.map((b) => this.price(b.close));
     const highs = bars.map((b) => this.price(b.high));
@@ -459,6 +642,7 @@ export class DerivativesService {
     const volumes = bars.map((b) => Number(b.volume) || 0);
     const ema9 = this.ema(closes, 9);
     const ema21 = this.ema(closes, 21);
+    const ema50 = this.ema(closes, 50);
     const rsi = this.rsi(closes, 14);
     const atr = this.atr(bars, ATR_PERIOD);
     const latestIdx = bars.length - 1;
@@ -474,7 +658,8 @@ export class DerivativesService {
       close: closes[latestIdx],
       ema9: ema9[latestIdx],
       ema21: ema21[latestIdx],
-      emaSlope: ema9[latestIdx] - ema9[Math.max(0, latestIdx - 3)],
+      ema50: ema50[latestIdx],
+      emaSlope: ema9[latestIdx] - ema9[Math.max(0, latestIdx - 5)],
       rsi14: rsi[latestIdx],
       atr14: atr[latestIdx],
       vwap,
@@ -526,52 +711,100 @@ export class DerivativesService {
         (b) => Number(b.time) * 1000 > d.decidedAt.getTime(),
       );
       if (!after.length) continue;
+      const entryP = Number(d.entryPrice);
+      const isLong = d.action === DerivativeDecisionAction.LONG;
+      const riskDist = Math.abs(entryP - Number(d.stopLoss));
+      // SL động: khởi đầu = SL gốc, dời về hòa vốn khi lãi 1R, trailing khi lãi > 2R.
+      let trailStop = Number(d.stopLoss);
+      let movedToBreakeven = false;
+      let trailing = false;
+      const stopHitReason = () =>
+        trailing
+          ? 'Chạm trailing stop — đã khóa một phần lãi.'
+          : movedToBreakeven
+            ? 'Chạm SL hòa vốn (đã dời về entry sau khi lãi 1R).'
+            : 'Chạm SL trước TP.';
       let exitBar: IntradayIndexBarDto | null = null;
       let exitPrice: number | null = null;
-      let outcome: DerivativeDecisionOutcome | null = null;
       let reason = '';
       for (const b of after) {
         const high = this.price(b.high);
         const low = this.price(b.low);
-        if (d.action === DerivativeDecisionAction.LONG) {
-          if (low <= Number(d.stopLoss)) {
+        if (isLong) {
+          // 1. Kiểm tra stop (mức trail tính từ các nến TRƯỚC — không dùng high của nến hiện tại)
+          if (low <= trailStop) {
             exitBar = b;
-            exitPrice = Number(d.stopLoss);
-            outcome = DerivativeDecisionOutcome.LOSS;
-            reason = 'Chạm SL trước TP.';
+            exitPrice = trailStop;
+            reason = stopHitReason();
             break;
           }
+          // 2. Take-profit
           if (high >= Number(d.takeProfit)) {
             exitBar = b;
             exitPrice = Number(d.takeProfit);
-            outcome = DerivativeDecisionOutcome.WIN;
             reason = 'Chạm TP.';
             break;
           }
+          // 3. Cập nhật SL động theo đỉnh nến này
+          const favorable = high - entryP;
+          if (
+            !movedToBreakeven &&
+            favorable >= BREAKEVEN_TRIGGER_R * riskDist
+          ) {
+            trailStop = Math.max(trailStop, entryP);
+            movedToBreakeven = true;
+          }
+          if (favorable >= (TRAIL_AFTER_R + 1) * riskDist) {
+            const t = high - TRAIL_AFTER_R * riskDist;
+            if (t > trailStop) {
+              trailStop = t;
+              trailing = true;
+            }
+          }
         } else {
-          if (high >= Number(d.stopLoss)) {
+          if (high >= trailStop) {
             exitBar = b;
-            exitPrice = Number(d.stopLoss);
-            outcome = DerivativeDecisionOutcome.LOSS;
-            reason = 'Chạm SL trước TP.';
+            exitPrice = trailStop;
+            reason = stopHitReason();
             break;
           }
           if (low <= Number(d.takeProfit)) {
             exitBar = b;
             exitPrice = Number(d.takeProfit);
-            outcome = DerivativeDecisionOutcome.WIN;
             reason = 'Chạm TP.';
             break;
+          }
+          const favorable = entryP - low;
+          if (
+            !movedToBreakeven &&
+            favorable >= BREAKEVEN_TRIGGER_R * riskDist
+          ) {
+            trailStop = Math.min(trailStop, entryP);
+            movedToBreakeven = true;
+          }
+          if (favorable >= (TRAIL_AFTER_R + 1) * riskDist) {
+            const t = low + TRAIL_AFTER_R * riskDist;
+            if (t < trailStop) {
+              trailStop = t;
+              trailing = true;
+            }
           }
         }
       }
       if (!exitBar && after.length >= SETTLE_AFTER_BARS) {
         exitBar = after[after.length - 1];
         exitPrice = this.price(exitBar.close);
-        outcome = DerivativeDecisionOutcome.TIME_EXIT;
         reason = `Thoát theo thời gian sau ${SETTLE_AFTER_BARS} nến 5m.`;
       }
-      if (!exitBar || exitPrice == null || !outcome) continue;
+      if (!exitBar || exitPrice == null) continue;
+      // Phân loại theo P/L thực tế: hòa vốn (±0.01đ) tính trung tính, không kể là LOSS.
+      const settledPnl = isLong ? exitPrice - entryP : entryP - exitPrice;
+      const outcome: DerivativeDecisionOutcome =
+        settledPnl > 0.01
+          ? DerivativeDecisionOutcome.WIN
+          : settledPnl < -0.01
+            ? DerivativeDecisionOutcome.LOSS
+            : DerivativeDecisionOutcome.TIME_EXIT;
       d.status = DerivativeDecisionStatus.CLOSED;
       d.exitAt = new Date(Number(exitBar.time) * 1000);
       d.exitPrice = this.round2(exitPrice);
@@ -722,7 +955,9 @@ export class DerivativesService {
       decision.action === DerivativeDecisionAction.LONG ? 'LONG' : 'SHORT';
     const outcomeLabel = decision.outcome ?? 'CLOSED';
     const pnlText =
-      decision.pnlPoints == null ? '-' : `${this.formatSigned(decision.pnlPoints)} điểm`;
+      decision.pnlPoints == null
+        ? '-'
+        : `${this.formatSigned(decision.pnlPoints)} điểm`;
     return this.telegramService.sendMessage({
       parseMode: 'HTML',
       text:
@@ -852,6 +1087,7 @@ export class DerivativesService {
             close: this.round2(snapshot.close),
             ema9: this.round2(snapshot.ema9),
             ema21: this.round2(snapshot.ema21),
+            ema50: this.round2(snapshot.ema50),
             emaSlope: this.round2(snapshot.emaSlope),
             rsi14: snapshot.rsi14 == null ? null : this.round2(snapshot.rsi14),
             atr14: snapshot.atr14 == null ? null : this.round2(snapshot.atr14),
@@ -866,20 +1102,29 @@ export class DerivativesService {
 
   private explainSnapshot(s: IndicatorSnapshot): string[] {
     return [
-      `Close ${this.round2(s.close)}, VWAP ${this.round2(s.vwap)}.`,
-      `EMA9 ${this.round2(s.ema9)} / EMA21 ${this.round2(s.ema21)}, slope ${this.round2(s.emaSlope)}.`,
+      `Close ${this.round2(s.close)}, VWAP ${this.round2(s.vwap)}, EMA50 ${this.round2(s.ema50)}.`,
+      `EMA9 ${this.round2(s.ema9)} / EMA21 ${this.round2(s.ema21)}, slope(5b) ${this.round2(s.emaSlope)}.`,
       `RSI14 ${s.rsi14 == null ? '-' : this.round2(s.rsi14)}, ATR14 ${s.atr14 == null ? '-' : this.round2(s.atr14)}.`,
       `Breakout 12 nến: high ${this.round2(s.prevHigh12)}, low ${this.round2(s.prevLow12)}, vol x${this.round2(s.volumeRatio20)}.`,
     ];
   }
 
   private ema(values: number[], period: number): number[] {
+    if (!values.length) return [];
     const k = 2 / (period + 1);
-    let e = values[0] ?? 0;
-    return values.map((v, i) => {
-      e = i === 0 ? v : v * k + e * (1 - k);
-      return e;
-    });
+    const seed = Math.min(period, values.length);
+    const out: number[] = new Array(values.length);
+    // Warmup: running SMA up to `seed` values, used as seed for EMA.
+    let sum = 0;
+    for (let i = 0; i < seed; i++) {
+      sum += values[i];
+      out[i] = sum / (i + 1);
+    }
+    // EMA từ index `seed` trở đi, dùng SMA(seed) làm giá trị khởi đầu.
+    for (let i = seed; i < values.length; i++) {
+      out[i] = values[i] * k + out[i - 1] * (1 - k);
+    }
+    return out;
   }
 
   private rsi(values: number[], period: number): Array<number | null> {
