@@ -3739,18 +3739,23 @@ function app() {
         });
 
         const allVals = cumData.flat();
-        const minVal = Math.min(...allVals), maxVal = Math.max(...allVals);
+        const minVal = Math.min(...allVals),
+          maxVal = Math.max(...allVals);
         const yPad = (maxVal - minVal) * 0.15 || 50;
-        const yMin = minVal - yPad, yMax = maxVal + yPad;
+        const yMin = minVal - yPad,
+          yMax = maxVal + yPad;
 
-        const pL = 8, pR = 52, pT = 10, pB = 26 + legendH;
+        const pL = 8,
+          pR = 52,
+          pT = 10,
+          pB = 26 + legendH;
         const cH = H - pT - pB;
         const visW = W - pL - pR;
-        const MIN_STEP = 60;                   // min px between month points
+        const MIN_STEP = 60; // min px between month points
         const step = Math.max(visW / Math.max(nM - 1, 1), MIN_STEP);
         const totalW = step * (nM - 1);
         const maxScrollPx = Math.max(0, totalW - visW);
-        let scrollPx = maxScrollPx;            // start at newest (rightmost)
+        let scrollPx = maxScrollPx; // start at newest (rightmost)
         const canPan = maxScrollPx > 0;
 
         const toX = (i) => pL + i * step - scrollPx;
@@ -3779,10 +3784,14 @@ function app() {
 
           // Grid lines
           for (let i = 0; i <= 5; i++) {
-            const v = yMin + (yMax - yMin) * i / 5;
+            const v = yMin + ((yMax - yMin) * i) / 5;
             const y = toY(v);
-            ctx.strokeStyle = gridClr; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(pL, y); ctx.lineTo(W - pR, y); ctx.stroke();
+            ctx.strokeStyle = gridClr;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(pL, y);
+            ctx.lineTo(W - pR, y);
+            ctx.stroke();
           }
 
           // X-axis labels (skip if too crowded)
@@ -3790,8 +3799,10 @@ function app() {
             const x = toX(i);
             if (x < pL - 20 || x > W - pR + 20) continue;
             const [yr, mo] = months[i].split('-');
-            ctx.fillStyle = textClr; ctx.font = font(10);
-            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            ctx.fillStyle = textClr;
+            ctx.font = font(10);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
             ctx.fillText(mo + '/' + yr.slice(2), x, pT + cH + 6);
           }
 
@@ -3800,14 +3811,19 @@ function app() {
             const color = seriesArr[si].color;
             const pts = cumData[si];
 
-            ctx.strokeStyle = color; ctx.lineWidth = 2;
-            ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
             ctx.beginPath();
             let started = false;
             for (let i = 0; i < nM; i++) {
-              const x = toX(i), y = toY(pts[i]);
-              if (!started) { ctx.moveTo(x, y); started = true; }
-              else ctx.lineTo(x, y);
+              const x = toX(i),
+                y = toY(pts[i]);
+              if (!started) {
+                ctx.moveTo(x, y);
+                started = true;
+              } else ctx.lineTo(x, y);
             }
             ctx.stroke();
 
@@ -3815,9 +3831,13 @@ function app() {
               const x = toX(i);
               if (x < pL - 8 || x > W - pR + 8) continue;
               const y = toY(pts[i]);
-              ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
-              ctx.fillStyle = bgClr; ctx.fill();
-              ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+              ctx.beginPath();
+              ctx.arc(x, y, 4, 0, Math.PI * 2);
+              ctx.fillStyle = bgClr;
+              ctx.fill();
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 2;
+              ctx.stroke();
             }
           }
 
@@ -3827,9 +3847,11 @@ function app() {
           ctx.fillStyle = bgClr;
           ctx.fillRect(W - pR, pT, pR, cH);
           for (let i = 0; i <= 5; i++) {
-            const v = yMin + (yMax - yMin) * i / 5;
-            ctx.fillStyle = textClr; ctx.font = font(10);
-            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            const v = yMin + ((yMax - yMin) * i) / 5;
+            ctx.fillStyle = textClr;
+            ctx.font = font(10);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
             ctx.fillText(v.toFixed(0), W - pR + 4, toY(v));
           }
 
@@ -3837,13 +3859,17 @@ function app() {
           if (canPan) {
             const alpha = 0.45;
             ctx.font = `bold 14px system-ui`;
-            ctx.fillStyle = dark ? `rgba(161,161,170,${alpha})` : `rgba(100,116,139,${alpha})`;
+            ctx.fillStyle = dark
+              ? `rgba(161,161,170,${alpha})`
+              : `rgba(100,116,139,${alpha})`;
             ctx.textBaseline = 'middle';
             if (scrollPx > 1) {
-              ctx.textAlign = 'left'; ctx.fillText('◀', pL + 2, pT + cH / 2);
+              ctx.textAlign = 'left';
+              ctx.fillText('◀', pL + 2, pT + cH / 2);
             }
             if (scrollPx < maxScrollPx - 1) {
-              ctx.textAlign = 'right'; ctx.fillText('▶', W - pR - 2, pT + cH / 2);
+              ctx.textAlign = 'right';
+              ctx.fillText('▶', W - pR - 2, pT + cH / 2);
             }
           }
 
@@ -3863,15 +3889,25 @@ function app() {
           });
           canvas.addEventListener('pointermove', (e) => {
             if (!drag) return;
-            scrollPx = Math.max(0, Math.min(maxScrollPx, drag.startScroll - (e.clientX - drag.x)));
+            scrollPx = Math.max(
+              0,
+              Math.min(maxScrollPx, drag.startScroll - (e.clientX - drag.x)),
+            );
             redraw();
           });
-          const endDrag = () => { drag = null; canvas.style.cursor = 'grab'; };
+          const endDrag = () => {
+            drag = null;
+            canvas.style.cursor = 'grab';
+          };
           canvas.addEventListener('pointerup', endDrag);
           canvas.addEventListener('pointercancel', endDrag);
         }
 
-        this._btLineChart = { remove: () => { lineEl.innerHTML = ''; } };
+        this._btLineChart = {
+          remove: () => {
+            lineEl.innerHTML = '';
+          },
+        };
       }
     },
 
