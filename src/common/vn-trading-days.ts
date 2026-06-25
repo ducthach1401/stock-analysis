@@ -45,6 +45,21 @@ export function isVnCashMarketSessionOpen(d = new Date()): boolean {
 }
 
 /**
+ * T2–T6, phiên giao dịch VN30 futures trên HNX:
+ *  - Liên tục sáng:  9:00 – 11:30
+ *  - Liên tục chiều: 13:00 – 14:30
+ *  - ATC:            14:30 – 14:45
+ * (ATO 8:45–9:00 là khớp định kỳ, không đủ chất lượng bar 5m — bỏ qua)
+ */
+export function isVnFuturesSessionOpen(d = new Date()): boolean {
+  const { weekday, hour, minute } = hoChiMinhTimeParts(d);
+  if (weekday === 0 || weekday === 6) return false;
+  const inMorning = hour === 9 || hour === 10 || (hour === 11 && minute <= 30);
+  const inAfternoon = hour === 13 || (hour === 14 && minute <= 45);
+  return inMorning || inAfternoon;
+}
+
+/**
  * Khuyến nghị tự động / Telegram / mở vị thế chỉ dùng nến ngày đã đóng phiên
  * (sau ATC 14:45 — mặc định từ 14:46 VN trở đi, T2–T6).
  */
