@@ -138,6 +138,7 @@ function app() {
     btLoading: false,
     btResult: null,
     btError: '',
+    btMonthPage: 1,
     _btBarChart: null,
     _btLineChart: null,
     lwChart: null,
@@ -2152,6 +2153,27 @@ function app() {
       return 'vn30BacktestCache:VN30:v1';
     },
 
+    btMonthPagedRows() {
+      const BT_MONTH_LIMIT = 10;
+      const s0 = this.btResult?.series?.[0];
+      if (!s0) return [];
+      const all = Array.isArray(s0.monthly) ? s0.monthly : [];
+      const start = (this.btMonthPage - 1) * BT_MONTH_LIMIT;
+      return all.slice(start, start + BT_MONTH_LIMIT);
+    },
+
+    btMonthTotalPages() {
+      const BT_MONTH_LIMIT = 10;
+      const s0 = this.btResult?.series?.[0];
+      const total = s0?.monthTotal ?? (Array.isArray(s0?.monthly) ? s0.monthly.length : 0);
+      return Math.max(1, Math.ceil(total / BT_MONTH_LIMIT));
+    },
+
+    btMonthNetForRow(s, m) {
+      const entry = Array.isArray(s.monthly) ? s.monthly.find((x) => x.month === m.month) : null;
+      return entry ? entry.net : null;
+    },
+
     readBacktestCache() {
       try {
         const raw = localStorage.getItem(this.backtestCacheKey());
@@ -3409,6 +3431,7 @@ function app() {
       this.btLoading = true;
       this.btError = '';
       this.btResult = null;
+      this.btMonthPage = 1;
       if (this._btBarChart) this._btBarChart.remove();
       if (this._btLineChart) this._btLineChart.remove();
       this._btBarChart = null;

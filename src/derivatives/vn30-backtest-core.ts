@@ -56,8 +56,17 @@ export type BacktestSeriesStats = {
   neutrals: number;
   wr: number;
   net: number;
-  pf: number | null;
-  exp: number;
+  pf: number | null;       // profit factor = gross profit / gross loss
+  exp: number;             // expectancy = net / trades
+  avgWin: number | null;   // avg P/L của lệnh thắng
+  avgLoss: number | null;  // avg P/L của lệnh thua (âm)
+  maxWin: number | null;   // lệnh thắng lớn nhất
+  maxLoss: number | null;  // lệnh thua nặng nhất (âm)
+  maxDrawdown: number;     // drawdown lớn nhất (điểm, từ đỉnh equity xuống đáy)
+  maxConsecLosses: number; // chuỗi thua dài nhất
+  maxConsecWins: number;   // chuỗi thắng dài nhất
+  sharpe: number | null;   // per-trade Sharpe = mean(pnl) / stddev(pnl)
+  recoveryFactor: number | null; // net / |maxDrawdown|
   longTrades: number;
   longNet: number;
   shortTrades: number;
@@ -70,6 +79,7 @@ export type BacktestSeries = {
   stats: BacktestSeriesStats;
   equity: { date: string; value: number }[];
   monthly: { month: string; net: number; longNet: number; shortNet: number }[];
+  monthTotal: number;
 };
 
 export type BacktestResult = {
@@ -385,17 +395,54 @@ export function buildSeries(
   const neutrals = trades.filter((t) => t.outcome === 'NEUTRAL').length;
   const decided = wins + losses;
   const net = r2(trades.reduce((a, t) => a + t.pnl, 0));
-  const gp = trades.filter((t) => t.pnl > 0).reduce((a, t) => a + t.pnl, 0);
-  const gl = trades.filter((t) => t.pnl < 0).reduce((a, t) => a + t.pnl, 0);
+  const winPnls = trades.filter((t) => t.pnl > 0).map((t) => t.pnl);
+  const lossPnls = trades.filter((t) => t.pnl < 0).map((t) => t.pnl);
+  const gp = winPnls.reduce((a, v) => a + v, 0);
+  const gl = lossPnls.reduce((a, v) => a + v, 0);
   const longTrades = trades.filter((t) => t.side === 'LONG');
   const shortTrades = trades.filter((t) => t.side === 'SHORT');
 
-  // Equity curve (cumulative after each trade, keyed to trade date)
+  // Equity curve + max drawdown
   let cum = 0;
+  let peak = 0;
+  let maxDD = 0;
   const equity: BacktestSeries['equity'] = trades.map((t) => {
     cum += t.pnl;
+    if (cum > peak) peak = cum;
+    const dd = peak - cum;
+    if (dd > maxDD) maxDD = dd;
     return { date: t.date, value: r2(cum) };
   });
+
+  // Consecutive wins/losses
+  let maxConsecWins = 0;
+  let maxConsecLosses = 0;
+  let curW = 0;
+  let curL = 0;
+  for (const t of trades) {
+    if (t.outcome === 'WIN') {
+      curW++;
+      curL = 0;
+      if (curW > maxConsecWins) maxConsecWins = curW;
+    } else if (t.outcome === 'LOSS') {
+      curL++;
+      curW = 0;
+      if (curL > maxConsecLosses) maxConsecLosses = curL;
+    } else {
+      curW = 0;
+      curL = 0;
+    }
+  }
+
+  // Per-trade Sharpe = mean / stddev
+  let sharpe: number | null = null;
+  if (trades.length >= 2) {
+    const mean = net / trades.length;
+    const variance =
+      trades.reduce((a, t) => a + (t.pnl - mean) ** 2, 0) / trades.length;
+    const std = Math.sqrt(variance);
+    sharpe = std > 0 ? r2(mean / std) : null;
+  }
 
   // Monthly aggregation
   const monthMap = new Map<
@@ -411,7 +458,7 @@ export function buildSeries(
     monthMap.set(m, e);
   }
   const monthly = [...monthMap.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => b.localeCompare(a))
     .map(([month, v]) => ({
       month,
       net: r2(v.net),
@@ -419,6 +466,8 @@ export function buildSeries(
       shortNet: r2(v.shortNet),
     }));
 
+  const mdd = r2(maxDD);
+  const monthTotal = monthly.length;
   return {
     label,
     color,
@@ -431,6 +480,15 @@ export function buildSeries(
       net,
       pf: gl !== 0 ? r2(gp / Math.abs(gl)) : null,
       exp: trades.length ? r2(net / trades.length) : 0,
+      avgWin: winPnls.length ? r2(gp / winPnls.length) : null,
+      avgLoss: lossPnls.length ? r2(gl / lossPnls.length) : null,
+      maxWin: winPnls.length ? r2(Math.max(...winPnls)) : null,
+      maxLoss: lossPnls.length ? r2(Math.min(...lossPnls)) : null,
+      maxDrawdown: mdd,
+      maxConsecLosses,
+      maxConsecWins,
+      sharpe,
+      recoveryFactor: mdd > 0 ? r2(net / mdd) : null,
       longTrades: longTrades.length,
       longNet: r2(longTrades.reduce((a, t) => a + t.pnl, 0)),
       shortTrades: shortTrades.length,
@@ -438,5 +496,6 @@ export function buildSeries(
     },
     equity,
     monthly,
+    monthTotal,
   };
 }

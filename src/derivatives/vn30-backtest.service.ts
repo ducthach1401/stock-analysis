@@ -48,25 +48,36 @@ export class Vn30BacktestService implements OnModuleDestroy {
     }
   }
 
+  private endOfMonthYmd(d: Date): string {
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const y = last.getFullYear();
+    const m = String(last.getMonth() + 1).padStart(2, '0');
+    const day = String(last.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  private startOfMonthYmd(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}-01`;
+  }
+
   private backtestCacheKey(
     from: Date,
     to: Date,
     flags: { trailing: boolean; rsicap: boolean },
   ): string {
     return [
-      'backtest:vn30:v1',
-      from.toISOString().slice(0, 10),
-      to.toISOString().slice(0, 10),
+      'backtest:vn30:v2',
+      this.startOfMonthYmd(from),
+      this.endOfMonthYmd(to),
       flags.trailing ? 'trail-on' : 'trail-off',
       flags.rsicap ? 'rsi-on' : 'rsi-off',
     ].join(':');
   }
 
-  private backtestCacheTtlSeconds(to: Date): number {
-    const ageMs = Date.now() - to.getTime();
-    if (ageMs > 14 * 24 * 60 * 60 * 1000) return 24 * 60 * 60;
-    if (ageMs > 2 * 24 * 60 * 60 * 1000) return 6 * 60 * 60;
-    return 5 * 60;
+  private backtestCacheTtlSeconds(): number {
+    return 15 * 24 * 60 * 60;
   }
 
   private async readBacktestCache(key: string): Promise<BacktestResult | null> {
@@ -89,7 +100,6 @@ export class Vn30BacktestService implements OnModuleDestroy {
   private async writeBacktestCache(
     key: string,
     data: BacktestResult,
-    to: Date,
   ): Promise<void> {
     if (!this.cacheEnabled || !this.redisClient) return;
     try {
@@ -98,7 +108,7 @@ export class Vn30BacktestService implements OnModuleDestroy {
         key,
         JSON.stringify(data),
         'EX',
-        this.backtestCacheTtlSeconds(to),
+        this.backtestCacheTtlSeconds(),
       );
     } catch (e) {
       this.logger.debug(
@@ -110,11 +120,13 @@ export class Vn30BacktestService implements OnModuleDestroy {
   async runCompare(
     from: Date,
     to: Date,
-    flags: { trailing: boolean; rsicap: boolean },
+    flags: { trailing: boolean; rsicap: boolean; forceRefresh?: boolean },
   ): Promise<BacktestResult> {
     const cacheKey = this.backtestCacheKey(from, to, flags);
-    const cached = await this.readBacktestCache(cacheKey);
-    if (cached) return cached;
+    if (!flags.forceRefresh) {
+      const cached = await this.readBacktestCache(cacheKey);
+      if (cached) return cached;
+    }
 
     const raw = await this.dnse.fetchIntradayIndexOhlc('VN30', '5', from, to);
     const bars: Bar[] = raw.map((b) => ({
@@ -135,7 +147,7 @@ export class Vn30BacktestService implements OnModuleDestroy {
         bars: bars.length,
         series: [],
       };
-      await this.writeBacktestCache(cacheKey, result, to);
+      await this.writeBacktestCache(cacheKey, result);
       return result;
     }
 
@@ -159,7 +171,7 @@ export class Vn30BacktestService implements OnModuleDestroy {
         buildSeries('SHORT only (tắt LONG)', '#f59e0b', offTrades),
       ],
     };
-    await this.writeBacktestCache(cacheKey, result, to);
+    await this.writeBacktestCache(cacheKey, result);
     return result;
   }
 }

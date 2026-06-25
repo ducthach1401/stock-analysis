@@ -2349,37 +2349,32 @@
                       :class="s.stats.net >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
                       x-text="(s.stats.net >= 0 ? '+' : '') + s.stats.net.toFixed(2) + 'đ'"
                     ></div>
+                    <!-- Row 1: core -->
                     <div class="text-[11px] mt-1" style="color: var(--text-2)">
-                      PF
-                      <span
-                        x-text="s.stats.pf ?? '∞'"
-                        class="font-medium text-gray-700 dark:text-zinc-200"
-                      ></span>
-                      · WR
-                      <span
-                        x-text="s.stats.wr + '%'"
-                        class="font-medium text-gray-700 dark:text-zinc-200"
-                      ></span>
-                      ·
-                      <span x-text="s.stats.trades"></span> lệnh
+                      PF <span x-text="s.stats.pf ?? '∞'" class="font-medium text-gray-700 dark:text-zinc-200"></span>
+                      · WR <span x-text="s.stats.wr + '%'" class="font-medium text-gray-700 dark:text-zinc-200"></span>
+                      · <span x-text="s.stats.trades"></span> lệnh
+                      · Exp <span x-text="(s.stats.exp >= 0 ? '+' : '') + s.stats.exp.toFixed(2)" class="font-medium text-gray-700 dark:text-zinc-200"></span>đ
                     </div>
-                    <div
-                      class="text-[11px] mt-0.5"
-                      style="color: var(--text-2)"
-                    >
-                      LONG
-                      <span x-text="s.stats.longTrades"></span>
-                      (<span
-                        :class="s.stats.longNet >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
-                        x-text="(s.stats.longNet >= 0 ? '+' : '') + s.stats.longNet.toFixed(2)"
-                      ></span
-                      >đ) · SHORT
-                      <span x-text="s.stats.shortTrades"></span>
-                      (<span
-                        :class="s.stats.shortNet >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
-                        x-text="(s.stats.shortNet >= 0 ? '+' : '') + s.stats.shortNet.toFixed(2)"
-                      ></span
-                      >đ)
+                    <!-- Row 2: win/loss breakdown -->
+                    <div class="text-[11px] mt-0.5" style="color: var(--text-2)">
+                      AvgW <span :class="'font-medium ' + (s.stats.avgWin >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500')" x-text="s.stats.avgWin != null ? (s.stats.avgWin >= 0 ? '+' : '') + s.stats.avgWin.toFixed(2) : '-'"></span>đ
+                      · AvgL <span class="font-medium text-red-500" x-text="s.stats.avgLoss != null ? s.stats.avgLoss.toFixed(2) : '-'"></span>đ
+                      · MaxW <span class="font-medium text-teal-600 dark:text-teal-400" x-text="s.stats.maxWin != null ? '+' + s.stats.maxWin.toFixed(2) : '-'"></span>đ
+                      · MaxL <span class="font-medium text-red-500" x-text="s.stats.maxLoss != null ? s.stats.maxLoss.toFixed(2) : '-'"></span>đ
+                    </div>
+                    <!-- Row 3: risk metrics -->
+                    <div class="text-[11px] mt-0.5" style="color: var(--text-2)">
+                      MDD <span class="font-medium text-red-500" x-text="'-' + s.stats.maxDrawdown.toFixed(2)"></span>đ
+                      · RF <span :class="'font-medium ' + (s.stats.recoveryFactor >= 1 ? 'text-teal-600 dark:text-teal-400' : 'text-amber-500')" x-text="s.stats.recoveryFactor != null ? s.stats.recoveryFactor.toFixed(2) : '-'"></span>
+                      · Sharpe <span :class="'font-medium ' + (s.stats.sharpe >= 0.2 ? 'text-teal-600 dark:text-teal-400' : 'text-amber-500')" x-text="s.stats.sharpe != null ? s.stats.sharpe.toFixed(2) : '-'"></span>
+                    </div>
+                    <!-- Row 4: streak & long/short -->
+                    <div class="text-[11px] mt-0.5" style="color: var(--text-2)">
+                      Streak W<span class="font-medium text-teal-600 dark:text-teal-400" x-text="s.stats.maxConsecWins"></span>
+                      / L<span class="font-medium text-red-500" x-text="s.stats.maxConsecLosses"></span>
+                      · LONG <span x-text="s.stats.longTrades"></span>(<span :class="s.stats.longNet >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'" x-text="(s.stats.longNet >= 0 ? '+' : '') + s.stats.longNet.toFixed(2)"></span>đ)
+                      · SHORT <span x-text="s.stats.shortTrades"></span>(<span :class="s.stats.shortNet >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'" x-text="(s.stats.shortNet >= 0 ? '+' : '') + s.stats.shortNet.toFixed(2)"></span>đ)
                     </div>
                   </div>
                 </template>
@@ -2426,52 +2421,84 @@
 
               <!-- Monthly breakdown table -->
               <template
-                x-if="btResult.series[0] && btResult.series[0].monthly.length > 1"
+                x-if="btResult.series[0] && btResult.series[0].monthly.length > 0"
               >
-                <div class="overflow-x-auto mt-2">
-                  <table
-                    class="w-full text-[11px] border-collapse"
-                    style="color: var(--text-2)"
-                  >
-                    <thead>
-                      <tr
-                        class="border-b text-left font-semibold"
-                        style="border-color: var(--border)"
-                      >
-                        <th class="py-1.5 pr-3">Tháng</th>
-                        <template x-for="s in btResult.series" :key="s.label">
-                          <th
-                            class="py-1.5 px-2 text-right"
-                            x-text="s.label.split(' ')[0] + ' ' + (s.label.split(' ')[1] ?? '')"
-                          ></th>
-                        </template>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <template
-                        x-for="(m, mi) in btResult.series[0].monthly"
-                        :key="m.month"
-                      >
+                <div class="mt-2">
+                  <div class="overflow-x-auto">
+                    <table
+                      class="w-full text-[11px] border-collapse"
+                      style="color: var(--text-2)"
+                    >
+                      <thead>
                         <tr
-                          class="border-b"
-                          style="border-color: var(--border-sub)"
+                          class="border-b text-left font-semibold"
+                          style="border-color: var(--border)"
                         >
-                          <td
-                            class="py-1 pr-3 font-medium text-gray-600 dark:text-zinc-300"
-                            x-text="m.month"
-                          ></td>
+                          <th class="py-1.5 pr-3">Tháng</th>
                           <template x-for="s in btResult.series" :key="s.label">
-                            <td class="py-1 px-2 text-right font-mono">
-                              <span
-                                :class="s.monthly[mi].net >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
-                                x-text="(s.monthly[mi].net >= 0 ? '+' : '') + s.monthly[mi].net.toFixed(2)"
-                              ></span>
-                            </td>
+                            <th
+                              class="py-1.5 px-2 text-right"
+                              x-text="s.label.split(' ')[0] + ' ' + (s.label.split(' ')[1] ?? '')"
+                            ></th>
                           </template>
                         </tr>
-                      </template>
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        <template
+                          x-for="m in btMonthPagedRows()"
+                          :key="m.month"
+                        >
+                          <tr
+                            class="border-b"
+                            style="border-color: var(--border-sub)"
+                          >
+                            <td
+                              class="py-1 pr-3 font-medium text-gray-600 dark:text-zinc-300"
+                              x-text="m.month"
+                            ></td>
+                            <template x-for="s in btResult.series" :key="s.label">
+                              <td class="py-1 px-2 text-right font-mono">
+                                <template x-if="btMonthNetForRow(s, m) != null">
+                                  <span
+                                    :class="btMonthNetForRow(s, m) >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
+                                    x-text="(btMonthNetForRow(s, m) >= 0 ? '+' : '') + btMonthNetForRow(s, m).toFixed(2)"
+                                  ></span>
+                                </template>
+                                <template x-if="btMonthNetForRow(s, m) == null">
+                                  <span style="color: var(--text-2)">—</span>
+                                </template>
+                              </td>
+                            </template>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                  <!-- Pagination -->
+                  <div
+                    x-show="btMonthTotalPages() > 1"
+                    class="flex items-center justify-between mt-2"
+                  >
+                    <span class="text-[11px]" style="color: var(--text-2)">
+                      Trang <span x-text="btMonthPage"></span> / <span x-text="btMonthTotalPages()"></span>
+                    </span>
+                    <div class="flex gap-1">
+                      <button
+                        type="button"
+                        @click="btMonthPage = Math.max(1, btMonthPage - 1)"
+                        :disabled="btMonthPage <= 1"
+                        class="px-2 py-0.5 text-[11px] rounded border disabled:opacity-40"
+                        style="border-color: var(--border); background: var(--bg-card)"
+                      >← Trước</button>
+                      <button
+                        type="button"
+                        @click="btMonthPage = Math.min(btMonthTotalPages(), btMonthPage + 1)"
+                        :disabled="btMonthPage >= btMonthTotalPages()"
+                        class="px-2 py-0.5 text-[11px] rounded border disabled:opacity-40"
+                        style="border-color: var(--border); background: var(--bg-card)"
+                      >Sau →</button>
+                    </div>
+                  </div>
                 </div>
               </template>
 

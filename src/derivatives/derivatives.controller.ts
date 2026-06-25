@@ -59,14 +59,21 @@ export class DerivativesController {
     @Query('to') to?: string,
     @Query('trailing') trailing?: string,
     @Query('rsicap') rsicap?: string,
+    @Query('refresh') refresh?: string,
   ) {
-    const toDate = to ? new Date(to + 'T23:59:59') : new Date();
+    const toDate = to
+      ? new Date(to + 'T23:59:59')
+      : (() => {
+          const now = new Date();
+          return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        })();
     const fromDate = from
       ? new Date(from + 'T00:00:00')
-      : new Date(toDate.getTime() - 180 * 24 * 60 * 60 * 1000);
+      : new Date(toDate.getFullYear() - 1, toDate.getMonth(), 1);
     return this.backtestService.runCompare(fromDate, toDate, {
       trailing: trailing !== 'off',
       rsicap: rsicap !== 'off',
+      forceRefresh: refresh === '1' || refresh === 'true',
     });
   }
 }
