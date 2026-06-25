@@ -131,16 +131,15 @@ function app() {
     _derivativesPollFirst: null,
     derivSignalsLatest: [],
     /** Backtest chiến lược LONG */
-    btFrom: new Date(new Date().getFullYear() + '-01-01')
-      .toISOString()
-      .slice(0, 10),
+    btFrom: '2025-01-01',
     btTo: new Date().toISOString().slice(0, 10),
     btTrailing: true,
     btRsicap: true,
     btLoading: false,
     btResult: null,
     btError: '',
-    _btChart: null,
+    _btBarChart: null,
+    _btLineChart: null,
     lwChart: null,
     rsiChart: null,
     macdChart: null,
@@ -475,6 +474,8 @@ function app() {
       if (this.lwChart) this.lwChart.applyOptions(opts);
       if (this.rsiChart) this.rsiChart.applyOptions(opts);
       if (this.macdChart) this.macdChart.applyOptions(opts);
+      if (this._btBarChart) this._btBarChart.applyOptions(opts);
+      if (this._btLineChart) this._btLineChart.applyOptions(opts);
       ['vni', 'vn30'].forEach((slot) => {
         const k = this.marketCharts[slot];
         if (!k) return;
@@ -3333,7 +3334,7 @@ function app() {
         if (!this.restoreBacktestResultFromCache()) {
           void this.runVn30Backtest();
         }
-      } else if (!this._btChart) {
+      } else if (!this._btBarChart || !this._btLineChart) {
         this.$nextTick(() => this.renderBtEquityChart());
       }
       this.$nextTick(() => {
@@ -3408,10 +3409,10 @@ function app() {
       this.btLoading = true;
       this.btError = '';
       this.btResult = null;
-      if (this._btChart) {
-        this._btChart.remove();
-        this._btChart = null;
-      }
+      if (this._btBarChart) this._btBarChart.remove();
+      if (this._btLineChart) this._btLineChart.remove();
+      this._btBarChart = null;
+      this._btLineChart = null;
       try {
         const params = new URLSearchParams({
           from: this.btFrom,
@@ -3443,62 +3444,435 @@ function app() {
     },
 
     renderBtEquityChart() {
-      const el = this.$refs.btEquityChart;
-      if (!el || !this.btResult?.series?.length) return;
-      if (this._btChart) {
-        this._btChart.remove();
-        this._btChart = null;
-      }
+      const barEl = this.$refs.btMonthlyBarChart;
+      const lineEl = this.$refs.btMonthlyLineChart;
+      if (!barEl || !lineEl || !this.btResult?.series?.length) return;
+      if (this._btBarChart) this._btBarChart.remove();
+      if (this._btLineChart) this._btLineChart.remove();
+      this._btBarChart = null;
+      this._btLineChart = null;
       const dark = this.darkMode;
-      const chart = LightweightCharts.createChart(el, {
-        width: el.clientWidth,
-        height: 200,
-        layout: {
-          background: { color: dark ? '#09090b' : '#ffffff' },
-          textColor: dark ? '#71717a' : '#64748b',
-          fontFamily: 'Inter, system-ui, sans-serif',
-          fontSize: 11,
-        },
-        grid: {
-          vertLines: { color: dark ? '#27272a' : '#f1f5f9' },
-          horzLines: { color: dark ? '#27272a' : '#f1f5f9' },
-        },
-        rightPriceScale: { visible: true, minimumWidth: 56 },
-        timeScale: {
-          borderColor: dark ? '#3f3f46' : '#e2e8f0',
-          fixRightEdge: true,
-        },
-        localization: {
-          priceFormatter: (p) => (p >= 0 ? '+' : '') + p.toFixed(2),
-        },
-        handleScroll: true,
-        handleScale: true,
-      });
-      for (const s of this.btResult.series) {
-        const line = chart.addLineSeries({
-          color: s.color,
-          lineWidth: 2,
-          title: s.label,
-          priceLineVisible: false,
-          lastValueVisible: true,
-          crosshairMarkerVisible: true,
-        });
-        const equityData = (Array.isArray(s.equity) ? s.equity : [])
-          .map((e) => ({
-            time: typeof e?.date === 'string' ? e.date : String(e?.date ?? ''),
-            value: Number(e?.value),
-          }))
-          .filter(
-            (p) =>
-              p.time &&
-              p.time !== 'null' &&
-              p.time !== 'undefined' &&
-              Number.isFinite(p.value),
-          );
-        line.setData(equityData);
+      const seriesArr = this.btResult.series;
+
+      const monthSet = new Set();
+      for (const s of seriesArr) {
+        for (const m of Array.isArray(s.monthly) ? s.monthly : []) {
+          if (typeof m?.month === 'string' && m.month) monthSet.add(m.month);
+        }
       }
-      chart.timeScale().fitContent();
-      this._btChart = chart;
+      const months = [...monthSet].sort((a, b) => a.localeCompare(b));
+
+      const textClr = dark ? '#a1a1aa' : '#64748b';
+      const gridClr = dark ? '#27272a' : '#e5e7eb';
+      const bgClr = dark ? '#09090b' : '#ffffff';
+      const labelClr = dark ? '#d4d4d8' : '#374151';
+      const font = (sz) => `${sz}px system-ui,sans-serif`;
+
+      // Helper: draw a rounded rect (for envs that may not have ctx.roundRect)
+      function roundRect(ctx, x, y, w, h, r) {
+        if (w < 0) {
+          x += w;
+          w = -w;
+        }
+        if (h < 0) {
+          y += h;
+          h = -h;
+        }
+        r = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h);
+        ctx.arcTo(x, y + h, x, y + h - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+      }
+
+      function makeCanvas(el, W, H) {
+        const dpr = window.devicePixelRatio || 1;
+        el.innerHTML = '';
+        const canvas = document.createElement('canvas');
+        canvas.style.cssText = `width:${W}px;height:${H}px;display:block`;
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
+        el.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return ctx;
+      }
+
+      // shared: draw legend rows inside canvas (bottom-left)
+      const drawLegend = (ctx, W, H, legendTop) => {
+        const rowH = 16,
+          swW = 14,
+          swH = 9,
+          padL = 10;
+        for (let si = 0; si < seriesArr.length; si++) {
+          const cy = legendTop + si * rowH + rowH / 2;
+          ctx.fillStyle = seriesArr[si].color;
+          roundRect(ctx, padL, cy - swH / 2, swW, swH, 2);
+          ctx.fill();
+          ctx.fillStyle = textClr;
+          ctx.font = font(10);
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(seriesArr[si].label, padL + swW + 5, cy);
+        }
+      };
+
+      // ── 1. Grouped bar chart — Canvas 2D, pannable ───────────────────────
+      {
+        const W = barEl.clientWidth || 400;
+        const H = barEl.clientHeight || W;
+        const nS = seriesArr.length;
+        const nM = months.length;
+        const legendH = nS * 16 + 8;
+
+        const allData = seriesArr.map((s) => {
+          const byM = new Map(
+            (Array.isArray(s.monthly) ? s.monthly : []).map((m) => [
+              m.month,
+              +m.net,
+            ]),
+          );
+          return months.map((mo) => byM.get(mo) ?? 0);
+        });
+
+        let minVal = 0,
+          maxVal = 0;
+        for (const arr of allData)
+          for (const v of arr) {
+            if (v < minVal) minVal = v;
+            if (v > maxVal) maxVal = v;
+          }
+        const yPad = (maxVal - minVal) * 0.2 || 10;
+        const yMin = minVal - yPad;
+        const yMax = maxVal + yPad * 1.5;
+
+        const pL = 8,
+          pR = 52,
+          pT = 10,
+          pB = 26 + legendH;
+        const cH = H - pT - pB;
+        const visW = W - pL - pR; // visible data area width
+        const MIN_GROUP_W = 80; // min px per month group when panning
+        const groupW = Math.max(visW / nM, MIN_GROUP_W);
+        const innerFrac = Math.min(0.75, 0.55 + 0.06 * nM);
+        const innerW = groupW * innerFrac;
+        const barW = innerW / nS;
+        const maxScrollPx = Math.max(0, nM * groupW - visW);
+        let scrollPx = maxScrollPx; // start scrolled to rightmost month
+        const canPan = maxScrollPx > 0;
+
+        const toY = (v) => pT + cH * (1 - (v - yMin) / (yMax - yMin));
+        const zeroY = Math.max(pT, Math.min(pT + cH, toY(0)));
+
+        // Canvas setup (full size, fixed — bars shift via scrollPx)
+        barEl.innerHTML = '';
+        const dpr = window.devicePixelRatio || 1;
+        const canvas = document.createElement('canvas');
+        canvas.style.cssText = `width:${W}px;height:${H}px;display:block;${canPan ? 'cursor:grab' : ''}`;
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
+        barEl.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const redraw = () => {
+          ctx.clearRect(0, 0, W, H);
+          ctx.fillStyle = bgClr;
+          ctx.fillRect(0, 0, W, H);
+
+          // Clip to data area (left of y-axis)
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 0, W - pR, H);
+          ctx.clip();
+
+          // Horizontal grid lines (drawn across data area)
+          for (let i = 0; i <= 5; i++) {
+            const v = yMin + ((yMax - yMin) * i) / 5;
+            const y = toY(v);
+            ctx.strokeStyle = gridClr;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(pL, y);
+            ctx.lineTo(W - pR, y);
+            ctx.stroke();
+          }
+          // Zero line
+          ctx.strokeStyle = dark ? '#52525b' : '#9ca3af';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(pL, zeroY);
+          ctx.lineTo(W - pR, zeroY);
+          ctx.stroke();
+
+          // Bars + x-labels (shifted by scrollPx)
+          for (let mi = 0; mi < nM; mi++) {
+            const groupX = pL + mi * groupW - scrollPx + (groupW - innerW) / 2;
+            if (groupX + innerW < pL || groupX > W - pR) continue; // off-screen
+            for (let si = 0; si < nS; si++) {
+              const v = allData[si][mi];
+              const bTop = v >= 0 ? toY(v) : zeroY;
+              const bH = Math.abs(toY(v) - zeroY);
+              if (bH < 0.5) continue;
+              const r = Math.min(4, barW * 0.2, bH * 0.35);
+              ctx.fillStyle = seriesArr[si].color;
+              roundRect(ctx, groupX + si * barW + 0.5, bTop, barW - 1, bH, r);
+              ctx.fill();
+              ctx.fillStyle = labelClr;
+              ctx.font = `bold ${Math.max(9, Math.min(11, barW * 0.7))}px system-ui,sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = v >= 0 ? 'bottom' : 'top';
+              ctx.fillText(
+                v.toFixed(0),
+                groupX + si * barW + barW / 2,
+                v >= 0 ? bTop - 2 : bTop + bH + 2,
+              );
+            }
+            const [yr, mo] = months[mi].split('-');
+            ctx.fillStyle = textClr;
+            ctx.font = font(10);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(
+              mo + '/' + yr.slice(2),
+              groupX + innerW / 2,
+              pT + cH + 6,
+            );
+          }
+          ctx.restore();
+
+          // Y-axis (fixed right, always redrawn on top)
+          ctx.fillStyle = bgClr;
+          ctx.fillRect(W - pR, pT, pR, cH); // clear bg behind axis
+          for (let i = 0; i <= 5; i++) {
+            const v = yMin + ((yMax - yMin) * i) / 5;
+            ctx.fillStyle = textClr;
+            ctx.font = font(10);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(v.toFixed(0), W - pR + 4, toY(v));
+          }
+
+          // Scroll hint arrows
+          if (canPan) {
+            const arrowAlpha = 0.45;
+            ctx.font = `bold 14px system-ui`;
+            ctx.fillStyle = dark
+              ? `rgba(161,161,170,${arrowAlpha})`
+              : `rgba(100,116,139,${arrowAlpha})`;
+            ctx.textBaseline = 'middle';
+            if (scrollPx > 1) {
+              ctx.textAlign = 'left';
+              ctx.fillText('◀', pL + 2, pT + cH / 2);
+            }
+            if (scrollPx < maxScrollPx - 1) {
+              ctx.textAlign = 'right';
+              ctx.fillText('▶', W - pR - 2, pT + cH / 2);
+            }
+          }
+
+          // Legend
+          drawLegend(ctx, W, H, H - legendH + 2);
+        };
+
+        redraw();
+
+        // Pointer drag to pan
+        if (canPan) {
+          let drag = null;
+          canvas.addEventListener('pointerdown', (e) => {
+            drag = { x: e.clientX, startScroll: scrollPx };
+            canvas.setPointerCapture(e.pointerId);
+            canvas.style.cursor = 'grabbing';
+          });
+          canvas.addEventListener('pointermove', (e) => {
+            if (!drag) return;
+            scrollPx = Math.max(
+              0,
+              Math.min(maxScrollPx, drag.startScroll - (e.clientX - drag.x)),
+            );
+            redraw();
+          });
+          const endDrag = () => {
+            drag = null;
+            canvas.style.cursor = 'grab';
+          };
+          canvas.addEventListener('pointerup', endDrag);
+          canvas.addEventListener('pointercancel', endDrag);
+        }
+
+        this._btBarChart = {
+          remove: () => {
+            barEl.innerHTML = '';
+          },
+        };
+      }
+
+      // ── 2. Cumulative line chart — Canvas 2D, pannable ───────────────────
+      {
+        const W = lineEl.clientWidth || 400;
+        const H = lineEl.clientHeight || W;
+        const nS = seriesArr.length;
+        const nM = months.length;
+        const legendH = nS * 16 + 8;
+        lineEl.innerHTML = '';
+
+        const cumData = seriesArr.map((s) => {
+          const byMonth = new Map(
+            (Array.isArray(s.monthly) ? s.monthly : [])
+              .filter((m) => typeof m?.month === 'string')
+              .map((m) => [m.month, Number(m.net)]),
+          );
+          let cum = 0;
+          return months.map((mo) => {
+            const net = byMonth.get(mo);
+            if (Number.isFinite(net)) cum += net;
+            return Number(cum.toFixed(2));
+          });
+        });
+
+        const allVals = cumData.flat();
+        const minVal = Math.min(...allVals), maxVal = Math.max(...allVals);
+        const yPad = (maxVal - minVal) * 0.15 || 50;
+        const yMin = minVal - yPad, yMax = maxVal + yPad;
+
+        const pL = 8, pR = 52, pT = 10, pB = 26 + legendH;
+        const cH = H - pT - pB;
+        const visW = W - pL - pR;
+        const MIN_STEP = 60;                   // min px between month points
+        const step = Math.max(visW / Math.max(nM - 1, 1), MIN_STEP);
+        const totalW = step * (nM - 1);
+        const maxScrollPx = Math.max(0, totalW - visW);
+        let scrollPx = maxScrollPx;            // start at newest (rightmost)
+        const canPan = maxScrollPx > 0;
+
+        const toX = (i) => pL + i * step - scrollPx;
+        const toY = (v) => pT + cH * (1 - (v - yMin) / (yMax - yMin));
+
+        // Canvas setup
+        const dpr = window.devicePixelRatio || 1;
+        const canvas = document.createElement('canvas');
+        canvas.style.cssText = `width:${W}px;height:${H}px;display:block;${canPan ? 'cursor:grab' : ''}`;
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
+        lineEl.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const redraw = () => {
+          ctx.clearRect(0, 0, W, H);
+          ctx.fillStyle = bgClr;
+          ctx.fillRect(0, 0, W, H);
+
+          // Clip to data area
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 0, W - pR, H);
+          ctx.clip();
+
+          // Grid lines
+          for (let i = 0; i <= 5; i++) {
+            const v = yMin + (yMax - yMin) * i / 5;
+            const y = toY(v);
+            ctx.strokeStyle = gridClr; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(pL, y); ctx.lineTo(W - pR, y); ctx.stroke();
+          }
+
+          // X-axis labels (skip if too crowded)
+          for (let i = 0; i < nM; i++) {
+            const x = toX(i);
+            if (x < pL - 20 || x > W - pR + 20) continue;
+            const [yr, mo] = months[i].split('-');
+            ctx.fillStyle = textClr; ctx.font = font(10);
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            ctx.fillText(mo + '/' + yr.slice(2), x, pT + cH + 6);
+          }
+
+          // Lines + dots per series
+          for (let si = 0; si < nS; si++) {
+            const color = seriesArr[si].color;
+            const pts = cumData[si];
+
+            ctx.strokeStyle = color; ctx.lineWidth = 2;
+            ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+            ctx.beginPath();
+            let started = false;
+            for (let i = 0; i < nM; i++) {
+              const x = toX(i), y = toY(pts[i]);
+              if (!started) { ctx.moveTo(x, y); started = true; }
+              else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            for (let i = 0; i < nM; i++) {
+              const x = toX(i);
+              if (x < pL - 8 || x > W - pR + 8) continue;
+              const y = toY(pts[i]);
+              ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+              ctx.fillStyle = bgClr; ctx.fill();
+              ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+            }
+          }
+
+          ctx.restore();
+
+          // Y-axis labels (fixed right)
+          ctx.fillStyle = bgClr;
+          ctx.fillRect(W - pR, pT, pR, cH);
+          for (let i = 0; i <= 5; i++) {
+            const v = yMin + (yMax - yMin) * i / 5;
+            ctx.fillStyle = textClr; ctx.font = font(10);
+            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            ctx.fillText(v.toFixed(0), W - pR + 4, toY(v));
+          }
+
+          // Pan hint arrows
+          if (canPan) {
+            const alpha = 0.45;
+            ctx.font = `bold 14px system-ui`;
+            ctx.fillStyle = dark ? `rgba(161,161,170,${alpha})` : `rgba(100,116,139,${alpha})`;
+            ctx.textBaseline = 'middle';
+            if (scrollPx > 1) {
+              ctx.textAlign = 'left'; ctx.fillText('◀', pL + 2, pT + cH / 2);
+            }
+            if (scrollPx < maxScrollPx - 1) {
+              ctx.textAlign = 'right'; ctx.fillText('▶', W - pR - 2, pT + cH / 2);
+            }
+          }
+
+          // Legend
+          drawLegend(ctx, W, H, H - legendH + 2);
+        };
+
+        redraw();
+
+        // Pointer drag to pan
+        if (canPan) {
+          let drag = null;
+          canvas.addEventListener('pointerdown', (e) => {
+            drag = { x: e.clientX, startScroll: scrollPx };
+            canvas.setPointerCapture(e.pointerId);
+            canvas.style.cursor = 'grabbing';
+          });
+          canvas.addEventListener('pointermove', (e) => {
+            if (!drag) return;
+            scrollPx = Math.max(0, Math.min(maxScrollPx, drag.startScroll - (e.clientX - drag.x)));
+            redraw();
+          });
+          const endDrag = () => { drag = null; canvas.style.cursor = 'grab'; };
+          canvas.addEventListener('pointerup', endDrag);
+          canvas.addEventListener('pointercancel', endDrag);
+        }
+
+        this._btLineChart = { remove: () => { lineEl.innerHTML = ''; } };
+      }
     },
 
     async loadMarketCharts(opts = {}) {

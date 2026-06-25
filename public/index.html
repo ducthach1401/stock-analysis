@@ -41,14 +41,14 @@
       tailwind.config = { darkMode: 'class' };
     </script>
     <script src="/vendor/tailwindcss-3.4.17.js"></script>
-    <script
-      src="/vendor/alpinejs-3.x.x.min.js"
-      defer
-    ></script>
+    <script src="/vendor/alpinejs-3.x.x.min.js" defer></script>
     <script src="/vendor/lightweight-charts-4.2.0.standalone.production.js"></script>
     <link rel="stylesheet" href="/css/app.css" />
   </head>
-  <body class="notranslate min-h-screen safe-pb touch-manipulation" translate="no">
+  <body
+    class="notranslate min-h-screen safe-pb touch-manipulation"
+    translate="no"
+  >
     <!-- PWA: phủ toàn màn — Android: beforeinstallprompt; iOS: Web Share + hướng dẫn theo Safari/Chrome/Firefox/Edge/Opera -->
     <div
       x-show="pwaMandatoryGate"
@@ -89,10 +89,9 @@
             </h1>
             <p class="pwa-copy text-sm mt-2 leading-relaxed px-1">
               Cài PWA để giao diện gọn và mở nhanh hơn. Bạn có thể
-              <strong>bỏ qua</strong> và dùng trên trình
-              duyệt. Sau khi cài,
-              <strong>mở từ icon</strong> màn hình chính
-              để có trải nghiệm đầy đủ.
+              <strong>bỏ qua</strong> và dùng trên trình duyệt. Sau khi cài,
+              <strong>mở từ icon</strong> màn hình chính để có trải nghiệm đầy
+              đủ.
             </p>
           </div>
         </div>
@@ -401,7 +400,10 @@
               class="app-nav-button px-2.5 sm:px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap"
               :title="t.label"
             >
-              <span x-html="t.icon" class="app-nav-icon w-4 h-4 shrink-0"></span>
+              <span
+                x-html="t.icon"
+                class="app-nav-icon w-4 h-4 shrink-0"
+              ></span>
               <span class="hidden sm:inline" x-text="t.label"></span>
             </button>
           </template>
@@ -1572,10 +1574,13 @@
               <h2 class="font-semibold text-gray-900 dark:text-zinc-100">
                 📉 Phái sinh VN30
               </h2>
-              <p class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl">
-                Dùng dữ liệu chỉ số <b>VN30</b> để quét <b>LONG/SHORT/NO_TRADE</b>
-                mỗi 5 phút trong phiên. Kéo trái để nạp thêm lịch sử nến;
-                quyết định được lưu để review P/L.
+              <p
+                class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl"
+              >
+                Dùng dữ liệu chỉ số <b>VN30</b> để quét
+                <b>LONG/SHORT/NO_TRADE</b>
+                mỗi 5 phút trong phiên. Kéo trái để nạp thêm lịch sử nến; quyết
+                định được lưu để review P/L.
               </p>
             </div>
           </div>
@@ -1585,7 +1590,9 @@
               class="rounded-xl border p-4 sm:p-5 w-full deriv-history-card deriv-history-sidebar"
               style="border-color: var(--border); background: var(--bg-raised)"
             >
-              <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div
+                class="flex flex-wrap items-center justify-between gap-2 mb-2"
+              >
                 <h3 class="text-sm font-bold text-gray-900 dark:text-zinc-100">
                   Lịch sử quyết định phái sinh
                 </h3>
@@ -1605,14 +1612,22 @@
               <p class="text-xs text-gray-500 mb-2">
                 Feed quyết định 5 phút gần nhất của hệ thống.
                 <span x-show="isAdmin" class="text-gray-400 dark:text-zinc-500"
-                  >Admin: <b>Đồng bộ ~1 tháng</b> nằm cạnh nút <b>Làm mới</b> phía
-                  trên chart — kéo nến <b>ngày</b> <b>VNINDEX + VN30</b> vào DB +
-                  phân tích market; chart intraday vẫn lấy Entrade khi làm mới
-                  chart.</span
+                  >Admin: <b>Đồng bộ ~1 tháng</b> nằm cạnh nút
+                  <b>Làm mới</b> phía trên chart — kéo nến <b>ngày</b>
+                  <b>VNINDEX + VN30</b> vào DB + phân tích market; chart
+                  intraday vẫn lấy Entrade khi làm mới chart.</span
                 >
               </p>
-              <div class="rounded-lg border p-2.5 mb-2.5" style="border-color: var(--border-sub); background: var(--bg-card)">
-                <p class="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-2">
+              <div
+                class="rounded-lg border p-2.5 mb-2.5"
+                style="
+                  border-color: var(--border-sub);
+                  background: var(--bg-card);
+                "
+              >
+                <p
+                  class="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-2"
+                >
                   Lịch sử quyết định phái sinh
                 </p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2.5">
@@ -1622,7 +1637,10 @@
                       type="date"
                       x-model="derivFilterDate"
                       class="mt-1 w-full rounded-lg border px-2 py-1.5 text-xs"
-                      style="border-color: var(--border-sub); background: var(--bg-card)"
+                      style="
+                        border-color: var(--border-sub);
+                        background: var(--bg-card);
+                      "
                     />
                   </label>
                   <label class="text-[11px] text-gray-500 dark:text-zinc-400">
@@ -1631,7 +1649,10 @@
                       type="month"
                       x-model="derivFilterMonth"
                       class="mt-1 w-full rounded-lg border px-2 py-1.5 text-xs"
-                      style="border-color: var(--border-sub); background: var(--bg-card)"
+                      style="
+                        border-color: var(--border-sub);
+                        background: var(--bg-card);
+                      "
                     />
                   </label>
                 </div>
@@ -1639,15 +1660,17 @@
                   x-show="derivFilteredHistory().length"
                   class="space-y-2 pr-1 deriv-history-list"
                 >
-                  <template
-                    x-for="d in derivFilteredHistory()"
-                    :key="d.id"
-                  >
+                  <template x-for="d in derivFilteredHistory()" :key="d.id">
                     <div
                       class="text-xs rounded-lg border p-2.5 deriv-history-item"
-                      style="border-color: var(--border-sub); background: var(--bg-card)"
+                      style="
+                        border-color: var(--border-sub);
+                        background: var(--bg-card);
+                      "
                     >
-                      <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div
+                        class="flex flex-wrap items-center justify-between gap-2"
+                      >
                         <div class="flex flex-wrap items-center gap-2">
                           <span
                             class="font-mono px-2 py-0.5 rounded-full border"
@@ -1676,17 +1699,27 @@
                             x-text="d.outcome || (d.status === 'OPEN' ? 'OPEN' : '-')"
                           ></span>
                           <span x-show="d.pnlPoints != null">
-                            · <span x-text="fmtDerivPoints(d.pnlPoints)"></span> điểm
+                            ·
+                            <span x-text="fmtDerivPoints(d.pnlPoints)"></span>
+                            điểm
                           </span>
                         </div>
                       </div>
                       <div
                         class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px] text-gray-500 dark:text-zinc-400"
                       >
-                        <span>Entry <b x-text="fmtDerivPoints(d.entryPrice)"></b></span>
-                        <span>SL <b x-text="fmtDerivPoints(d.stopLoss)"></b></span>
-                        <span>TP <b x-text="fmtDerivPoints(d.takeProfit)"></b></span>
-                        <span>Exit <b x-text="fmtDerivPoints(d.exitPrice)"></b></span>
+                        <span
+                          >Entry <b x-text="fmtDerivPoints(d.entryPrice)"></b
+                        ></span>
+                        <span
+                          >SL <b x-text="fmtDerivPoints(d.stopLoss)"></b
+                        ></span>
+                        <span
+                          >TP <b x-text="fmtDerivPoints(d.takeProfit)"></b
+                        ></span>
+                        <span
+                          >Exit <b x-text="fmtDerivPoints(d.exitPrice)"></b
+                        ></span>
                       </div>
                       <p
                         class="mt-1.5 text-[11px] text-gray-500 dark:text-zinc-500 line-clamp-1"
@@ -1702,7 +1735,6 @@
                   Không có quyết định trong bộ lọc hiện tại.
                 </p>
               </div>
-
             </aside>
 
             <div
@@ -1712,348 +1744,443 @@
               <div
                 class="flex flex-wrap items-baseline justify-between gap-2.5 mb-3"
               >
-              <div>
-                <h3 class="text-lg font-bold text-gray-900 dark:text-zinc-100">
-                  VN30 Intraday Desk
-                </h3>
-                <p class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl">
-                  Khung <b>5m · 15m · 1H</b>, chart tự làm mới trong phiên.
-                </p>
-              </div>
-              <div class="flex flex-wrap items-center gap-1.5 shrink-0 deriv-toolbar">
-                <button
-                  type="button"
-                  @click="setDerivResolution('5')"
-                  :disabled="derivLoading"
-                  class="text-xs px-2.5 py-1.5 rounded-lg deriv-chip-btn"
-                  :class="derivResolution === '5' ? 'btn-primary' : 'btn-secondary'"
-                >
-                  5m
-                </button>
-                <button
-                  type="button"
-                  @click="setDerivResolution('15')"
-                  :disabled="derivLoading"
-                  class="text-xs px-2.5 py-1.5 rounded-lg deriv-chip-btn"
-                  :class="derivResolution === '15' ? 'btn-primary' : 'btn-secondary'"
-                >
-                  15m
-                </button>
-                <button
-                  type="button"
-                  @click="setDerivResolution('1H')"
-                  :disabled="derivLoading"
-                  class="text-xs px-2.5 py-1.5 rounded-lg deriv-chip-btn"
-                  :class="derivResolution === '1H' ? 'btn-primary' : 'btn-secondary'"
-                >
-                  1H
-                </button>
-                <button
-                  type="button"
-                  @click="loadDerivIntraday({ reset: true })"
-                  :disabled="derivLoading"
-                  class="btn-secondary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
-                >
-                  <svg
-                    :class="derivLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                <div>
+                  <h3
+                    class="text-lg font-bold text-gray-900 dark:text-zinc-100"
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  Làm mới
-                </button>
-                <button
-                  type="button"
-                  x-show="isAdmin"
-                  @click="runDerivManualScan()"
-                  :disabled="derivDecisionScanLoading"
-                  class="btn-primary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
-                  title="Quét VN30 5m ngay và gửi Telegram nếu có thay đổi quyết định"
-                >
-                  <svg
-                    :class="derivDecisionScanLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
-                    />
-                  </svg>
-                  Quét ngay
-                </button>
-                <button
-                  type="button"
-                  x-show="isAdmin"
-                  @click="syncIndicesOneMonthAndReload()"
-                  :disabled="derivLoading || derivSyncMonthLoading"
-                  class="btn-primary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
-                  title="Đồng bộ nến ngày VNINDEX + VN30 ~1 tháng vào DB + phân tích tín hiệu (admin)"
-                >
-                  <svg
-                    :class="derivSyncMonthLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  Đồng bộ ~1 tháng
-                </button>
-              </div>
-            </div>
-            <div
-              x-show="derivLoading"
-              class="text-sm text-indigo-600 dark:text-indigo-400 py-8 text-center"
-            >
-              Đang tải nến VN30…
-            </div>
-            <div
-              x-show="!derivLoading && !derivBars.length"
-              class="text-sm text-amber-700 dark:text-amber-400/90 py-6 leading-relaxed"
-            >
-              Chưa có dữ liệu nến. Bấm <b>Làm mới</b> hoặc kiểm tra kết nối /
-              API chỉ số.
-            </div>
-            <div x-show="!derivLoading && derivBars.length" class="space-y-3">
-              <div
-                class="flex items-center justify-end gap-2 text-xs text-gray-400 font-mono px-0.5"
-              >
-                <span
-                  class="text-indigo-600 dark:text-indigo-400"
-                  x-show="derivOlderLoading"
-                  >Đang tải thêm…</span
-                >
-                <span
-                  x-show="derivBars.length"
-                  x-text="derivBars.length + ' nến'"
-                ></span>
-              </div>
-              <div
-                x-show="derivAnalysis && !derivLoading"
-                class="text-xs space-y-2.5 rounded-xl border p-3 mb-1 shadow-sm deriv-decision-card"
-                style="border-color: var(--border); background: var(--bg-card)"
-              >
-                <template x-if="derivAnalysis && derivAnalysis.short">
+                    VN30 Intraday Desk
+                  </h3>
                   <p
-                    class="text-amber-800 dark:text-amber-300/90 leading-relaxed"
-                    x-text="derivAnalysis.short"
-                  ></p>
-                </template>
-                <template x-if="derivAnalysis && !derivAnalysis.short">
-                  <div
-                    class="space-y-3 leading-relaxed"
-                    style="color: var(--text-2)"
+                    class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl"
                   >
+                    Khung <b>5m · 15m · 1H</b>, chart tự làm mới trong phiên.
+                  </p>
+                </div>
+                <div
+                  class="flex flex-wrap items-center gap-1.5 shrink-0 deriv-toolbar"
+                >
+                  <button
+                    type="button"
+                    @click="setDerivResolution('5')"
+                    :disabled="derivLoading"
+                    class="text-xs px-2.5 py-1.5 rounded-lg deriv-chip-btn"
+                    :class="derivResolution === '5' ? 'btn-primary' : 'btn-secondary'"
+                  >
+                    5m
+                  </button>
+                  <button
+                    type="button"
+                    @click="setDerivResolution('15')"
+                    :disabled="derivLoading"
+                    class="text-xs px-2.5 py-1.5 rounded-lg deriv-chip-btn"
+                    :class="derivResolution === '15' ? 'btn-primary' : 'btn-secondary'"
+                  >
+                    15m
+                  </button>
+                  <button
+                    type="button"
+                    @click="setDerivResolution('1H')"
+                    :disabled="derivLoading"
+                    class="text-xs px-2.5 py-1.5 rounded-lg deriv-chip-btn"
+                    :class="derivResolution === '1H' ? 'btn-primary' : 'btn-secondary'"
+                  >
+                    1H
+                  </button>
+                  <button
+                    type="button"
+                    @click="loadDerivIntraday({ reset: true })"
+                    :disabled="derivLoading"
+                    class="btn-secondary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
+                  >
+                    <svg
+                      :class="derivLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Làm mới
+                  </button>
+                  <button
+                    type="button"
+                    x-show="isAdmin"
+                    @click="runDerivManualScan()"
+                    :disabled="derivDecisionScanLoading"
+                    class="btn-primary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
+                    title="Quét VN30 5m ngay và gửi Telegram nếu có thay đổi quyết định"
+                  >
+                    <svg
+                      :class="derivDecisionScanLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      />
+                    </svg>
+                    Quét ngay
+                  </button>
+                  <button
+                    type="button"
+                    x-show="isAdmin"
+                    @click="syncIndicesOneMonthAndReload()"
+                    :disabled="derivLoading || derivSyncMonthLoading"
+                    class="btn-primary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
+                    title="Đồng bộ nến ngày VNINDEX + VN30 ~1 tháng vào DB + phân tích tín hiệu (admin)"
+                  >
+                    <svg
+                      :class="derivSyncMonthLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Đồng bộ ~1 tháng
+                  </button>
+                </div>
+              </div>
+              <div
+                x-show="derivLoading"
+                class="text-sm text-indigo-600 dark:text-indigo-400 py-8 text-center"
+              >
+                Đang tải nến VN30…
+              </div>
+              <div
+                x-show="!derivLoading && !derivBars.length"
+                class="text-sm text-amber-700 dark:text-amber-400/90 py-6 leading-relaxed"
+              >
+                Chưa có dữ liệu nến. Bấm <b>Làm mới</b> hoặc kiểm tra kết nối /
+                API chỉ số.
+              </div>
+              <div x-show="!derivLoading && derivBars.length" class="space-y-3">
+                <div
+                  class="flex items-center justify-end gap-2 text-xs text-gray-400 font-mono px-0.5"
+                >
+                  <span
+                    class="text-indigo-600 dark:text-indigo-400"
+                    x-show="derivOlderLoading"
+                    >Đang tải thêm…</span
+                  >
+                  <span
+                    x-show="derivBars.length"
+                    x-text="derivBars.length + ' nến'"
+                  ></span>
+                </div>
+                <div
+                  x-show="derivAnalysis && !derivLoading"
+                  class="text-xs space-y-2.5 rounded-xl border p-3 mb-1 shadow-sm deriv-decision-card"
+                  style="
+                    border-color: var(--border);
+                    background: var(--bg-card);
+                  "
+                >
+                  <template x-if="derivAnalysis && derivAnalysis.short">
+                    <p
+                      class="text-amber-800 dark:text-amber-300/90 leading-relaxed"
+                      x-text="derivAnalysis.short"
+                    ></p>
+                  </template>
+                  <template x-if="derivAnalysis && !derivAnalysis.short">
                     <div
-                      class="rounded-xl p-3 border"
-                      :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/10 border-emerald-500/30' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-gray-500/5 border-gray-400/30 dark:border-zinc-600')"
+                      class="space-y-3 leading-relaxed"
+                      style="color: var(--text-2)"
                     >
                       <div
-                        class="font-semibold mb-2 flex flex-wrap items-center justify-between gap-2"
-                        :class="derivAnalysis.bias === 'long' ? 'text-emerald-800 dark:text-emerald-300' : (derivAnalysis.bias === 'short' ? 'text-rose-800 dark:text-rose-300' : 'text-gray-700 dark:text-zinc-300')"
+                        class="rounded-xl p-3 border"
+                        :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/10 border-emerald-500/30' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-gray-500/5 border-gray-400/30 dark:border-zinc-600')"
                       >
-                        <span>Quyết định server (VN30 5m):</span>
-                        <span
-                          class="font-mono px-2.5 py-1 rounded-full text-sm border"
-                          :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/20' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/20' : 'bg-gray-500/15')"
-                          x-text="derivAnalysis.biasLabelVi"
-                        ></span>
-                      </div>
-                      <div
-                        class="mb-2 rounded-lg border px-2 py-1.5 text-[11px] bg-white/60 dark:bg-black/15"
-                        style="border-color: var(--border-sub)"
-                      >
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-gray-500 dark:text-zinc-400">Trạng thái lệnh</span>
+                        <div
+                          class="font-semibold mb-2 flex flex-wrap items-center justify-between gap-2"
+                          :class="derivAnalysis.bias === 'long' ? 'text-emerald-800 dark:text-emerald-300' : (derivAnalysis.bias === 'short' ? 'text-rose-800 dark:text-rose-300' : 'text-gray-700 dark:text-zinc-300')"
+                        >
+                          <span>Quyết định server (VN30 5m):</span>
                           <span
-                            class="font-mono font-semibold px-2 py-0.5 rounded-md border"
-                            :class="derivDecisionLatest?.status === 'OPEN'
+                            class="font-mono px-2.5 py-1 rounded-full text-sm border"
+                            :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/20' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/20' : 'bg-gray-500/15')"
+                            x-text="derivAnalysis.biasLabelVi"
+                          ></span>
+                        </div>
+                        <div
+                          class="mb-2 rounded-lg border px-2 py-1.5 text-[11px] bg-white/60 dark:bg-black/15"
+                          style="border-color: var(--border-sub)"
+                        >
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-gray-500 dark:text-zinc-400"
+                              >Trạng thái lệnh</span
+                            >
+                            <span
+                              class="font-mono font-semibold px-2 py-0.5 rounded-md border"
+                              :class="derivDecisionLatest?.status === 'OPEN'
                               ? 'text-sky-700 border-sky-400/40 bg-sky-500/10 dark:text-sky-300'
                               : 'text-gray-600 border-gray-400/40 bg-gray-500/10 dark:text-zinc-300'"
-                            x-text="derivDecisionLatest?.status === 'OPEN' ? 'ĐANG MỞ' : 'ĐÃ ĐÓNG'"
-                          ></span>
+                              x-text="derivDecisionLatest?.status === 'OPEN' ? 'ĐANG MỞ' : 'ĐÃ ĐÓNG'"
+                            ></span>
+                          </div>
+                          <div
+                            x-show="derivDecisionLatest?.status === 'OPEN'"
+                            class="mt-1 flex items-center justify-between gap-2"
+                          >
+                            <span class="text-gray-500 dark:text-zinc-400"
+                              >P/L hiện tại</span
+                            >
+                            <span
+                              class="font-mono font-semibold"
+                              :class="Number(derivDecisionLatest?.pnlPoints) >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'"
+                              x-text="(Number(derivDecisionLatest?.pnlPoints) >= 0 ? '+' : '') + fmtDerivPoints(derivDecisionLatest?.pnlPoints) + ' điểm'"
+                            ></span>
+                          </div>
+                          <div
+                            x-show="derivDecisionLatest?.status === 'OPEN'"
+                            class="mt-1 flex items-center justify-between gap-2"
+                          >
+                            <span class="text-gray-500 dark:text-zinc-400"
+                              >Điểm hiện tại</span
+                            >
+                            <span
+                              class="font-mono font-semibold text-gray-700 dark:text-zinc-200"
+                              x-text="fmtDerivPoints(derivCurrentPoints(derivDecisionLatest))"
+                            ></span>
+                          </div>
+                          <div
+                            x-show="derivDecisionLatest?.status === 'OPEN'"
+                            class="mt-1 flex items-center justify-between gap-2 text-[10px]"
+                          >
+                            <span class="text-gray-500 dark:text-zinc-400"
+                              >Scan cập nhật P/L</span
+                            >
+                            <span
+                              class="font-mono text-gray-600 dark:text-zinc-300"
+                              x-text="fmtDerivDateTime(derivDecisionLatest?.updatedAt || derivDecisionLatest?.decidedAt)"
+                            ></span>
+                          </div>
                         </div>
                         <div
-                          x-show="derivDecisionLatest?.status === 'OPEN'"
-                          class="mt-1 flex items-center justify-between gap-2"
+                          class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[11px] mb-2"
                         >
-                          <span class="text-gray-500 dark:text-zinc-400">P/L hiện tại</span>
-                          <span
-                            class="font-mono font-semibold"
-                            :class="Number(derivDecisionLatest?.pnlPoints) >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'"
-                            x-text="(Number(derivDecisionLatest?.pnlPoints) >= 0 ? '+' : '') + fmtDerivPoints(derivDecisionLatest?.pnlPoints) + ' điểm'"
-                          ></span>
+                          <div
+                            class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15"
+                          >
+                            <span class="block text-gray-400">Thời điểm</span>
+                            <b
+                              x-text="fmtDerivDateTime(derivAnalysis.decidedAt)"
+                            ></b>
+                          </div>
+                          <div
+                            class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15"
+                          >
+                            <span class="block text-gray-400">Entry</span>
+                            <b
+                              x-text="fmtDerivPoints(derivAnalysis.lastClose)"
+                            ></b>
+                          </div>
+                          <div
+                            class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15"
+                          >
+                            <span class="block text-gray-400">SL</span>
+                            <b x-text="fmtDerivPoints(derivAnalysis.sl)"></b>
+                          </div>
+                          <div
+                            class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15"
+                          >
+                            <span class="block text-gray-400">TP</span>
+                            <b x-text="fmtDerivPoints(derivAnalysis.tp)"></b>
+                          </div>
+                          <div
+                            class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15"
+                          >
+                            <span class="block text-gray-400">Tin cậy</span>
+                            <b
+                              x-text="(derivAnalysis.confidence ?? 0) + '%'"
+                            ></b>
+                          </div>
                         </div>
-                        <div
-                          x-show="derivDecisionLatest?.status === 'OPEN'"
-                          class="mt-1 flex items-center justify-between gap-2"
-                        >
-                          <span class="text-gray-500 dark:text-zinc-400">Điểm hiện tại</span>
-                          <span
-                            class="font-mono font-semibold text-gray-700 dark:text-zinc-200"
-                            x-text="fmtDerivPoints(derivCurrentPoints(derivDecisionLatest))"
-                          ></span>
-                        </div>
-                        <div
-                          x-show="derivDecisionLatest?.status === 'OPEN'"
-                          class="mt-1 flex items-center justify-between gap-2 text-[10px]"
-                        >
-                          <span class="text-gray-500 dark:text-zinc-400">Scan cập nhật P/L</span>
-                          <span
-                            class="font-mono text-gray-600 dark:text-zinc-300"
-                            x-text="fmtDerivDateTime(derivDecisionLatest?.updatedAt || derivDecisionLatest?.decidedAt)"
-                          ></span>
-                        </div>
-                      </div>
-                      <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[11px] mb-2">
-                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
-                          <span class="block text-gray-400">Thời điểm</span>
-                          <b x-text="fmtDerivDateTime(derivAnalysis.decidedAt)"></b>
-                        </div>
-                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
-                          <span class="block text-gray-400">Entry</span>
-                          <b x-text="fmtDerivPoints(derivAnalysis.lastClose)"></b>
-                        </div>
-                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
-                          <span class="block text-gray-400">SL</span>
-                          <b x-text="fmtDerivPoints(derivAnalysis.sl)"></b>
-                        </div>
-                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
-                          <span class="block text-gray-400">TP</span>
-                          <b x-text="fmtDerivPoints(derivAnalysis.tp)"></b>
-                        </div>
-                        <div class="rounded-lg px-2 py-1.5 bg-white/60 dark:bg-black/15">
-                          <span class="block text-gray-400">Tin cậy</span>
-                          <b x-text="(derivAnalysis.confidence ?? 0) + '%'"></b>
-                        </div>
+                        <p
+                          class="text-[11px] text-gray-600 dark:text-zinc-400"
+                          x-text="normalizeViText(derivAnalysis.biasHint)"
+                        ></p>
                       </div>
                       <p
-                        class="text-[11px] text-gray-600 dark:text-zinc-400"
-                        x-text="normalizeViText(derivAnalysis.biasHint)"
-                      ></p>
+                        class="text-[11px] text-gray-400 dark:text-zinc-500 mt-1"
+                      >
+                        Thuật toán duy nhất: EMA9/EMA21 + VWAP + RSI14 + ATR14 +
+                        breakout/volume 5m. SL/TP dùng ATR, chỉ là công cụ hỗ
+                        trợ quyết định, không phải tư vấn đầu tư.
+                      </p>
                     </div>
-                    <p class="text-[11px] text-gray-400 dark:text-zinc-500 mt-1">
-                      Thuật toán duy nhất: EMA9/EMA21 + VWAP + RSI14 + ATR14 +
-                      breakout/volume 5m. SL/TP dùng ATR, chỉ là công cụ hỗ trợ
-                      quyết định, không phải tư vấn đầu tư.
-                    </p>
-                  </div>
-                </template>
-              </div>
-              <div
-                class="rounded-xl border p-3 text-xs mb-1"
-                style="border-color: var(--border); background: var(--bg-card)"
-              >
-                <p class="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-2">
-                  Tổng hợp theo bộ lọc
-                </p>
+                  </template>
+                </div>
                 <div
-                  class="mb-2.5 rounded-lg border px-2.5 py-2 text-xs"
-                  style="border-color: var(--border-sub); background: var(--bg-card)"
+                  class="rounded-xl border p-3 text-xs mb-1"
+                  style="
+                    border-color: var(--border);
+                    background: var(--bg-card);
+                  "
                 >
-                  <div class="flex items-center justify-between gap-2 mb-1">
-                    <span class="text-gray-500 dark:text-zinc-400">Ngày</span>
-                    <b class="font-mono text-gray-700 dark:text-zinc-200" x-text="derivDaySummary().day || vnYmdNow()"></b>
+                  <p
+                    class="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-2"
+                  >
+                    Tổng hợp theo bộ lọc
+                  </p>
+                  <div
+                    class="mb-2.5 rounded-lg border px-2.5 py-2 text-xs"
+                    style="
+                      border-color: var(--border-sub);
+                      background: var(--bg-card);
+                    "
+                  >
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                      <span class="text-gray-500 dark:text-zinc-400">Ngày</span>
+                      <b
+                        class="font-mono text-gray-700 dark:text-zinc-200"
+                        x-text="derivDaySummary().day || vnYmdNow()"
+                      ></b>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-zinc-400"
+                        >Thắng / Thua / Ròng</span
+                      >
+                      <span class="font-mono text-[11px]">
+                        <b
+                          class="text-emerald-700 dark:text-emerald-300"
+                          x-text="'+' + fmtDerivPoints(derivDaySummary().winPoints)"
+                        ></b>
+                        <span class="text-gray-400"> / </span>
+                        <b
+                          class="text-rose-700 dark:text-rose-300"
+                          x-text="'-' + fmtDerivPoints(derivDaySummary().lossPoints)"
+                        ></b>
+                        <span class="text-gray-400"> / </span>
+                        <b
+                          :class="derivDaySummary().netPoints >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'"
+                          x-text="(derivDaySummary().netPoints >= 0 ? '+' : '') + fmtDerivPoints(derivDaySummary().netPoints) + 'đ'"
+                        ></b>
+                      </span>
+                    </div>
+                    <div
+                      class="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-gray-400"
+                    >
+                      <span
+                        x-text="'% lãi/lỗ theo điểm: ' + fmtPct(derivDaySummary().profitSharePct) + ' / ' + fmtPct(derivDaySummary().lossSharePct) + ' · % ròng: ' + fmtPct(derivDaySummary().netPct)"
+                      ></span>
+                      <span
+                        x-text="'Win rate: ' + fmtPct(derivDaySummary().winRatePct) + ' · Loss rate: ' + fmtPct(derivDaySummary().lossRatePct)"
+                      ></span>
+                    </div>
                   </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-gray-500 dark:text-zinc-400">Thắng / Thua / Ròng</span>
-                    <span class="font-mono text-[11px]">
-                      <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(derivDaySummary().winPoints)"></b>
-                      <span class="text-gray-400"> / </span>
-                      <b class="text-rose-700 dark:text-rose-300" x-text="'-' + fmtDerivPoints(derivDaySummary().lossPoints)"></b>
-                      <span class="text-gray-400"> / </span>
-                      <b :class="derivDaySummary().netPoints >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(derivDaySummary().netPoints >= 0 ? '+' : '') + fmtDerivPoints(derivDaySummary().netPoints) + 'đ'"></b>
-                    </span>
-                  </div>
-                  <div class="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-gray-400">
-                    <span x-text="'% lãi/lỗ theo điểm: ' + fmtPct(derivDaySummary().profitSharePct) + ' / ' + fmtPct(derivDaySummary().lossSharePct) + ' · % ròng: ' + fmtPct(derivDaySummary().netPct)"></span>
-                    <span x-text="'Win rate: ' + fmtPct(derivDaySummary().winRatePct) + ' · Loss rate: ' + fmtPct(derivDaySummary().lossRatePct)"></span>
+                  <div
+                    class="rounded-lg border p-2 text-xs"
+                    style="
+                      border-color: var(--border-sub);
+                      background: var(--bg-card);
+                    "
+                  >
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                      <span class="text-gray-500 dark:text-zinc-400"
+                        >Tháng</span
+                      >
+                      <b
+                        class="font-mono text-gray-700 dark:text-zinc-200"
+                        x-text="fmtDerivMonth(derivMonthSummary().month)"
+                      ></b>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-zinc-400"
+                        >Thắng / Thua / Ròng</span
+                      >
+                      <span class="font-mono text-[11px]">
+                        <b
+                          class="text-emerald-700 dark:text-emerald-300"
+                          x-text="'+' + fmtDerivPoints(derivMonthSummary().winPoints)"
+                        ></b>
+                        <span class="text-gray-400"> / </span>
+                        <b
+                          class="text-rose-700 dark:text-rose-300"
+                          x-text="'-' + fmtDerivPoints(derivMonthSummary().lossPoints)"
+                        ></b>
+                        <span class="text-gray-400"> / </span>
+                        <b
+                          :class="derivMonthSummary().netPoints >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'"
+                          x-text="(derivMonthSummary().netPoints >= 0 ? '+' : '') + fmtDerivPoints(derivMonthSummary().netPoints) + 'đ'"
+                        ></b>
+                      </span>
+                    </div>
+                    <div
+                      class="mt-1 flex items-center justify-between text-[10px] text-gray-400"
+                    >
+                      <span
+                        x-text="'% lãi/lỗ: ' + fmtPct(derivMonthSummary().profitSharePct) + ' / ' + fmtPct(derivMonthSummary().lossSharePct) + ' · % ròng: ' + fmtPct(derivMonthSummary().netPct)"
+                      ></span>
+                      <span
+                        x-text="'Win rate: ' + fmtPct(derivMonthSummary().winRatePct) + ' · Loss rate: ' + fmtPct(derivMonthSummary().lossRatePct)"
+                      ></span>
+                    </div>
                   </div>
                 </div>
                 <div
-                  class="rounded-lg border p-2 text-xs"
-                  style="border-color: var(--border-sub); background: var(--bg-card)"
+                  x-show="derivBars.length && !derivLoading"
+                  class="text-xs rounded-lg border p-3 leading-relaxed"
+                  style="
+                    border-color: var(--border);
+                    background: var(--bg-card);
+                  "
                 >
-                  <div class="flex items-center justify-between gap-2 mb-1">
-                    <span class="text-gray-500 dark:text-zinc-400">Tháng</span>
-                    <b class="font-mono text-gray-700 dark:text-zinc-200" x-text="fmtDerivMonth(derivMonthSummary().month)"></b>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-gray-500 dark:text-zinc-400">Thắng / Thua / Ròng</span>
-                    <span class="font-mono text-[11px]">
-                      <b class="text-emerald-700 dark:text-emerald-300" x-text="'+' + fmtDerivPoints(derivMonthSummary().winPoints)"></b>
-                      <span class="text-gray-400"> / </span>
-                      <b class="text-rose-700 dark:text-rose-300" x-text="'-' + fmtDerivPoints(derivMonthSummary().lossPoints)"></b>
-                      <span class="text-gray-400"> / </span>
-                      <b :class="derivMonthSummary().netPoints >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'" x-text="(derivMonthSummary().netPoints >= 0 ? '+' : '') + fmtDerivPoints(derivMonthSummary().netPoints) + 'đ'"></b>
-                    </span>
-                  </div>
-                  <div class="mt-1 flex items-center justify-between text-[10px] text-gray-400">
-                    <span x-text="'% lãi/lỗ: ' + fmtPct(derivMonthSummary().profitSharePct) + ' / ' + fmtPct(derivMonthSummary().lossSharePct) + ' · % ròng: ' + fmtPct(derivMonthSummary().netPct)"></span>
-                    <span x-text="'Win rate: ' + fmtPct(derivMonthSummary().winRatePct) + ' · Loss rate: ' + fmtPct(derivMonthSummary().lossRatePct)"></span>
-                  </div>
+                  <details class="deriv-help-details">
+                    <summary
+                      class="font-semibold text-gray-800 dark:text-zinc-100 cursor-pointer"
+                    >
+                      Cách hệ thống ra quyết định (mở rộng)
+                    </summary>
+                    <div class="pt-2 space-y-2">
+                      <p class="text-gray-500 dark:text-zinc-400 text-[11px]">
+                        LONG khi giá trên VWAP + EMA9&gt;EMA21 + động lượng đủ
+                        mạnh. SHORT khi điều kiện ngược lại. Nếu tín hiệu chưa
+                        rõ hệ thống trả về KHÔNG VÀO để tránh overtrade.
+                      </p>
+                      <p class="text-[10px] text-gray-400 dark:text-zinc-500">
+                        Lệnh review bằng TP/SL hoặc thoát sau 12 nến 5m. Không
+                        đảm bảo win rate.
+                      </p>
+                    </div>
+                  </details>
                 </div>
+                <div
+                  x-ref="derivChartMain"
+                  class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700 min-h-[400px]"
+                  style="height: clamp(440px, min(72vh, 820px), 820px)"
+                ></div>
+                <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">
+                  RSI (14)
+                </div>
+                <div
+                  x-ref="derivRsi"
+                  class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700"
+                  style="height: 128px"
+                ></div>
+                <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">
+                  MACD (12, 26, 9)
+                </div>
+                <div
+                  x-ref="derivMacd"
+                  class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700"
+                  style="height: 128px"
+                ></div>
               </div>
-              <div
-                x-show="derivBars.length && !derivLoading"
-                class="text-xs rounded-lg border p-3 leading-relaxed"
-                style="border-color: var(--border); background: var(--bg-card)"
-              >
-                <details class="deriv-help-details">
-                  <summary class="font-semibold text-gray-800 dark:text-zinc-100 cursor-pointer">
-                    Cách hệ thống ra quyết định (mở rộng)
-                  </summary>
-                  <div class="pt-2 space-y-2">
-                    <p class="text-gray-500 dark:text-zinc-400 text-[11px]">
-                      LONG khi giá trên VWAP + EMA9&gt;EMA21 + động lượng đủ mạnh.
-                      SHORT khi điều kiện ngược lại. Nếu tín hiệu chưa rõ hệ thống
-                      trả về KHÔNG VÀO để tránh overtrade.
-                    </p>
-                    <p class="text-[10px] text-gray-400 dark:text-zinc-500">
-                      Lệnh review bằng TP/SL hoặc thoát sau 12 nến 5m. Không đảm
-                      bảo win rate.
-                    </p>
-                  </div>
-                </details>
-              </div>
-              <div
-                x-ref="derivChartMain"
-                class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700 min-h-[400px]"
-                style="height: clamp(440px, min(72vh, 820px), 820px)"
-              ></div>
-              <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">
-                RSI (14)
-              </div>
-              <div
-                x-ref="derivRsi"
-                class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700"
-                style="height: 128px"
-              ></div>
-              <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">
-                MACD (12, 26, 9)
-              </div>
-              <div
-                x-ref="derivMacd"
-                class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700"
-                style="height: 128px"
-              ></div>
-            </div>
             </div>
           </div>
 
@@ -2138,7 +2265,10 @@
                 type="date"
                 x-model="btFrom"
                 class="mt-1 block rounded-lg border px-2 py-1.5 text-xs"
-                style="border-color: var(--border-sub); background: var(--bg-card)"
+                style="
+                  border-color: var(--border-sub);
+                  background: var(--bg-card);
+                "
               />
             </label>
             <label class="text-[11px] text-gray-500 dark:text-zinc-400">
@@ -2147,7 +2277,10 @@
                 type="date"
                 x-model="btTo"
                 class="mt-1 block rounded-lg border px-2 py-1.5 text-xs"
-                style="border-color: var(--border-sub); background: var(--bg-card)"
+                style="
+                  border-color: var(--border-sub);
+                  background: var(--bg-card);
+                "
               />
             </label>
             <!-- Trailing toggle -->
@@ -2216,10 +2349,7 @@
                       :class="s.stats.net >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
                       x-text="(s.stats.net >= 0 ? '+' : '') + s.stats.net.toFixed(2) + 'đ'"
                     ></div>
-                    <div
-                      class="text-[11px] mt-1"
-                      style="color: var(--text-2)"
-                    >
+                    <div class="text-[11px] mt-1" style="color: var(--text-2)">
                       PF
                       <span
                         x-text="s.stats.pf ?? '∞'"
@@ -2233,29 +2363,66 @@
                       ·
                       <span x-text="s.stats.trades"></span> lệnh
                     </div>
-                    <div class="text-[11px] mt-0.5" style="color: var(--text-2)">
+                    <div
+                      class="text-[11px] mt-0.5"
+                      style="color: var(--text-2)"
+                    >
                       LONG
                       <span x-text="s.stats.longTrades"></span>
                       (<span
                         :class="s.stats.longNet >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
                         x-text="(s.stats.longNet >= 0 ? '+' : '') + s.stats.longNet.toFixed(2)"
-                      ></span>đ) · SHORT
+                      ></span
+                      >đ) · SHORT
                       <span x-text="s.stats.shortTrades"></span>
                       (<span
                         :class="s.stats.shortNet >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
                         x-text="(s.stats.shortNet >= 0 ? '+' : '') + s.stats.shortNet.toFixed(2)"
-                      ></span>đ)
+                      ></span
+                      >đ)
                     </div>
                   </div>
                 </template>
               </div>
 
-              <!-- Equity chart -->
+              <!-- Monthly charts — side by side, square -->
               <div
-                x-ref="btEquityChart"
-                class="rounded-xl mb-3"
-                style="height: 200px; background: var(--bg-card)"
-              ></div>
+                style="
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 12px;
+                  margin-bottom: 12px;
+                "
+              >
+                <div>
+                  <p class="text-[11px] mb-1" style="color: var(--text-2)">
+                    So sánh NET theo tháng (chart cột)
+                  </p>
+                  <div
+                    x-ref="btMonthlyBarChart"
+                    class="rounded-xl"
+                    style="
+                      aspect-ratio: 1/1;
+                      background: var(--bg-card);
+                      overflow: hidden;
+                    "
+                  ></div>
+                </div>
+                <div>
+                  <p class="text-[11px] mb-1" style="color: var(--text-2)">
+                    Lũy kế theo tháng (chart line)
+                  </p>
+                  <div
+                    x-ref="btMonthlyLineChart"
+                    class="rounded-xl"
+                    style="
+                      aspect-ratio: 1/1;
+                      background: var(--bg-card);
+                      overflow: hidden;
+                    "
+                  ></div>
+                </div>
+              </div>
 
               <!-- Monthly breakdown table -->
               <template
@@ -2293,10 +2460,7 @@
                             class="py-1 pr-3 font-medium text-gray-600 dark:text-zinc-300"
                             x-text="m.month"
                           ></td>
-                          <template
-                            x-for="s in btResult.series"
-                            :key="s.label"
-                          >
+                          <template x-for="s in btResult.series" :key="s.label">
                             <td class="py-1 px-2 text-right font-mono">
                               <span
                                 :class="s.monthly[mi].net >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
@@ -2314,8 +2478,8 @@
               <p class="text-[10px] mt-2" style="color: var(--text-2)">
                 <span x-text="btResult.bars"></span> nến 5m ·
                 <span x-text="btResult.from"></span> →
-                <span x-text="btResult.to"></span> · backtest xấp xỉ (fill
-                tại close/SL/TP, không tính phí).
+                <span x-text="btResult.to"></span> · backtest xấp xỉ (fill tại
+                close/SL/TP, không tính phí).
               </p>
             </div>
           </template>
@@ -2719,7 +2883,9 @@
                     <tr style="color: var(--text-3)">
                       <th class="text-left py-2 pl-3 pr-1 font-medium">Ngày</th>
                       <th class="text-left py-2 px-1 font-medium">Mã</th>
-                      <th class="text-right py-2 px-1 font-medium w-16">Điểm</th>
+                      <th class="text-right py-2 px-1 font-medium w-16">
+                        Điểm
+                      </th>
                       <th
                         class="text-left py-2 px-1 font-medium hidden sm:table-cell"
                       >
@@ -2847,7 +3013,9 @@
                   ></div>
 
                   <!-- Row 3: Top signal hoặc sector -->
-                  <template x-if="signalSummaryByTicker(stock.ticker)?.topSignal">
+                  <template
+                    x-if="signalSummaryByTicker(stock.ticker)?.topSignal"
+                  >
                     <div class="flex items-center gap-1 mt-1">
                       <!-- HIGH confidence badge -->
                       <template
@@ -2869,7 +3037,9 @@
                     </div>
                   </template>
                   <div class="flex items-center justify-between gap-2 mt-1">
-                    <template x-if="!signalSummaryByTicker(stock.ticker)?.topSignal">
+                    <template
+                      x-if="!signalSummaryByTicker(stock.ticker)?.topSignal"
+                    >
                       <div
                         class="text-xs text-gray-300 mt-0.5 truncate"
                         x-text="stock.sector"
