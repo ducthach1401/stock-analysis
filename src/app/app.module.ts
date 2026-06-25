@@ -40,7 +40,7 @@ import { AppService } from './app.service';
       },
     }),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..', 'public'),
+      rootPath: join(process.cwd(), 'public'),
       serveStaticOptions: { index: false },
       renderPath: '/',
     }),

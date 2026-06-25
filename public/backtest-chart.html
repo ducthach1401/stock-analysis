@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VN30 Backtest — Chiến lược LONG</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px}
+    h2{color:#38bdf8;margin:0 0 2px}
+    .sub{color:#94a3b8;margin:0 0 20px;font-size:13px}
+    .wrap{background:#1e293b;border-radius:12px;padding:20px;margin-bottom:20px}
+    h3{color:#94a3b8;font-size:12px;letter-spacing:.8px;text-transform:uppercase;margin:0 0 14px}
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:20px}
+    .card{background:#1e293b;border-radius:10px;padding:16px 20px;border-left:4px solid var(--c)}
+    .card-title{font-size:11px;color:#94a3b8;margin-bottom:8px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+    .card-net{font-size:28px;font-weight:700;line-height:1}
+    .card-meta{font-size:12px;color:#64748b;margin-top:6px}
+    .card-side{font-size:11px;color:#94a3b8;margin-top:4px}
+    .pos{color:#4ade80}.neg{color:#f87171}
+  </style>
+</head>
+<body>
+  <h2>VN30 Backtest — Chiến lược LONG</h2>
+  <p class="sub">2026-06-01 → 2026-06-25</p>
+  <div class="cards" id="cards"></div>
+  <div class="wrap">
+    <h3>Equity curve tích lũy (theo ngày)</h3>
+    <canvas id="equity" height="110"></canvas>
+  </div>
+  <div class="wrap">
+    <h3>NET P/L theo tháng</h3>
+    <canvas id="monthly" height="90"></canvas>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script>
+    var LABELS=["2026-06-02","2026-06-03","2026-06-04","2026-06-05","2026-06-08","2026-06-09","2026-06-10","2026-06-11","2026-06-12","2026-06-15","2026-06-16","2026-06-17","2026-06-18","2026-06-19","2026-06-22","2026-06-23","2026-06-24","2026-06-25"];
+    var DS=[{"label":"LONG bình thường (4/5)","color":"#3b82f6","values":[16.23,15,11.84,5.45,16.22,14.43,13.4,6.56,-0.88,-3.23,-10.75,-16.91,-16.29,-6.35,4.63,8.2,17.45,15.51]},{"label":"LONG siết tight (5/5, RSI 58-72)","color":"#10b981","values":[16.23,15,11.84,6.21,16.98,15.19,20.32,13.48,8.12,10.88,5.99,-0.18,-2.73,7.21,6.53,11.9,10.5,9.91]},{"label":"SHORT only (tắt LONG)","color":"#f59e0b","values":[16.23,15,11.84,13.87,24.63,22.84,22.84,16.01,18,20.76,17.03,10.86,10.86,20.8,20.8,20.8,23.97,26.72]}];
+    var STATS=[{"trades":66,"wins":24,"losses":32,"neutrals":10,"wr":42.86,"net":15.51,"pf":1.13,"exp":0.24,"longTrades":30,"longNet":-13.32,"shortTrades":36,"shortNet":28.84,"label":"LONG bình thường (4/5)","color":"#3b82f6"},{"trades":53,"wins":18,"losses":29,"neutrals":6,"wr":38.3,"net":9.91,"pf":1.1,"exp":0.19,"longTrades":15,"longNet":-12.55,"shortTrades":38,"shortNet":22.46,"label":"LONG siết tight (5/5, RSI 58-72)","color":"#10b981"},{"trades":43,"wins":17,"losses":21,"neutrals":5,"wr":44.74,"net":26.72,"pf":1.38,"exp":0.62,"longTrades":0,"longNet":0,"shortTrades":43,"shortNet":26.72,"label":"SHORT only (tắt LONG)","color":"#f59e0b"}];
+    var MONTHS=["2026-06"];
+    var MONTHLY=[[15.51],[9.91],[26.72]];
+    var cardsEl=document.getElementById("cards");
+    STATS.forEach(function(s){
+      var pos=s.net>=0;
+      var netStr=(pos?"+":"")+s.net.toFixed(2)+"d";
+      cardsEl.innerHTML+='<div class="card" style="--c:'+s.color+'">'+
+        '<div class="card-title">'+s.label+'</div>'+
+        '<div class="card-net '+( pos?"pos":"neg")+'">'+netStr+'</div>'+
+        '<div class="card-meta">PF '+(s.pf||"∞")+" · WR "+s.wr+"% · "+s.trades+" lệnh</div>"+
+        '<div class="card-side">LONG '+s.longTrades+" (NET "+(s.longNet>=0?"+":"")+s.longNet+"d) · SHORT "+s.shortTrades+" (NET "+(s.shortNet>=0?"+":"")+s.shortNet+"d)</div>"+
+        "</div>";
+    });
+    new Chart(document.getElementById("equity"),{
+      type:"line",
+      data:{
+        labels:LABELS,
+        datasets:DS.map(function(d){
+          return{label:d.label,data:d.values,borderColor:d.color,backgroundColor:d.color+"18",
+            fill:true,pointRadius:0,pointHoverRadius:4,borderWidth:2,tension:0.3};
+        })
+      },
+      options:{
+        responsive:true,
+        interaction:{mode:"index",intersect:false},
+        plugins:{
+          legend:{labels:{color:"#e2e8f0",boxWidth:12}},
+          tooltip:{
+            backgroundColor:"#1e293b",borderColor:"#334155",borderWidth:1,
+            titleColor:"#94a3b8",bodyColor:"#e2e8f0",
+            callbacks:{label:function(ctx){
+              var v=ctx.parsed.y;
+              return" "+ctx.dataset.label+": "+(v>=0?"+":"")+v.toFixed(2)+"d";
+            }}
+          }
+        },
+        scales:{
+          x:{ticks:{color:"#64748b",maxTicksLimit:10,maxRotation:0},grid:{color:"#1e293b"}},
+          y:{ticks:{color:"#94a3b8"},grid:{color:"#334155"},
+             title:{display:true,text:"Diem tich luy (VN30)",color:"#94a3b8"}}
+        }
+      }
+    });
+    new Chart(document.getElementById("monthly"),{
+      type:"bar",
+      data:{
+        labels:MONTHS,
+        datasets:DS.map(function(d,i){
+          return{label:d.label,data:MONTHLY[i],backgroundColor:d.color+"cc",borderRadius:4};
+        })
+      },
+      options:{
+        responsive:true,
+        interaction:{mode:"index",intersect:false},
+        plugins:{legend:{labels:{color:"#e2e8f0",boxWidth:12}}},
+        scales:{
+          x:{ticks:{color:"#94a3b8"},grid:{color:"#1e293b"}},
+          y:{ticks:{color:"#94a3b8"},grid:{color:"#334155"},
+             title:{display:true,text:"NET P/L (diem)",color:"#94a3b8"}}
+        }
+      }
+    });
+  </script>
+</body>
+</html>

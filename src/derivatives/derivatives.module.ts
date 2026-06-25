@@ -6,6 +6,7 @@ import { TelegramModule } from '../telegram/telegram.module';
 import { DerivativesController } from './derivatives.controller';
 import { DerivativesService } from './derivatives.service';
 import { DerivativeDecision } from './entities/derivative-decision.entity';
+import { Vn30BacktestService } from './vn30-backtest.service';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { DerivativeDecision } from './entities/derivative-decision.entity';
     TelegramModule,
   ],
   controllers: [DerivativesController],
-  providers: [DerivativesService],
+  providers: [DerivativesService, Vn30BacktestService],
   exports: [DerivativesService],
 })
 export class DerivativesModule {}

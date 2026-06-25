@@ -130,6 +130,17 @@ function app() {
     _derivativesPollTimer: null,
     _derivativesPollFirst: null,
     derivSignalsLatest: [],
+    /** Backtest chiến lược LONG */
+    btFrom: new Date(new Date().getFullYear() + '-01-01')
+      .toISOString()
+      .slice(0, 10),
+    btTo: new Date().toISOString().slice(0, 10),
+    btTrailing: true,
+    btRsicap: true,
+    btLoading: false,
+    btResult: null,
+    btError: '',
+    _btChart: null,
     lwChart: null,
     rsiChart: null,
     macdChart: null,
@@ -477,6 +488,7 @@ function app() {
 
     async init() {
       this.applyAppColorScheme();
+      this.restoreBacktestParamsFromCache();
       // Link ?tab=&ticker= đã áp vào state; lưu session cho lần sau
       if (urlTab) {
         try {
@@ -1456,12 +1468,10 @@ function app() {
           crosshairMarkerVisible: false,
         });
         s.setData(
-          this.barData
-            .slice(warmup)
-            .map((b, i) => ({
-              time: b.tradingDate,
-              value: values[i + warmup],
-            })),
+          this.barData.slice(warmup).map((b, i) => ({
+            time: b.tradingDate,
+            value: values[i + warmup],
+          })),
         );
       };
       if (this.chartShowEma) {
@@ -1670,7 +1680,12 @@ function app() {
       this._chartScrollRestore = null;
       const tkr = (ticker || this.signalTicker || '').toUpperCase();
       const nBars = this.barData.length;
-      const mainRt = { ro: null, roTimer: null, panTimer: null, postTimer: null };
+      const mainRt = {
+        ro: null,
+        roTimer: null,
+        panTimer: null,
+        postTimer: null,
+      };
       const applyMainRange = () => {
         if (scrollRestore && scrollRestore.added > 0) {
           const a = scrollRestore.added;
@@ -2132,6 +2147,66 @@ function app() {
       return `derivIntradayCache:VN30:${this.derivResolution}`;
     },
 
+    backtestCacheKey() {
+      return 'vn30BacktestCache:VN30:v1';
+    },
+
+    readBacktestCache() {
+      try {
+        const raw = localStorage.getItem(this.backtestCacheKey());
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const result = parsed?.result;
+        const series = Array.isArray(result?.series) ? result.series : [];
+        if (!series.length) return null;
+        return {
+          result,
+          params: parsed?.params || null,
+          cachedAt: parsed?.cachedAt || null,
+        };
+      } catch {
+        return null;
+      }
+    },
+
+    writeBacktestCache(result) {
+      try {
+        if (!result?.series?.length) return;
+        localStorage.setItem(
+          this.backtestCacheKey(),
+          JSON.stringify({
+            params: {
+              from: this.btFrom,
+              to: this.btTo,
+              trailing: this.btTrailing !== false,
+              rsicap: this.btRsicap !== false,
+            },
+            result,
+            cachedAt: new Date().toISOString(),
+          }),
+        );
+      } catch {}
+    },
+
+    restoreBacktestParamsFromCache() {
+      const cached = this.readBacktestCache();
+      const p = cached?.params;
+      if (!p) return;
+      if (typeof p.from === 'string' && p.from) this.btFrom = p.from;
+      if (typeof p.to === 'string' && p.to) this.btTo = p.to;
+      if (typeof p.trailing === 'boolean') this.btTrailing = p.trailing;
+      if (typeof p.rsicap === 'boolean') this.btRsicap = p.rsicap;
+    },
+
+    restoreBacktestResultFromCache() {
+      const cached = this.readBacktestCache();
+      if (!cached?.result?.series?.length) return false;
+      this.btResult = cached.result;
+      this.btError = '';
+      this.$nextTick(() => this.renderBtEquityChart());
+      return true;
+    },
+
     readDerivBarsCache() {
       try {
         const raw = localStorage.getItem(this.derivCacheKey());
@@ -2205,7 +2280,9 @@ function app() {
           this.derivBars.length > 0 &&
           this.derivBarsResolution === this.derivResolution;
         if (canFastRefresh) {
-          const lastSec = Number(this.derivBars[this.derivBars.length - 1]?.time);
+          const lastSec = Number(
+            this.derivBars[this.derivBars.length - 1]?.time,
+          );
           const overlapSec = this.derivResolutionSeconds() * 24;
           const fromFast = new Date((lastSec - overlapSec) * 1000);
           const toFast = new Date();
@@ -2218,7 +2295,9 @@ function app() {
             .catch(() => []);
           const arrFast = Array.isArray(rawFast) ? rawFast : [];
           if (arrFast.length) {
-            const byTime = new Map(this.derivBars.map((b) => [Number(b.time), b]));
+            const byTime = new Map(
+              this.derivBars.map((b) => [Number(b.time), b]),
+            );
             for (const b of arrFast) {
               const t = Number(b?.time);
               if (Number.isFinite(t)) byTime.set(t, b);
@@ -2769,7 +2848,12 @@ function app() {
 
       const dRestore = this._derivScrollRestore;
       if (dRestore) this._derivScrollRestore = null;
-      const derivRt = { ro: null, roTimer: null, panTimer: null, postTimer: null };
+      const derivRt = {
+        ro: null,
+        roTimer: null,
+        panTimer: null,
+        postTimer: null,
+      };
       this.derivCharts = { main: chart, rsi: rsiChart, macd: macdChart };
       this._derivChartRuntime = derivRt;
       const isDerivAlive = () => this.derivCharts?.main === chart;
@@ -2849,7 +2933,10 @@ function app() {
         if (span >= barCount * 0.92) return;
         if (range.from > 14) return;
         clearTimeout(derivRt.panTimer);
-        derivRt.panTimer = setTimeout(() => this.maybeLoadOlderDerivBars(), 500);
+        derivRt.panTimer = setTimeout(
+          () => this.maybeLoadOlderDerivBars(),
+          500,
+        );
       });
 
       const ro = new ResizeObserver(() => {
@@ -3242,6 +3329,13 @@ function app() {
     /** Tab Phái sinh: intraday VN30. */
     onDerivativesTabFocus() {
       void this.loadDerivativeDecisions({ silent: true });
+      if (!this.btResult?.series?.length) {
+        if (!this.restoreBacktestResultFromCache()) {
+          void this.runVn30Backtest();
+        }
+      } else if (!this._btChart) {
+        this.$nextTick(() => this.renderBtEquityChart());
+      }
       this.$nextTick(() => {
         requestAnimationFrame(() => {
           if (
@@ -3307,6 +3401,104 @@ function app() {
       } finally {
         this.derivSyncMonthLoading = false;
       }
+    },
+
+    async runVn30Backtest() {
+      if (this.btLoading) return;
+      this.btLoading = true;
+      this.btError = '';
+      this.btResult = null;
+      if (this._btChart) {
+        this._btChart.remove();
+        this._btChart = null;
+      }
+      try {
+        const params = new URLSearchParams({
+          from: this.btFrom,
+          to: this.btTo,
+        });
+        if (!this.btTrailing) params.set('trailing', 'off');
+        if (!this.btRsicap) params.set('rsicap', 'off');
+        const res = await fetch(
+          '/derivatives/vn30/backtest?' + params.toString(),
+          {
+            cache: 'no-store',
+          },
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.message || 'Lỗi API ' + res.status);
+        if (!data?.series?.length)
+          throw new Error(
+            'Không có dữ liệu — DNSE không trả nến 5m cho khoảng thời gian này',
+          );
+        this.btResult = data;
+        this.writeBacktestCache(data);
+        await this.$nextTick();
+        this.renderBtEquityChart();
+      } catch (e) {
+        this.btError = e.message || 'Lỗi backtest';
+      } finally {
+        this.btLoading = false;
+      }
+    },
+
+    renderBtEquityChart() {
+      const el = this.$refs.btEquityChart;
+      if (!el || !this.btResult?.series?.length) return;
+      if (this._btChart) {
+        this._btChart.remove();
+        this._btChart = null;
+      }
+      const dark = this.darkMode;
+      const chart = LightweightCharts.createChart(el, {
+        width: el.clientWidth,
+        height: 200,
+        layout: {
+          background: { color: dark ? '#09090b' : '#ffffff' },
+          textColor: dark ? '#71717a' : '#64748b',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: 11,
+        },
+        grid: {
+          vertLines: { color: dark ? '#27272a' : '#f1f5f9' },
+          horzLines: { color: dark ? '#27272a' : '#f1f5f9' },
+        },
+        rightPriceScale: { visible: true, minimumWidth: 56 },
+        timeScale: {
+          borderColor: dark ? '#3f3f46' : '#e2e8f0',
+          fixRightEdge: true,
+        },
+        localization: {
+          priceFormatter: (p) => (p >= 0 ? '+' : '') + p.toFixed(2),
+        },
+        handleScroll: true,
+        handleScale: true,
+      });
+      for (const s of this.btResult.series) {
+        const line = chart.addLineSeries({
+          color: s.color,
+          lineWidth: 2,
+          title: s.label,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          crosshairMarkerVisible: true,
+        });
+        const equityData = (Array.isArray(s.equity) ? s.equity : [])
+          .map((e) => ({
+            time: typeof e?.date === 'string' ? e.date : String(e?.date ?? ''),
+            value: Number(e?.value),
+          }))
+          .filter(
+            (p) =>
+              p.time &&
+              p.time !== 'null' &&
+              p.time !== 'undefined' &&
+              Number.isFinite(p.value),
+          );
+        line.setData(equityData);
+      }
+      chart.timeScale().fitContent();
+      this._btChart = chart;
     },
 
     async loadMarketCharts(opts = {}) {
@@ -3618,12 +3810,10 @@ function app() {
           crosshairMarkerVisible: false,
         });
         s.setData(
-          barData
-            .slice(warmup)
-            .map((b, i) => ({
-              time: b.tradingDate,
-              value: values[i + warmup],
-            })),
+          barData.slice(warmup).map((b, i) => ({
+            time: b.tradingDate,
+            value: values[i + warmup],
+          })),
         );
       };
       if (this.chartShowEma) {
@@ -3785,7 +3975,12 @@ function app() {
           ? this._marketScrollRestore
           : null;
       if (mktRestore) this._marketScrollRestore = null;
-      const marketRt = { ro: null, roTimer: null, panTimer: null, postTimer: null };
+      const marketRt = {
+        ro: null,
+        roTimer: null,
+        panTimer: null,
+        postTimer: null,
+      };
       this.marketCharts[slot] = { main: chart, rsi: rsiChart, macd: macdChart };
       this._marketChartRuntime[slot] = marketRt;
       const isMarketAlive = () => this.marketCharts?.[slot]?.main === chart;

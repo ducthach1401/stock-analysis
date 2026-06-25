@@ -31,7 +31,9 @@ import { nearestVn30FuturesContract } from './vn30-contracts.util';
  *        thêm lọc EMA50 + EMA slope 5 nến, RSI≥50 (bỏ trần), fix duplicate theo slot 5 phút,
  *        đóng cuối phiên 14:45. (chưa từng chạy live — không có bản ghi trong DB)
  *  - V3: trần RSI mềm (LONG 50–75 / SHORT 25–50), SL dời hòa vốn khi lãi 1R, trailing stop khi lãi >2R,
- *        outcome phân loại theo P/L thực (hòa vốn = trung tính). (đang chạy)
+ *        outcome phân loại theo P/L thực (hòa vốn = trung tính). BỎ lọc EMA50 → còn 5 điều kiện (≥4/5):
+ *        backtest 6 tháng (yarn backtest:vn30) cho thấy EMA50 bóp SHORT nhiều hơn lợi cho LONG, net hại
+ *        (~−29đ/438 lệnh); trailing đóng góp lớn nhất (+122đ), trần RSI dương nhẹ (+46đ). (đang chạy)
  */
 const ALGORITHM = 'VN30_EMA_VWAP_RSI_ATR_5M_V3';
 const LOOKBACK_BARS = 120;
@@ -43,7 +45,7 @@ const REWARD_ATR_MULT = 2;
 const MIN_ATR_POINTS = 1.5; // Không trade khi thị trường quá ít biến động
 const NO_TRADE_AFTER_HHMM = 1415; // 14:15 VN — quá gần đóng cửa
 const MAX_DAILY_LOSSES = 2; // Dừng sau 2 lần lỗ/ngày
-const CHECKS_REQUIRED = 5; // Cần 5/6 điều kiện thỏa mãn
+const CHECKS_REQUIRED = 4; // Cần 4/5 điều kiện (đã bỏ EMA50 — backtest 6T cho thấy hại nhẹ)
 const RSI_MAX_LONG = 75; // Không đu LONG khi đã quá mua (data V1: LONG ở RSI 74-81 toàn lỗ)
 const RSI_MIN_SHORT = 25; // Không đu SHORT khi đã quá bán
 const BREAKEVEN_TRIGGER_R = 1; // Lãi đạt 1R → dời SL về hòa vốn
@@ -470,7 +472,8 @@ export class DerivativesService {
       );
     }
 
-    // 6 điều kiện định hướng — mutually exclusive giữa LONG và SHORT
+    // 5 điều kiện định hướng — mutually exclusive giữa LONG và SHORT.
+    // (EMA50 đã bỏ: backtest 6T cho thấy bóp phe SHORT nhiều hơn lợi cho LONG → net hại.)
     const longChecks = [
       snapshot.close > snapshot.vwap, // 1. Giá trên VWAP ngày
       snapshot.ema9 > snapshot.ema21, // 2. EMA9 dẫn EMA21 (uptrend ngắn hạn)
@@ -479,7 +482,6 @@ export class DerivativesService {
         snapshot.rsi14 >= 50 &&
         snapshot.rsi14 <= RSI_MAX_LONG, // 4. RSI bullish nhưng chưa quá mua (50–75)
       snapshot.close > snapshot.prevHigh12, // 5. Break đỉnh 60 phút gần nhất
-      snapshot.close > snapshot.ema50, // 6. Giá trên EMA50 (trend trung hạn ~4H)
     ];
     const shortChecks = [
       snapshot.close < snapshot.vwap,
@@ -489,7 +491,6 @@ export class DerivativesService {
         snapshot.rsi14 <= 50 &&
         snapshot.rsi14 >= RSI_MIN_SHORT, // RSI bearish nhưng chưa quá bán (25–50)
       snapshot.close < snapshot.prevLow12,
-      snapshot.close < snapshot.ema50,
     ];
 
     const longScore = longChecks.filter(Boolean).length;
@@ -502,17 +503,17 @@ export class DerivativesService {
       action = DerivativeDecisionAction.LONG;
       score = longScore;
       notes.unshift(
-        `LONG: ${longScore}/6 điều kiện tăng thỏa mãn (EMA trend, VWAP, RSI, breakout, EMA50).`,
+        `LONG: ${longScore}/5 điều kiện tăng thỏa mãn (EMA trend, VWAP, RSI, breakout).`,
       );
     } else if (shortScore >= CHECKS_REQUIRED && shortScore > longScore) {
       action = DerivativeDecisionAction.SHORT;
       score = shortScore;
       notes.unshift(
-        `SHORT: ${shortScore}/6 điều kiện giảm thỏa mãn (EMA trend, VWAP, RSI, breakdown, EMA50).`,
+        `SHORT: ${shortScore}/5 điều kiện giảm thỏa mãn (EMA trend, VWAP, RSI, breakdown).`,
       );
     } else {
       notes.unshift(
-        `NO_TRADE: LONG ${longScore}/6, SHORT ${shortScore}/6 — chưa đạt ngưỡng ${CHECKS_REQUIRED}/6.`,
+        `NO_TRADE: LONG ${longScore}/5, SHORT ${shortScore}/5 — chưa đạt ngưỡng ${CHECKS_REQUIRED}/5.`,
       );
     }
 
@@ -531,10 +532,10 @@ export class DerivativesService {
           : null;
     const confidence =
       action === DerivativeDecisionAction.NO_TRADE
-        ? Math.min(55, 20 + Math.abs(longScore - shortScore) * 8)
-        : score === 6
+        ? Math.min(55, 20 + Math.abs(longScore - shortScore) * 9)
+        : score === 5
           ? 95
-          : Math.min(90, 50 + score * 8);
+          : Math.min(90, 50 + score * 9);
 
     return {
       symbol: 'VN30',

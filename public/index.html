@@ -2112,6 +2112,214 @@
             </label>
           </div>
         </div>
+
+        <!-- ─── Backtest chiến lược LONG ─── -->
+        <div
+          class="rounded-xl border p-4 sm:p-5"
+          style="border-color: var(--border); background: var(--bg-raised)"
+        >
+          <div class="flex flex-wrap items-start justify-between gap-2 mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-gray-900 dark:text-zinc-100">
+                📊 Backtest chiến lược LONG
+              </h3>
+              <p class="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                So sánh LONG bình thường / siết / tắt trên cùng dữ liệu. SHORT
+                giữ nguyên.
+              </p>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="flex flex-wrap gap-2 mb-4 items-end">
+            <label class="text-[11px] text-gray-500 dark:text-zinc-400">
+              Từ ngày
+              <input
+                type="date"
+                x-model="btFrom"
+                class="mt-1 block rounded-lg border px-2 py-1.5 text-xs"
+                style="border-color: var(--border-sub); background: var(--bg-card)"
+              />
+            </label>
+            <label class="text-[11px] text-gray-500 dark:text-zinc-400">
+              Đến ngày
+              <input
+                type="date"
+                x-model="btTo"
+                class="mt-1 block rounded-lg border px-2 py-1.5 text-xs"
+                style="border-color: var(--border-sub); background: var(--bg-card)"
+              />
+            </label>
+            <!-- Trailing toggle -->
+            <label
+              class="inline-flex items-center gap-1.5 cursor-pointer select-none text-xs text-gray-600 dark:text-zinc-300"
+              title="Dời SL về hòa vốn khi lãi 1R, trailing sau 2R"
+            >
+              <input
+                type="checkbox"
+                x-model="btTrailing"
+                class="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              />
+              Trailing SL
+            </label>
+            <!-- RSI cap toggle -->
+            <label
+              class="inline-flex items-center gap-1.5 cursor-pointer select-none text-xs text-gray-600 dark:text-zinc-300"
+              title="Chặn LONG khi RSI > 75, chặn SHORT khi RSI < 25"
+            >
+              <input
+                type="checkbox"
+                x-model="btRsicap"
+                class="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              />
+              Trần RSI
+            </label>
+            <button
+              type="button"
+              @click="runVn30Backtest()"
+              :disabled="btLoading"
+              class="btn-primary text-xs inline-flex items-center gap-1.5 self-end"
+            >
+              <span
+                class="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent"
+                :class="btLoading ? 'spin' : 'hidden'"
+              ></span>
+              Chạy backtest
+            </button>
+          </div>
+
+          <!-- Error -->
+          <p
+            x-show="btError"
+            x-text="btError"
+            class="text-xs text-red-500 mb-3"
+          ></p>
+
+          <!-- Results -->
+          <template x-if="btResult">
+            <div>
+              <!-- Stat cards — 3 variants -->
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                <template x-for="s in btResult.series" :key="s.label">
+                  <div
+                    class="rounded-xl border p-3"
+                    :style="'border-left: 3px solid ' + s.color + '; border-top-color: var(--border); border-right-color: var(--border); border-bottom-color: var(--border)'"
+                    style="background: var(--bg-card)"
+                  >
+                    <div
+                      class="text-[10px] font-semibold uppercase tracking-wide mb-1"
+                      style="color: var(--text-2)"
+                      x-text="s.label"
+                    ></div>
+                    <div
+                      class="text-xl font-bold"
+                      :class="s.stats.net >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
+                      x-text="(s.stats.net >= 0 ? '+' : '') + s.stats.net.toFixed(2) + 'đ'"
+                    ></div>
+                    <div
+                      class="text-[11px] mt-1"
+                      style="color: var(--text-2)"
+                    >
+                      PF
+                      <span
+                        x-text="s.stats.pf ?? '∞'"
+                        class="font-medium text-gray-700 dark:text-zinc-200"
+                      ></span>
+                      · WR
+                      <span
+                        x-text="s.stats.wr + '%'"
+                        class="font-medium text-gray-700 dark:text-zinc-200"
+                      ></span>
+                      ·
+                      <span x-text="s.stats.trades"></span> lệnh
+                    </div>
+                    <div class="text-[11px] mt-0.5" style="color: var(--text-2)">
+                      LONG
+                      <span x-text="s.stats.longTrades"></span>
+                      (<span
+                        :class="s.stats.longNet >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
+                        x-text="(s.stats.longNet >= 0 ? '+' : '') + s.stats.longNet.toFixed(2)"
+                      ></span>đ) · SHORT
+                      <span x-text="s.stats.shortTrades"></span>
+                      (<span
+                        :class="s.stats.shortNet >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
+                        x-text="(s.stats.shortNet >= 0 ? '+' : '') + s.stats.shortNet.toFixed(2)"
+                      ></span>đ)
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Equity chart -->
+              <div
+                x-ref="btEquityChart"
+                class="rounded-xl mb-3"
+                style="height: 200px; background: var(--bg-card)"
+              ></div>
+
+              <!-- Monthly breakdown table -->
+              <template
+                x-if="btResult.series[0] && btResult.series[0].monthly.length > 1"
+              >
+                <div class="overflow-x-auto mt-2">
+                  <table
+                    class="w-full text-[11px] border-collapse"
+                    style="color: var(--text-2)"
+                  >
+                    <thead>
+                      <tr
+                        class="border-b text-left font-semibold"
+                        style="border-color: var(--border)"
+                      >
+                        <th class="py-1.5 pr-3">Tháng</th>
+                        <template x-for="s in btResult.series" :key="s.label">
+                          <th
+                            class="py-1.5 px-2 text-right"
+                            x-text="s.label.split(' ')[0] + ' ' + (s.label.split(' ')[1] ?? '')"
+                          ></th>
+                        </template>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template
+                        x-for="(m, mi) in btResult.series[0].monthly"
+                        :key="m.month"
+                      >
+                        <tr
+                          class="border-b"
+                          style="border-color: var(--border-sub)"
+                        >
+                          <td
+                            class="py-1 pr-3 font-medium text-gray-600 dark:text-zinc-300"
+                            x-text="m.month"
+                          ></td>
+                          <template
+                            x-for="s in btResult.series"
+                            :key="s.label"
+                          >
+                            <td class="py-1 px-2 text-right font-mono">
+                              <span
+                                :class="s.monthly[mi].net >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'"
+                                x-text="(s.monthly[mi].net >= 0 ? '+' : '') + s.monthly[mi].net.toFixed(2)"
+                              ></span>
+                            </td>
+                          </template>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </template>
+
+              <p class="text-[10px] mt-2" style="color: var(--text-2)">
+                <span x-text="btResult.bars"></span> nến 5m ·
+                <span x-text="btResult.from"></span> →
+                <span x-text="btResult.to"></span> · backtest xấp xỉ (fill
+                tại close/SL/TP, không tính phí).
+              </p>
+            </div>
+          </template>
+        </div>
       </div>
 
       <!-- ═══ SCANNER TAB ═══ -->
