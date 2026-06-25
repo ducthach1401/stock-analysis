@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { BacktestSeries, Trade, buildSeries } from './vn30-backtest-core';
 import {
   isVnFuturesSessionOpen,
   vnCalendarTodayYmd,
@@ -1247,5 +1248,52 @@ export class DerivativesService {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+  }
+
+  /**
+   * Xây dựng BacktestSeries từ lệnh thực tế trong DB (algorithm V3).
+   * Dùng để so sánh backtest giả lập với kết quả live trên chart.
+   */
+  async buildLiveSeries(from: string, to: string): Promise<BacktestSeries | null> {
+    const rows = await this.decisionRepo
+      .createQueryBuilder('d')
+      .where('d.symbol = :symbol', { symbol: 'VN30' })
+      .andWhere('d.status = :status', { status: DerivativeDecisionStatus.CLOSED })
+      .andWhere('d.action IN (:...actions)', { actions: [DerivativeDecisionAction.LONG, DerivativeDecisionAction.SHORT] })
+      .andWhere('d.outcome IN (:...outcomes)', {
+        outcomes: [DerivativeDecisionOutcome.WIN, DerivativeDecisionOutcome.LOSS, DerivativeDecisionOutcome.TIME_EXIT],
+      })
+      .andWhere('d.pnlPoints IS NOT NULL')
+      .andWhere('d.tradingDate BETWEEN :from AND :to', { from, to })
+      .orderBy('d.decidedAt', 'ASC')
+      .take(5000)
+      .getMany();
+
+    if (!rows.length) return null;
+
+    // Dedup: cùng symbol+action+decidedAt chỉ giữ 1 bản ghi
+    const seen = new Set<string>();
+    const trades: Trade[] = [];
+    for (const row of rows) {
+      const key = `${row.action}|${row.decidedAt.toISOString()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const outcome: Trade['outcome'] =
+        row.outcome === DerivativeDecisionOutcome.WIN ? 'WIN' :
+        row.outcome === DerivativeDecisionOutcome.LOSS ? 'LOSS' : 'NEUTRAL';
+
+      trades.push({
+        side: row.action as 'LONG' | 'SHORT',
+        entry: Number(row.entryPrice ?? 0),
+        pnl: Number(row.pnlPoints),
+        rsi: (row.metadata?.metrics?.rsi14 as number | null | undefined) ?? null,
+        outcome,
+        date: row.tradingDate,
+      });
+    }
+
+    if (!trades.length) return null;
+    return buildSeries('Live V3 (thực tế DB)', 'Live', '#f43f5e', trades);
   }
 }

@@ -139,6 +139,7 @@ function app() {
     btResult: null,
     btError: '',
     btMonthPage: 1,
+    btLiveSeries: null,
     _btBarChart: null,
     _btLineChart: null,
     lwChart: null,
@@ -3426,44 +3427,100 @@ function app() {
       }
     },
 
+    async refreshBtFromCache() {
+      if (this.btLoading) return;
+      this.btLoading = true;
+      this.btError = '';
+      this.btLiveSeries = null;
+      if (this._btBarChart) this._btBarChart.remove();
+      if (this._btLineChart) this._btLineChart.remove();
+      this._btBarChart = null;
+      this._btLineChart = null;
+      try {
+        const params = new URLSearchParams({ from: this.btFrom, to: this.btTo });
+        if (!this.btTrailing) params.set('trailing', 'off');
+        if (!this.btRsicap) params.set('rsicap', 'off');
+        const res = await fetch('/derivatives/vn30/backtest?' + params.toString(), { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.message || 'Lỗi API ' + res.status);
+        if (data?.status === 'pending') throw new Error('Chưa có kết quả — hãy bấm "Chạy backtest" để tính toán.');
+        if (!data.series?.length) throw new Error('Không có dữ liệu cho khoảng thời gian này.');
+        this.btResult = data;
+        this.btMonthPage = 1;
+        await this.$nextTick();
+        this.renderBtEquityChart();
+        this.fetchLiveSeries();
+      } catch (e) {
+        this.btError = e.message || 'Lỗi load cache';
+      } finally {
+        this.btLoading = false;
+      }
+    },
+
     async runVn30Backtest() {
       if (this.btLoading) return;
       this.btLoading = true;
       this.btError = '';
       this.btResult = null;
+      this.btLiveSeries = null;
       this.btMonthPage = 1;
       if (this._btBarChart) this._btBarChart.remove();
       if (this._btLineChart) this._btLineChart.remove();
       this._btBarChart = null;
       this._btLineChart = null;
       try {
-        const params = new URLSearchParams({
-          from: this.btFrom,
-          to: this.btTo,
-        });
+        const params = new URLSearchParams({ from: this.btFrom, to: this.btTo });
         if (!this.btTrailing) params.set('trailing', 'off');
         if (!this.btRsicap) params.set('rsicap', 'off');
-        const res = await fetch(
-          '/derivatives/vn30/backtest?' + params.toString(),
-          {
-            cache: 'no-store',
-          },
+        const qs = params.toString();
+
+        // 1. Enqueue job tính toán
+        const enqRes = await this.authFetch(
+          '/derivatives/vn30/backtest/run?' + qs,
+          { method: 'POST' },
         );
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.message || 'Lỗi API ' + res.status);
-        if (!data?.series?.length)
-          throw new Error(
-            'Không có dữ liệu — DNSE không trả nến 5m cho khoảng thời gian này',
-          );
+        if (!enqRes.ok) {
+          const err = await enqRes.json().catch(() => ({}));
+          throw new Error(err?.message || 'Lỗi enqueue ' + enqRes.status);
+        }
+
+        // 2. Poll GET cho đến khi cache sẵn (tối đa 120s)
+        const POLL_MS = 2000;
+        const TIMEOUT_MS = 120_000;
+        const deadline = Date.now() + TIMEOUT_MS;
+        let data = null;
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, POLL_MS));
+          const res = await fetch('/derivatives/vn30/backtest?' + qs, { cache: 'no-store' });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json?.message || 'Lỗi API ' + res.status);
+          if (json?.status === 'ready') { data = json; break; }
+        }
+        if (!data) throw new Error('Backtest timeout — thử lại sau.');
+        if (!data.series?.length)
+          throw new Error('Không có dữ liệu — DNSE không trả nến 5m cho khoảng thời gian này.');
+
         this.btResult = data;
         this.writeBacktestCache(data);
         await this.$nextTick();
         this.renderBtEquityChart();
+        this.fetchLiveSeries();
       } catch (e) {
         this.btError = e.message || 'Lỗi backtest';
       } finally {
         this.btLoading = false;
       }
+    },
+
+    async fetchLiveSeries() {
+      try {
+        const params = new URLSearchParams({ from: this.btFrom, to: this.btTo });
+        const res = await fetch('/derivatives/vn30/live-series?' + params.toString(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        this.btLiveSeries = data.series || null;
+        if (this.btResult) this.$nextTick(() => this.renderBtEquityChart());
+      } catch {}
     },
 
     renderBtEquityChart() {
@@ -3475,7 +3532,10 @@ function app() {
       this._btBarChart = null;
       this._btLineChart = null;
       const dark = this.darkMode;
-      const seriesArr = this.btResult.series;
+      const seriesArr = [
+        ...(this.btResult.series || []),
+        ...(this.btLiveSeries ? [this.btLiveSeries] : []),
+      ];
 
       const monthSet = new Set();
       for (const s of seriesArr) {
@@ -3565,24 +3625,13 @@ function app() {
           return months.map((mo) => byM.get(mo) ?? 0);
         });
 
-        let minVal = 0,
-          maxVal = 0;
-        for (const arr of allData)
-          for (const v of arr) {
-            if (v < minVal) minVal = v;
-            if (v > maxVal) maxVal = v;
-          }
-        const yPad = (maxVal - minVal) * 0.2 || 10;
-        const yMin = minVal - yPad;
-        const yMax = maxVal + yPad * 1.5;
-
         const pL = 8,
           pR = 52,
           pT = 10,
           pB = 26 + legendH;
         const cH = H - pT - pB;
         const visW = W - pL - pR; // visible data area width
-        const MIN_GROUP_W = 80; // min px per month group when panning
+        const MIN_GROUP_W = 180; // min px per month group when panning
         const groupW = Math.max(visW / nM, MIN_GROUP_W);
         const innerFrac = Math.min(0.75, 0.55 + 0.06 * nM);
         const innerW = groupW * innerFrac;
@@ -3590,9 +3639,6 @@ function app() {
         const maxScrollPx = Math.max(0, nM * groupW - visW);
         let scrollPx = maxScrollPx; // start scrolled to rightmost month
         const canPan = maxScrollPx > 0;
-
-        const toY = (v) => pT + cH * (1 - (v - yMin) / (yMax - yMin));
-        const zeroY = Math.max(pT, Math.min(pT + cH, toY(0)));
 
         // Canvas setup (full size, fixed — bars shift via scrollPx)
         barEl.innerHTML = '';
@@ -3606,6 +3652,23 @@ function app() {
         ctx.scale(dpr, dpr);
 
         const redraw = () => {
+          // Scale theo các tháng đang visible — tránh outlier 1 tháng bóp nhỏ các cột còn lại
+          let visMin = 0, visMax = 0;
+          for (let mi = 0; mi < nM; mi++) {
+            const gx = pL + mi * groupW - scrollPx + (groupW - innerW) / 2;
+            if (gx + innerW < pL || gx > W - pR) continue;
+            for (let si = 0; si < nS; si++) {
+              const v = allData[si][mi];
+              if (v < visMin) visMin = v;
+              if (v > visMax) visMax = v;
+            }
+          }
+          const yPad = (visMax - visMin) * 0.2 || 10;
+          const yMin = visMin - yPad;
+          const yMax = visMax + yPad * 1.5;
+          const toY = (v) => pT + cH * (1 - (v - yMin) / (yMax - yMin));
+          const zeroY = Math.max(pT, Math.min(pT + cH, toY(0)));
+
           ctx.clearRect(0, 0, W, H);
           ctx.fillStyle = bgClr;
           ctx.fillRect(0, 0, W, H);
@@ -3774,7 +3837,7 @@ function app() {
           pB = 26 + legendH;
         const cH = H - pT - pB;
         const visW = W - pL - pR;
-        const MIN_STEP = 60; // min px between month points
+        const MIN_STEP = 80; // min px between month points
         const step = Math.max(visW / Math.max(nM - 1, 1), MIN_STEP);
         const totalW = step * (nM - 1);
         const maxScrollPx = Math.max(0, totalW - visW);

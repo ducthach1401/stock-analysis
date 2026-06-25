@@ -36,7 +36,7 @@ function report(label: string, trades: Trade[]): void {
     console.log(`\n[${label}] không có lệnh`);
     return;
   }
-  const series = buildSeries(label, '', trades);
+  const series = buildSeries(label, '', '', trades);
   const s = series.stats;
   console.log(
     `\n[${label}]  ${s.trades} lệnh | WR ${s.wr}% | NET ${signed(s.net)} | ` +
@@ -103,7 +103,7 @@ function generateChart(
   }));
 
   const statCards = series.map((s) => {
-    const sr = buildSeries(s.label, s.color, s.trades).stats;
+    const sr = buildSeries(s.label, '', s.color, s.trades).stats;
     return { ...sr, label: s.label, color: s.color };
   });
 
@@ -304,19 +304,22 @@ async function main(): Promise<void> {
     ema50: flagEma50,
     trailing: flagTrailing,
     rsicap: flagRsicap,
+    short: 'normal',
+    session: 'all',
+    minAtr: 1.5,
   };
 
   if (longArg) {
     report(
       `V3 [long=${longArg}]`,
-      runBacktest(bars, { ...base, long: longArg }),
+      await runBacktest(bars, { ...base, long: longArg }),
     );
     return;
   }
 
-  const normalTrades = runBacktest(bars, { ...base, long: 'normal' });
-  const tightTrades = runBacktest(bars, { ...base, long: 'tight' });
-  const offTrades = runBacktest(bars, { ...base, long: 'off' });
+  const normalTrades = await runBacktest(bars, { ...base, long: 'normal' });
+  const tightTrades  = await runBacktest(bars, { ...base, long: 'tight' });
+  const offTrades    = await runBacktest(bars, { ...base, long: 'off' });
 
   console.log('\n══════════════════════════════════════════════');
   console.log(' SO SÁNH CHẾ ĐỘ LONG (SHORT giữ nguyên)');
@@ -330,30 +333,22 @@ async function main(): Promise<void> {
   console.log('══════════════════════════════════════════════');
   report(
     '  + bật lại EMA50',
-    runBacktest(bars, { ...base, ema50: true, long: 'normal' }),
+    await runBacktest(bars, { ...base, ema50: true, long: 'normal' }),
   );
   report(
     '  − bỏ trailing stop',
-    runBacktest(bars, { ...base, trailing: false, long: 'normal' }),
+    await runBacktest(bars, { ...base, trailing: false, long: 'normal' }),
   );
   report(
     '  − bỏ trần RSI',
-    runBacktest(bars, { ...base, rsicap: false, long: 'normal' }),
+    await runBacktest(bars, { ...base, rsicap: false, long: 'normal' }),
   );
 
   generateChart(
     [
-      {
-        label: 'LONG bình thường (4/5)',
-        color: '#3b82f6',
-        trades: normalTrades,
-      },
-      {
-        label: 'LONG siết tight (5/5, RSI 58-72)',
-        color: '#10b981',
-        trades: tightTrades,
-      },
-      { label: 'SHORT only (tắt LONG)', color: '#f59e0b', trades: offTrades },
+      { label: 'LONG bình thường (4/5)',        color: '#3b82f6', trades: normalTrades },
+      { label: 'LONG siết tight (5/5, RSI 58-72)', color: '#10b981', trades: tightTrades },
+      { label: 'SHORT only (tắt LONG)',         color: '#f59e0b', trades: offTrades },
     ],
     vnDate(bars[0].time),
     vnDate(bars[bars.length - 1].time),

@@ -12,6 +12,13 @@ import {
   vnDate,
 } from './vn30-backtest-core';
 
+export type BacktestParams = {
+  from: string; // YYYY-MM-DD
+  to: string;
+  trailing: boolean;
+  rsicap: boolean;
+};
+
 @Injectable()
 export class Vn30BacktestService implements OnModuleDestroy {
   private readonly logger = new Logger(Vn30BacktestService.name);
@@ -48,6 +55,8 @@ export class Vn30BacktestService implements OnModuleDestroy {
     }
   }
 
+  // ── Cache helpers ───────────────────────────────────────────────────────────
+
   private endOfMonthYmd(d: Date): string {
     const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
     const y = last.getFullYear();
@@ -62,71 +71,67 @@ export class Vn30BacktestService implements OnModuleDestroy {
     return `${y}-${m}-01`;
   }
 
-  private backtestCacheKey(
-    from: Date,
-    to: Date,
-    flags: { trailing: boolean; rsicap: boolean },
-  ): string {
+  cacheKey(params: BacktestParams): string {
+    const from = new Date(params.from + 'T00:00:00');
+    const to = new Date(params.to + 'T23:59:59');
     return [
       'backtest:vn30:v2',
       this.startOfMonthYmd(from),
       this.endOfMonthYmd(to),
-      flags.trailing ? 'trail-on' : 'trail-off',
-      flags.rsicap ? 'rsi-on' : 'rsi-off',
+      params.trailing ? 'trail-on' : 'trail-off',
+      params.rsicap ? 'rsi-on' : 'rsi-off',
     ].join(':');
   }
 
-  private backtestCacheTtlSeconds(): number {
+  private cacheTtlSeconds(): number {
     return 15 * 24 * 60 * 60;
   }
 
-  private async readBacktestCache(key: string): Promise<BacktestResult | null> {
+  private async redisConnect(): Promise<Redis | null> {
     if (!this.cacheEnabled || !this.redisClient) return null;
     try {
       if (this.redisClient.status === 'wait') await this.redisClient.connect();
-      const raw = await this.redisClient.get(key);
+      return this.redisClient;
+    } catch {
+      return null;
+    }
+  }
+
+  async getCached(key: string): Promise<BacktestResult | null> {
+    const redis = await this.redisConnect();
+    if (!redis) return null;
+    try {
+      const raw = await redis.get(key);
       if (!raw) return null;
       const parsed: unknown = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return null;
       return parsed as BacktestResult;
     } catch (e) {
-      this.logger.debug(
-        `Redis backtest cache miss/error (${key}): ${(e as Error).message}`,
-      );
+      this.logger.debug(`Cache miss (${key}): ${(e as Error).message}`);
       return null;
     }
   }
 
-  private async writeBacktestCache(
-    key: string,
-    data: BacktestResult,
-  ): Promise<void> {
-    if (!this.cacheEnabled || !this.redisClient) return;
+  private async setCached(key: string, data: BacktestResult): Promise<void> {
+    const redis = await this.redisConnect();
+    if (!redis) return;
     try {
-      if (this.redisClient.status === 'wait') await this.redisClient.connect();
-      await this.redisClient.set(
-        key,
-        JSON.stringify(data),
-        'EX',
-        this.backtestCacheTtlSeconds(),
-      );
+      await redis.set(key, JSON.stringify(data), 'EX', this.cacheTtlSeconds());
     } catch (e) {
-      this.logger.debug(
-        `Redis backtest cache write fail (${key}): ${(e as Error).message}`,
-      );
+      this.logger.debug(`Cache write fail (${key}): ${(e as Error).message}`);
     }
   }
 
-  async runCompare(
-    from: Date,
-    to: Date,
-    flags: { trailing: boolean; rsicap: boolean; forceRefresh?: boolean },
-  ): Promise<BacktestResult> {
-    const cacheKey = this.backtestCacheKey(from, to, flags);
-    if (!flags.forceRefresh) {
-      const cached = await this.readBacktestCache(cacheKey);
-      if (cached) return cached;
-    }
+  // ── Computation (chạy trong job queue) ─────────────────────────────────────
+
+  async computeAndCache(params: BacktestParams): Promise<BacktestResult> {
+    const from = new Date(params.from + 'T00:00:00');
+    const to = new Date(params.to + 'T23:59:59');
+    const key = this.cacheKey(params);
+
+    this.logger.log(
+      `Backtest VN30 bắt đầu: ${params.from} → ${params.to} (trailing=${params.trailing}, rsicap=${params.rsicap})`,
+    );
 
     const raw = await this.dnse.fetchIntradayIndexOhlc('VN30', '5', from, to);
     const bars: Bar[] = raw.map((b) => ({
@@ -140,38 +145,50 @@ export class Vn30BacktestService implements OnModuleDestroy {
 
     if (bars.length < MIN_BARS) {
       const result: BacktestResult = {
-        from: bars[0] ? vnDate(bars[0].time) : from.toISOString().slice(0, 10),
-        to: bars[0]
-          ? vnDate(bars[bars.length - 1].time)
-          : to.toISOString().slice(0, 10),
+        from: bars[0] ? vnDate(bars[0].time) : params.from,
+        to: bars[0] ? vnDate(bars[bars.length - 1].time) : params.to,
         bars: bars.length,
         series: [],
       };
-      await this.writeBacktestCache(cacheKey, result);
+      await this.setCached(key, result);
       return result;
     }
 
     const base: Omit<BacktestFlags, 'long'> = {
       ema50: false,
-      trailing: flags.trailing,
-      rsicap: flags.rsicap,
+      trailing: params.trailing,
+      rsicap: params.rsicap,
+      short: 'normal',
+      session: 'all',
+      minAtr: 1.5,
     };
 
-    const normalTrades = runBacktest(bars, { ...base, long: 'normal' });
-    const tightTrades = runBacktest(bars, { ...base, long: 'tight' });
-    const offTrades = runBacktest(bars, { ...base, long: 'off' });
+    // Chạy tuần tự để không tranh nhau CPU — mỗi series yield mỗi 200 bar
+    const normalTrades   = await runBacktest(bars, { ...base, long: 'normal' });
+    const tightTrades    = await runBacktest(bars, { ...base, long: 'tight' });
+    const shortOnlyTrades = await runBacktest(bars, { ...base, long: 'off' });
+    const longOnlyTrades  = await runBacktest(bars, { ...base, long: 'normal', short: 'off' });
+    const morningTrades   = await runBacktest(bars, { ...base, long: 'normal', session: 'morning' });
+    const highAtrTrades   = await runBacktest(bars, { ...base, long: 'normal', minAtr: 3 });
 
     const result: BacktestResult = {
       from: vnDate(bars[0].time),
       to: vnDate(bars[bars.length - 1].time),
       bars: bars.length,
       series: [
-        buildSeries('LONG bình thường (4/5)', '#3b82f6', normalTrades),
-        buildSeries('LONG siết (5/5, RSI 58-72)', '#10b981', tightTrades),
-        buildSeries('SHORT only (tắt LONG)', '#f59e0b', offTrades),
+        buildSeries('LONG bình thường (4/5)', 'LONG',      '#3b82f6', normalTrades),
+        buildSeries('LONG siết (5/5, RSI 58-72)', 'LONG siết', '#10b981', tightTrades),
+        buildSeries('SHORT only (tắt LONG)',  'SHORT',     '#f59e0b', shortOnlyTrades),
+        buildSeries('LONG only (tắt SHORT)',  'LONG only', '#a78bfa', longOnlyTrades),
+        buildSeries('Sáng only (<11:30)',     'Sáng',      '#fb923c', morningTrades),
+        buildSeries('ATR cao (≥3đ)',          'ATR≥3',     '#e879f9', highAtrTrades),
       ],
     };
-    await this.writeBacktestCache(cacheKey, result);
+
+    await this.setCached(key, result);
+    this.logger.log(
+      `Backtest VN30 xong: ${bars.length} nến, ${result.series.reduce((a, s) => a + s.stats.trades, 0)} lệnh tổng`,
+    );
     return result;
   }
 }

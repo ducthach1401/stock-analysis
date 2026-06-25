@@ -32,12 +32,17 @@ export type Bar = {
 };
 
 export type LongMode = 'normal' | 'tight' | 'off';
+export type ShortMode = 'normal' | 'off';
+export type SessionMode = 'all' | 'morning'; // morning = chỉ trước 11:30
 
 export type BacktestFlags = {
   ema50: boolean;
   trailing: boolean;
   rsicap: boolean;
   long: LongMode;
+  short: ShortMode;        // 'off' = tắt SHORT
+  session: SessionMode;    // 'morning' = chỉ vào lệnh trước 11:30
+  minAtr: number;          // override MIN_ATR_POINTS (mặc định 1.5)
 };
 
 export type Trade = {
@@ -75,6 +80,7 @@ export type BacktestSeriesStats = {
 
 export type BacktestSeries = {
   label: string;
+  shortLabel: string;
   color: string;
   stats: BacktestSeriesStats;
   equity: { date: string; value: number }[];
@@ -243,7 +249,8 @@ export function snapshotAt(bars: Bar[]): Snap {
 }
 
 export function decide(s: Snap, f: BacktestFlags): 'LONG' | 'SHORT' | null {
-  if (s.atr14 == null || s.atr14 < MIN_ATR_POINTS) return null;
+  const atrMin = f.minAtr ?? MIN_ATR_POINTS;
+  if (s.atr14 == null || s.atr14 < atrMin) return null;
 
   const rsiForLong =
     f.long === 'tight'
@@ -276,7 +283,7 @@ export function decide(s: Snap, f: BacktestFlags): 'LONG' | 'SHORT' | null {
     f.long === 'tight' ? longChecks.length : longChecks.length - 1;
   const shortNeed = shortChecks.length - 1;
   const ls = f.long !== 'off' ? longChecks.filter(Boolean).length : 0;
-  const ss = shortChecks.filter(Boolean).length;
+  const ss = (f.short ?? 'normal') !== 'off' ? shortChecks.filter(Boolean).length : 0;
   if (ls >= longNeed && ls > ss) return 'LONG';
   if (ss >= shortNeed && ss > ls) return 'SHORT';
   return null;
@@ -349,17 +356,27 @@ export function settle(
   return { pnl, outcome, exitIdx };
 }
 
-export function runBacktest(bars: Bar[], f: BacktestFlags): Trade[] {
+const yieldEventLoop = () => new Promise<void>((r) => setImmediate(r));
+
+export async function runBacktest(bars: Bar[], f: BacktestFlags): Promise<Trade[]> {
+  const YIELD_EVERY = 200;
   const trades: Trade[] = [];
   const lossesByDay = new Map<string, number>();
   let i = MIN_BARS - 1;
+  let stepsUntilYield = YIELD_EVERY;
   while (i < bars.length) {
+    if (--stepsUntilYield <= 0) {
+      await yieldEventLoop();
+      stepsUntilYield = YIELD_EVERY;
+    }
     const window = bars.slice(Math.max(0, i + 1 - LOOKBACK_BARS), i + 1);
     const day = vnDate(bars[i].time);
     const inSession = isVnFuturesSessionOpen(new Date(bars[i].time * 1000));
-    const late = vnHhmm(bars[i].time) >= NO_TRADE_AFTER_HHMM;
+    const hhmm = vnHhmm(bars[i].time);
+    const late = hhmm >= NO_TRADE_AFTER_HHMM;
+    const tooLateForMorning = (f.session ?? 'all') === 'morning' && hhmm >= 1130;
     const dayLosses = lossesByDay.get(day) ?? 0;
-    if (!inSession || late || dayLosses >= MAX_DAILY_LOSSES) {
+    if (!inSession || late || tooLateForMorning || dayLosses >= MAX_DAILY_LOSSES) {
       i++;
       continue;
     }
@@ -387,6 +404,7 @@ export function runBacktest(bars: Bar[], f: BacktestFlags): Trade[] {
 
 export function buildSeries(
   label: string,
+  shortLabel: string,
   color: string,
   trades: Trade[],
 ): BacktestSeries {
@@ -470,6 +488,7 @@ export function buildSeries(
   const monthTotal = monthly.length;
   return {
     label,
+    shortLabel,
     color,
     stats: {
       trades: trades.length,
