@@ -1,5 +1,20 @@
 import { Recommendation } from './dto/recommendation.dto';
 
+/**
+ * Context thị trường tại ngày đánh giá — dùng để gate market timing và RS filter.
+ * Optional: nếu không cung cấp, các check này tự động pass (backward compatible).
+ */
+export interface MarketContext {
+  /** Giá đóng cửa VNINDEX ngày đó */
+  vnindexClose: number;
+  /** SMA50 VNINDEX — null nếu chưa đủ 50 nến */
+  vnindexSma50: number | null;
+  /** % tăng trưởng cổ phiếu 63 phiên (~3 tháng) — null nếu chưa đủ */
+  stockReturn3M: number | null;
+  /** % tăng trưởng VNINDEX 63 phiên (~3 tháng) — null nếu chưa đủ */
+  vnindexReturn3M: number | null;
+}
+
 export interface MinerviniBar {
   open: number;
   high: number;
@@ -20,6 +35,10 @@ export interface MinerviniEvaluation {
   extended: boolean;
   nearPivot: boolean;
   rsAvailable: boolean;
+  /** VNINDEX đang trên SMA50 — true khi không có MarketContext (pass-through) */
+  marketTimingOk: boolean;
+  /** Cổ phiếu tăng mạnh hơn VNINDEX 3 tháng — true khi không có MarketContext (pass-through) */
+  rsOk: boolean;
   pivot: number | null;
   baseLow: number | null;
   baseDepthPct: number | null;
@@ -136,7 +155,23 @@ function findBaseBeforeLast(bars: MinerviniBar[]): {
   return { ok: false, pivot: null, low: null, depthPct: null, length: null };
 }
 
-export function evaluateMinervini(bars: MinerviniBar[]): MinerviniEvaluation {
+export function evaluateMinervini(
+  bars: MinerviniBar[],
+  ctx?: MarketContext,
+): MinerviniEvaluation {
+  // Market timing: VNINDEX > SMA50. True nếu không có ctx (backward compat).
+  const marketTimingOk =
+    ctx == null ||
+    ctx.vnindexSma50 == null ||
+    ctx.vnindexClose > ctx.vnindexSma50;
+
+  // RS filter: cổ phiếu tăng mạnh hơn VNINDEX 3 tháng. True nếu không có ctx.
+  const rsOk =
+    ctx == null ||
+    ctx.stockReturn3M == null ||
+    ctx.vnindexReturn3M == null ||
+    ctx.stockReturn3M > ctx.vnindexReturn3M;
+
   const reasons: string[] = [];
   const lastIndex = bars.length - 1;
   const last = bars[lastIndex];
@@ -152,6 +187,8 @@ export function evaluateMinervini(bars: MinerviniBar[]): MinerviniEvaluation {
       extended: false,
       nearPivot: false,
       rsAvailable: false,
+      marketTimingOk,
+      rsOk,
       pivot: null,
       baseLow: null,
       baseDepthPct: null,
@@ -231,6 +268,11 @@ export function evaluateMinervini(bars: MinerviniBar[]): MinerviniEvaluation {
   const riskReward =
     risk > 0 ? Number(((targetPrice - close) / risk).toFixed(2)) : null;
 
+  if (!marketTimingOk)
+    reasons.push('Market timing: VNINDEX < SMA50 — thị trường chưa vào uptrend');
+  if (!rsOk)
+    reasons.push('RS yếu: cổ phiếu tăng chậm hơn VNINDEX 3 tháng qua');
+
   let recommendation = Recommendation.HOLD;
   if (
     trendOk &&
@@ -239,7 +281,9 @@ export function evaluateMinervini(bars: MinerviniBar[]): MinerviniEvaluation {
     volumeOk &&
     buyZoneOk &&
     closeStrong &&
-    !extended
+    !extended &&
+    marketTimingOk &&
+    rsOk
   ) {
     recommendation = Recommendation.STRONG_BUY;
   } else if (trendOk && baseOk && nearPivot && !extended) {
@@ -253,7 +297,9 @@ export function evaluateMinervini(bars: MinerviniBar[]): MinerviniEvaluation {
     (volumeOk ? 1.5 : 0) +
     (buyZoneOk ? 1.5 : 0) +
     (closeStrong ? 1 : 0) -
-    (extended ? 2 : 0);
+    (extended ? 2 : 0) -
+    (!marketTimingOk ? 1 : 0) -
+    (!rsOk ? 0.5 : 0);
 
   return {
     recommendation,
@@ -266,6 +312,8 @@ export function evaluateMinervini(bars: MinerviniBar[]): MinerviniEvaluation {
     extended,
     nearPivot,
     rsAvailable: false,
+    marketTimingOk,
+    rsOk,
     pivot,
     baseLow: base.low,
     baseDepthPct: base.depthPct,

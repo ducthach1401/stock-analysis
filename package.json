@@ -30,6 +30,7 @@
     "db:reset-market": "bash scripts/reset-market-data.sh",
     "db:reset-market-all": "bash scripts/reset-market-data.sh --positions",
     "analytics:derivatives": "ts-node -r tsconfig-paths/register scripts/derivatives-analytics.ts",
+    "analytics:stocks": "ts-node -r tsconfig-paths/register scripts/stock-analytics.ts",
     "backtest:vn30": "ts-node -r tsconfig-paths/register scripts/backtest-vn30.ts",
     "prepare": "echo 'husky disabled'"
   },

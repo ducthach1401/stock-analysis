@@ -22,8 +22,36 @@ import {
 import { MIN_TRADING_SESSIONS_AFTER_ENTRY } from '../common/vn-trading-days';
 import {
   evaluateMinervini,
+  MarketContext,
   MINERVINI_PROFIT_LOCK_PCT,
+  MINERVINI_STOP_PCT,
 } from './minervini-strategy';
+
+/**
+ * Cấu hình thuật toán backtest — có thể so sánh đa chiến lược.
+ * Mặc định bật cả 3 cải tiến so với V1 (strict Minervini baseline).
+ */
+export type BacktestConfig = {
+  /** Chỉ mở lệnh khi VNINDEX > SMA50 (market uptrend). Default: true */
+  marketTiming: boolean;
+  /** Chỉ mua khi cổ phiếu tăng mạnh hơn VNINDEX 3 tháng (~63 phiên). Default: true */
+  rsFilter: boolean;
+  /** Trailing stop: hòa vốn khi lãi ≥10%, lock 50% gains khi lãi ≥20%. Default: true */
+  trailingStop: boolean;
+};
+
+export const DEFAULT_BACKTEST_CONFIG: BacktestConfig = {
+  marketTiming: true,
+  rsFilter: true,
+  trailingStop: true,
+};
+
+/** Baseline Minervini thuần — không có các bộ lọc thị trường hay trailing stop. */
+export const BASELINE_BACKTEST_CONFIG: BacktestConfig = {
+  marketTiming: false,
+  rsFilter: false,
+  trailingStop: false,
+};
 
 /** Giả lập T+2: ít nhất 2 phiên (nến) sau ngày mua mới được bán. */
 function canExitAfterT2(
@@ -170,13 +198,16 @@ export class SignalBacktestService {
     private readonly signalService: SignalService,
   ) {}
 
-  /** Backtest Minervini thuần: STRONG_BUY + setup mạnh, không trung bình giá. */
   /**
-   * Giả lập trên **toàn bộ nến giá** đã lưu (IPO → phiên mới nhất). Tín hiệu cùng kỳ.
-   * Xếp hạng trang chủ dùng thêm cửa sổ **12 tháng** (theo ngày đóng lệnh) — xem `getBacktestGoodBad`.
+   * Giả lập trên **toàn bộ nến giá** đã lưu (IPO → phiên mới nhất).
+   * Xếp hạng trang chủ dùng cửa sổ **12 tháng** (theo ngày đóng lệnh) — xem `getBacktestGoodBad`.
+   *
+   * @param config Bộ lọc thuật toán — mặc định dùng `DEFAULT_BACKTEST_CONFIG` (market timing + RS + trailing stop).
+   *               Truyền `BASELINE_BACKTEST_CONFIG` để so sánh với Minervini thuần.
    */
   async runBacktest(
     ticker: string,
+    config: BacktestConfig = DEFAULT_BACKTEST_CONFIG,
   ): Promise<BacktestRun & { trades: SimulatedTrade[] }> {
     const t = ticker.toUpperCase();
     const reentryCooldownDays = backtestReentryCooldownDaysFromEnv();
@@ -224,6 +255,40 @@ export class SignalBacktestService {
 
     const closes = bars.map((b) => Number(b.close));
 
+    // ── VNINDEX data cho market timing + RS filter ─────────────────────────────
+    // Chỉ load khi cần (tránh query thừa khi dùng BASELINE config)
+    let vnCtxByDate: Map<string, MarketContext> | null = null;
+    if (config.marketTiming || config.rsFilter) {
+      const vnBars = await this.stockRepo.find({
+        where: { ticker: 'VNINDEX' },
+        order: { tradingDate: 'ASC' },
+      });
+      if (vnBars.length >= 50) {
+        const vnCloses = vnBars.map((b) => Number(b.close));
+        const vnDates = vnBars.map((b) => b.tradingDate);
+        const vnIdx = new Map<string, number>(vnDates.map((d, i) => [d, i]));
+        vnCtxByDate = new Map<string, MarketContext>();
+        for (let vi = 0; vi < vnBars.length; vi++) {
+          const vnClose = vnCloses[vi];
+          const vnSma50 = vi >= 49
+            ? vnCloses.slice(vi - 49, vi + 1).reduce((a, b) => a + b, 0) / 50
+            : null;
+          const vnReturn3M = vi >= 63
+            ? ((vnClose - vnCloses[vi - 63]) / vnCloses[vi - 63]) * 100
+            : null;
+          vnCtxByDate.set(vnDates[vi], {
+            vnindexClose: vnClose,
+            vnindexSma50: vnSma50,
+            stockReturn3M: null, // sẽ được điền riêng theo từng cổ phiếu
+            vnindexReturn3M: vnReturn3M,
+          });
+        }
+        void vnIdx; // chỉ dùng để build map
+      } else {
+        this.logger.warn(`${t}: VNINDEX chưa đủ 50 nến — bỏ qua market timing / RS filter`);
+      }
+    }
+
     type Draft = {
       entryDate: string;
       entryPrice: number;
@@ -243,7 +308,7 @@ export class SignalBacktestService {
     };
 
     const closed: Draft[] = [];
-    /** Ngày đóng lệnh gần nhất — chỉ chặn mở lại khi `reentryCooldownDays` &gt; 0 */
+    /** Ngày đóng lệnh gần nhất — chỉ chặn mở lại khi `reentryCooldownDays` > 0 */
     let lastExitDate: string | null = null;
     let pos: {
       entryDate: string;
@@ -254,6 +319,8 @@ export class SignalBacktestService {
       entryReason: string | null;
       takeProfitTarget: number | null;
       stopLossAtEntry: number | null;
+      /** Stop loss động — khởi đầu = stopLossAtEntry, tăng dần khi trailing stop bật */
+      trailStop: number;
       peakPrice: number;
     } | null = null;
 
@@ -266,12 +333,24 @@ export class SignalBacktestService {
         const t2Ok = canExitAfterT2(pos.entryBarIndex, i);
         pos.peakPrice = Math.max(pos.peakPrice, close);
         const pnlPct = ((close - pos.entryPrice) / pos.entryPrice) * 100;
-        if (
-          t2Ok &&
-          pos.stopLossAtEntry != null &&
-          close <= pos.stopLossAtEntry
-        ) {
+
+        // ── Trailing stop: nâng stop khi lãi đủ ngưỡng (sau T+2) ───────────────
+        if (config.trailingStop && t2Ok) {
+          // Hòa vốn khi lãi ≥ 10%
+          if (pnlPct >= 10) {
+            pos.trailStop = Math.max(pos.trailStop, pos.entryPrice);
+          }
+          // Lock 50% gains khi lãi ≥ 20% và giá đã chạy từ entry
+          if (pnlPct >= 20 && pos.peakPrice > pos.entryPrice) {
+            const lockAt = pos.entryPrice + 0.5 * (pos.peakPrice - pos.entryPrice);
+            pos.trailStop = Math.max(pos.trailStop, lockAt);
+          }
+        }
+
+        // ── Exit 1: Stop / Trailing stop (sau T+2) ──────────────────────────────
+        if (t2Ok && close <= pos.trailStop) {
           const pnlPercent = ((close - pos.entryPrice) / pos.entryPrice) * 100;
+          const isTrail = pos.trailStop > pos.stopLossAtEntry!;
           closed.push({
             entryDate: pos.entryDate,
             entryPrice: pos.entryPrice,
@@ -284,9 +363,11 @@ export class SignalBacktestService {
             stopLossAtEntry: pos.stopLossAtEntry,
             exitDate: bar.tradingDate,
             exitPrice: close,
-            exitRecommendation: 'MINERVINI_STOP',
+            exitRecommendation: isTrail ? 'MINERVINI_TRAIL' : 'MINERVINI_STOP',
             exitSellStrength: null,
-            exitReason: `Cắt lỗ Minervini: đóng ${close.toLocaleString('vi-VN')} <= stop ${Math.round(pos.stopLossAtEntry).toLocaleString('vi-VN')} (sau T+2)`,
+            exitReason: isTrail
+              ? `Trailing stop: đóng ${close.toLocaleString('vi-VN')} ≤ trail ${Math.round(pos.trailStop).toLocaleString('vi-VN')} (bảo vệ lãi)`
+              : `Cắt lỗ: đóng ${close.toLocaleString('vi-VN')} ≤ stop ${Math.round(pos.trailStop).toLocaleString('vi-VN')} (sau T+2)`,
             pnlPercent: Number(pnlPercent.toFixed(4)),
           });
           lastExitDate = bar.tradingDate;
@@ -294,11 +375,8 @@ export class SignalBacktestService {
           continue;
         }
 
-        if (
-          t2Ok &&
-          pos.takeProfitTarget != null &&
-          close >= pos.takeProfitTarget
-        ) {
+        // ── Exit 2: Take profit (sau T+2) ───────────────────────────────────────
+        if (t2Ok && pos.takeProfitTarget != null && close >= pos.takeProfitTarget) {
           const pnlPercent = ((close - pos.entryPrice) / pos.entryPrice) * 100;
           closed.push({
             entryDate: pos.entryDate,
@@ -322,8 +400,8 @@ export class SignalBacktestService {
           continue;
         }
 
-        const peakPnlPct =
-          ((pos.peakPrice - pos.entryPrice) / pos.entryPrice) * 100;
+        // ── Exit 3: Profit lock khi lãi ≥ 20% + dưới MA10 / rút 8% từ đỉnh ────
+        const peakPnlPct = ((pos.peakPrice - pos.entryPrice) / pos.entryPrice) * 100;
         const drawdownFromPeak = (pos.peakPrice - close) / pos.peakPrice;
         if (
           t2Ok &&
@@ -345,7 +423,7 @@ export class SignalBacktestService {
             exitPrice: close,
             exitRecommendation: 'MINERVINI_PROFIT_LOCK',
             exitSellStrength: null,
-            exitReason: `Chặn lãi Minervini: đỉnh lãi ${peakPnlPct.toFixed(1)}%, đóng dưới MA10 hoặc giảm ${(drawdownFromPeak * 100).toFixed(1)}% từ đỉnh`,
+            exitReason: `Chặn lãi: đỉnh lãi ${peakPnlPct.toFixed(1)}%, đóng dưới MA10 hoặc giảm ${(drawdownFromPeak * 100).toFixed(1)}% từ đỉnh`,
             pnlPercent: Number(pnlPercent.toFixed(4)),
           });
           lastExitDate = bar.tradingDate;
@@ -355,6 +433,18 @@ export class SignalBacktestService {
       } else if (
         !isInReentryCooldown(lastExitDate, bar.tradingDate, reentryCooldownDays)
       ) {
+        // ── Chuẩn bị MarketContext (market timing + RS filter) ─────────────────
+        let ctx: MarketContext | undefined;
+        if (vnCtxByDate != null) {
+          const vnBase = vnCtxByDate.get(bar.tradingDate);
+          if (vnBase != null) {
+            const stockReturn3M = i >= 63
+              ? ((close - closes[i - 63]) / closes[i - 63]) * 100
+              : null;
+            ctx = { ...vnBase, stockReturn3M };
+          }
+        }
+
         const evalBars = bars.slice(0, i + 1).map((b) => ({
           open: Number(b.open),
           high: Number(b.high),
@@ -363,9 +453,13 @@ export class SignalBacktestService {
           volume: Number(b.volume),
           tradingDate: b.tradingDate,
         }));
-        const setup = evaluateMinervini(evalBars);
+        const setup = evaluateMinervini(evalBars, ctx);
         if (setup.recommendation !== Recommendation.STRONG_BUY) continue;
 
+        // evaluateMinervini đã kiểm tra marketTimingOk && rsOk trong recommendation
+        // khi ctx được cung cấp — STRONG_BUY chỉ pass khi cả 2 đều ok
+
+        const initStop = setup.stopLoss ?? Math.round(close * (1 - MINERVINI_STOP_PCT));
         pos = {
           entryDate: bar.tradingDate,
           entryBarIndex: i,
@@ -374,7 +468,8 @@ export class SignalBacktestService {
           entryStrength: 'STRONG',
           entryReason: `Strict Minervini: ${setup.reasons.join(' · ')}`,
           takeProfitTarget: setup.targetPrice,
-          stopLossAtEntry: setup.stopLoss,
+          stopLossAtEntry: initStop,
+          trailStop: initStop,
           peakPrice: close,
         };
       }

@@ -96,6 +96,21 @@ export class PositionService {
           'đang có vị thế mở — Minervini: không trung bình giá khi lỗ, chờ điểm vào mới sau khi đóng lệnh',
       };
     }
+
+    // ── Market timing + RS filter ──────────────────────────────────────────
+    const [timingOk, rsOk] = await Promise.all([
+      this.isMarketTimingOk(),
+      this.isRsOk(ticker),
+    ]);
+    if (!timingOk) {
+      this.logger.warn(`${ticker}: bỏ qua — VNINDEX < SMA50 (market timing fail)`);
+      return { outcome: 'NONE', detail: 'Market timing: VNINDEX < SMA50 — thị trường chưa vào uptrend' };
+    }
+    if (!rsOk) {
+      this.logger.warn(`${ticker}: bỏ qua — RS yếu hơn VNINDEX 3 tháng`);
+      return { outcome: 'NONE', detail: 'RS yếu: cổ phiếu tăng chậm hơn VNINDEX 3 tháng qua' };
+    }
+
     return this.tryOpenFirst(result);
   }
 
@@ -193,6 +208,45 @@ export class PositionService {
     }));
   }
 
+  /** VNINDEX đang trên SMA50 → thị trường uptrend. */
+  private async isMarketTimingOk(): Promise<boolean> {
+    const rows = await this.stockPriceRepo
+      .createQueryBuilder('sp')
+      .where('sp.ticker = :ticker', { ticker: 'VNINDEX' })
+      .orderBy('sp.tradingDate', 'DESC')
+      .limit(55)
+      .getMany();
+    if (rows.length < 50) return true;
+    const closes = rows.reverse().map((r) => Number(r.close));
+    const latest = closes[closes.length - 1];
+    const sma50 = closes.slice(-50).reduce((a, b) => a + b, 0) / 50;
+    return latest > sma50;
+  }
+
+  /** Cổ phiếu tăng mạnh hơn VNINDEX trong 63 phiên (~3 tháng). */
+  private async isRsOk(ticker: string): Promise<boolean> {
+    const [stockRows, vnRows] = await Promise.all([
+      this.stockPriceRepo
+        .createQueryBuilder('sp')
+        .where('sp.ticker = :ticker', { ticker })
+        .orderBy('sp.tradingDate', 'DESC')
+        .limit(65)
+        .getMany(),
+      this.stockPriceRepo
+        .createQueryBuilder('sp')
+        .where('sp.ticker = :ticker', { ticker: 'VNINDEX' })
+        .orderBy('sp.tradingDate', 'DESC')
+        .limit(65)
+        .getMany(),
+    ]);
+    if (stockRows.length < 64 || vnRows.length < 64) return true;
+    const stockCloses = stockRows.reverse().map((r) => Number(r.close));
+    const vnCloses = vnRows.reverse().map((r) => Number(r.close));
+    const stockRet = (stockCloses[stockCloses.length - 1] - stockCloses[0]) / stockCloses[0];
+    const vnRet = (vnCloses[vnCloses.length - 1] - vnCloses[0]) / vnCloses[0];
+    return stockRet > vnRet;
+  }
+
   // ─── Theo dõi hàng ngày ─────────────────────────────────────────────────
 
   /**
@@ -255,14 +309,30 @@ export class PositionService {
         const hitProfitFloor =
           peakPnlPct > PROFIT_RUN_PCT && pnlPct <= floorPnlPct;
 
-        const hitStop =
-          pos.stopLoss != null && currentPrice <= Number(pos.stopLoss);
-        const hitTarget = currentPrice >= Number(pos.targetPrice);
         const settlementOk = canSellAfterT2(pos.entryDate, today);
         const sessionsAfter = tradingSessionsAfterEntryDate(
           pos.entryDate,
           today,
         );
+
+        // ── Trailing stop: nâng stop loss khi lãi đủ ngưỡng (chỉ sau T+2) ──
+        if (settlementOk && pos.stopLoss != null) {
+          const entry2 = Number(pos.entryPrice);
+          const curStop = Number(pos.stopLoss);
+          // Hòa vốn khi lãi ≥ 10%
+          if (pnlPct >= 10) {
+            pos.stopLoss = Math.max(curStop, entry2);
+          }
+          // Lock 50% gains khi lãi ≥ 20%
+          if (pnlPct >= 20 && peakPrice > entry2) {
+            const lockAt = entry2 + 0.5 * (peakPrice - entry2);
+            pos.stopLoss = Math.max(Number(pos.stopLoss), lockAt);
+          }
+        }
+
+        const hitStop =
+          pos.stopLoss != null && currentPrice <= Number(pos.stopLoss);
+        const hitTarget = currentPrice >= Number(pos.targetPrice);
 
         if ((hitStop || hitTarget) && !settlementOk) {
           await this.positionRepo.save(pos);
