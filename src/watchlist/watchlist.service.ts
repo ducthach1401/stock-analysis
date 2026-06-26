@@ -15,6 +15,8 @@ import { WatchlistItem } from './entities/watchlist-item.entity';
 @Injectable()
 export class WatchlistService implements OnModuleInit {
   private readonly logger = new Logger(WatchlistService.name);
+  private _activeCache: { ts: number; data: WatchlistItem[] } | null = null;
+  private readonly ACTIVE_TTL_MS = 2 * 60 * 1000;
 
   constructor(
     @InjectRepository(WatchlistItem)
@@ -59,10 +61,17 @@ export class WatchlistService implements OnModuleInit {
     });
   }
 
+  invalidateActiveCache(): void {
+    this._activeCache = null;
+  }
+
   /** Active, ưu tiên vốn hoá/thanh khoản (theo thứ tự WATCHLIST) rồi avgVolume giảm dần. */
   async findActiveSortedByPriority(): Promise<WatchlistItem[]> {
+    if (this._activeCache && Date.now() - this._activeCache.ts < this.ACTIVE_TTL_MS) {
+      return this._activeCache.data;
+    }
     const items = await this.repo.find({ where: { active: true } });
-    return [...items].sort((a, b) => {
+    const sorted = [...items].sort((a, b) => {
       const ra = tickerCapLiquidityRank(a.ticker);
       const rb = tickerCapLiquidityRank(b.ticker);
       if (ra !== rb) return ra - rb;
@@ -71,6 +80,8 @@ export class WatchlistService implements OnModuleInit {
       if (va !== vb) return vb - va;
       return a.ticker.localeCompare(b.ticker);
     });
+    this._activeCache = { ts: Date.now(), data: sorted };
+    return sorted;
   }
 
   async getActiveTickers(): Promise<string[]> {
@@ -151,6 +162,7 @@ export class WatchlistService implements OnModuleInit {
         this.repo.create({ ticker: t, name, sector, active: true }),
       );
     }
+    this.invalidateActiveCache();
     const _sync = await this.syncPricesAndAnalyze(t);
     return { ...item, _sync };
   }
@@ -194,6 +206,7 @@ export class WatchlistService implements OnModuleInit {
 
   async remove(id: number): Promise<void> {
     await this.repo.delete(id);
+    this.invalidateActiveCache();
   }
 
   async deactivate(ticker: string, reason: string): Promise<void> {
@@ -201,6 +214,7 @@ export class WatchlistService implements OnModuleInit {
       { ticker: ticker.toUpperCase() },
       { active: false, deactivateReason: reason },
     );
+    this.invalidateActiveCache();
   }
 
   async activate(ticker: string): Promise<void> {
@@ -208,6 +222,7 @@ export class WatchlistService implements OnModuleInit {
       { ticker: ticker.toUpperCase() },
       { active: true, deactivateReason: null },
     );
+    this.invalidateActiveCache();
   }
 
   // ─── Đồng bộ danh sách chuẩn (WATCHLIST) → DB: thêm mã mới, cập nhật tên/ngành ─

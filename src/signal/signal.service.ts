@@ -548,19 +548,22 @@ export class SignalService {
 
     if (!latestDates.length) return {};
 
-    // Lấy tất cả tín hiệu của ngày mới nhất cho mỗi mã trong 1 query
-    const conditions = latestDates
-      .map((_, i) => `(s.ticker = :t${i} AND s.tradingDate = :d${i})`)
-      .join(' OR ');
-    const params: Record<string, string> = {};
-    latestDates.forEach(({ ticker, latestDate }, i) => {
-      params[`t${i}`] = ticker;
-      params[`d${i}`] = latestDate;
-    });
-
+    // Gộp thành 1 query với subquery JOIN thay vì dynamic OR conditions
+    const upper = tickers.map((t) => t.toUpperCase());
     const signals = await this.signalRepo
       .createQueryBuilder('s')
-      .where(conditions, params)
+      .innerJoin(
+        (qb) =>
+          qb
+            .select('sub.ticker', 'ticker')
+            .addSelect('MAX(sub.tradingDate)', 'maxDate')
+            .from(Signal, 'sub')
+            .where('sub.ticker IN (:...tickers)', { tickers: upper })
+            .groupBy('sub.ticker'),
+        'latest',
+        's.ticker = latest.ticker AND s.tradingDate = latest.maxDate',
+      )
+      .where('s.ticker IN (:...tickers)', { tickers: upper })
       .getMany();
 
     const result: Record<

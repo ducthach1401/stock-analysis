@@ -72,6 +72,8 @@ type ScannerSignalSummary = Record<
 export class ScannerService {
   private readonly logger = new Logger(ScannerService.name);
   private isRunning = false;
+  private _summaryCache: { ts: number; data: { orderedTickers: string[]; summary: ScannerSignalSummary } } | null = null;
+  private readonly SUMMARY_TTL_MS = 5 * 60 * 1000;
 
   constructor(
     private readonly stockService: StockService,
@@ -142,24 +144,19 @@ export class ScannerService {
     orderedTickers: string[];
     summary: ScannerSignalSummary;
   }> {
+    if (this._summaryCache && Date.now() - this._summaryCache.ts < this.SUMMARY_TTL_MS) {
+      return this._summaryCache.data;
+    }
     const watchlist = await this.watchlistService.findActiveSortedByPriority();
     const orderedTickers = watchlist.map((s) => s.ticker);
-    const summary: ScannerSignalSummary = {};
-    const pool = this.syncPoolSize();
+    const summary = await this.signalService.getSignalsSummary(orderedTickers);
+    const data = { orderedTickers, summary };
+    this._summaryCache = { ts: Date.now(), data };
+    return data;
+  }
 
-    await mapPool(watchlist, pool, async (stock) => {
-      try {
-        const result = await this.recommendationService.recommend(stock.ticker);
-        summary[stock.ticker.toUpperCase()] =
-          this.recommendationToScannerSummary(result);
-      } catch (e) {
-        this.logger.warn(
-          `Scanner summary lỗi ${stock.ticker}: ${(e as Error).message}`,
-        );
-      }
-    });
-
-    return { orderedTickers, summary };
+  invalidateSummaryCache(): void {
+    this._summaryCache = null;
   }
 
   private recommendationToScannerSummary(
@@ -303,6 +300,7 @@ export class ScannerService {
 
       const ok = Object.values(result).filter((v) => v >= 0).length;
       this.logger.log(`✅ Sync intraday xong: ${ok}/${tickers.length} mã`);
+      this.invalidateSummaryCache();
     } finally {
       this.isRunning = false;
     }
@@ -405,6 +403,8 @@ export class ScannerService {
         this.logger.error(`Scan lỗi ${stock.ticker}: ${(e as Error).message}`);
       }
     }
+
+    this.invalidateSummaryCache();
 
     if (!allSignals.length) {
       this.logger.log('Không có tín hiệu mới hôm nay');
