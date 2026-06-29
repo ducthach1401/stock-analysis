@@ -184,6 +184,9 @@ function app() {
     chartShowSR: localStorage.getItem('chartShowSR') !== 'false',
     /** Tab Phái sinh — BB + nén (5m/15m), khớp logic server: BW &lt; 8% */
     derivShowBb: localStorage.getItem('derivShowBb') !== 'false',
+    /** Tab Phái sinh — bật/tắt pane RSI và MACD (mặc định bật) */
+    derivShowRsi: localStorage.getItem('derivShowRsi') !== 'false',
+    derivShowMacd: localStorage.getItem('derivShowMacd') !== 'false',
 
     /** PWA + thông báo trình duyệt */
     pwaDeferredInstall: null,
@@ -435,6 +438,14 @@ function app() {
           'derivShowBb',
           this.derivShowBb ? 'true' : 'false',
         );
+        localStorage.setItem(
+          'derivShowRsi',
+          this.derivShowRsi ? 'true' : 'false',
+        );
+        localStorage.setItem(
+          'derivShowMacd',
+          this.derivShowMacd ? 'true' : 'false',
+        );
       } catch {}
       this.$nextTick(() => {
         if (this.barData.length && this.signalTicker) {
@@ -484,8 +495,8 @@ function app() {
         [k.main, k.rsi, k.macd].forEach((c) => c?.applyOptions(opts));
       });
       const dk = this.derivCharts;
-      if (dk) {
-        [dk.main, dk.rsi, dk.macd].forEach((c) => c?.applyOptions(opts));
+      if (dk?.main) {
+        dk.main.applyOptions(opts);
       }
     },
 
@@ -2131,19 +2142,79 @@ function app() {
         if (rt.postTimer) clearTimeout(rt.postTimer);
         if (rt.panTimer) clearTimeout(rt.panTimer);
         if (rt.roTimer) clearTimeout(rt.roTimer);
-        try {
-          rt.ro?.disconnect();
-        } catch {}
+        try { rt.ro?.disconnect(); } catch {}
+        const el = this.$refs.derivChartMain;
+        if (el && rt.onWheel) el.removeEventListener('wheel', rt.onWheel);
       }
       this._derivChartRuntime = null;
       const prev = this.derivCharts;
       if (!prev) return;
-      try {
-        prev.main?.remove();
-        prev.rsi?.remove();
-        prev.macd?.remove();
-      } catch {}
+      try { prev.main?.remove(); } catch {}
       this.derivCharts = null;
+    },
+
+    /**
+     * Cập nhật incremental nến cuối (và nến kế cuối nếu vừa mở nến mới) mà không rebuild chart.
+     * Trả về false nếu không có chart / series ref → caller phải fallback sang renderDerivIntradayPanel().
+     */
+    patchDerivLastBar() {
+      const dc = this.derivCharts;
+      if (!dc?.main || !dc.candle || !dc.vol) return false;
+
+      const bars = this.derivBars;
+      if (!bars?.length) return false;
+
+      const n = (x) => { const v = Number(x); return Number.isFinite(v) ? v : 0; };
+
+      // Tính lại RSI/MACD toàn bộ closes (rẻ hơn rebuild chart)
+      const closes = bars.map((b) => n(b.close) / 1000);
+      const rsiValues = dc.rsi ? this.calcRSI(closes, 14) : null;
+      const macdData  = (dc.macdHist || dc.macdLine || dc.macdSignal)
+        ? this.calcMACDFromIntradayBars(closes, bars)
+        : null;
+
+      // Update 2 nến cuối: nến hiện tại đang hình thành + nến vừa đóng (nếu mở nến mới)
+      const startIdx = Math.max(0, bars.length - 2);
+      for (let i = startIdx; i < bars.length; i++) {
+        const b = bars[i];
+        const t = n(b.time);
+
+        try {
+          dc.candle.update({
+            time: t,
+            open:  +(n(b.open)  / 1000).toFixed(2),
+            high:  +(n(b.high)  / 1000).toFixed(2),
+            low:   +(n(b.low)   / 1000).toFixed(2),
+            close: +(n(b.close) / 1000).toFixed(2),
+          });
+          dc.vol.update({
+            time: t,
+            value: n(b.volume),
+            color: n(b.close) >= n(b.open) ? '#26a69a33' : '#ef535033',
+          });
+          if (dc.rsi && rsiValues?.[i] != null && !Number.isNaN(rsiValues[i])) {
+            dc.rsi.update({ time: t, value: rsiValues[i] });
+          }
+          if (macdData?.[i]) {
+            const d = macdData[i];
+            if (dc.macdHist && d.hist != null && !Number.isNaN(d.hist)) {
+              dc.macdHist.update({ time: t, value: d.hist, color: d.hist >= 0 ? '#26a69a88' : '#ef535088' });
+            }
+            if (dc.macdLine && d.macd != null && !Number.isNaN(d.macd)) {
+              dc.macdLine.update({ time: t, value: d.macd });
+            }
+            if (dc.macdSignal && d.signal != null && !Number.isNaN(d.signal)) {
+              dc.macdSignal.update({ time: t, value: d.signal });
+            }
+          }
+        } catch {
+          return false; // series bị lỗi (ví dụ: chart đã bị destroy) → fallback
+        }
+      }
+
+      // Cập nhật closes cache để lần patch sau dùng
+      dc.closes = closes;
+      return true;
     },
 
     derivCacheKey() {
@@ -2336,8 +2407,11 @@ function app() {
             this.writeDerivBarsCache();
           }
           this.applyDerivDecisionToAnalysis();
-          await this.$nextTick();
-          requestAnimationFrame(() => this.renderDerivIntradayPanel());
+          // Incremental patch — không rebuild chart, chỉ update series cuối
+          if (!this.patchDerivLastBar()) {
+            await this.$nextTick();
+            requestAnimationFrame(() => this.renderDerivIntradayPanel());
+          }
           return;
         }
         /** ~31 ngày lịch lùi từ hiện tại; API Entrade thường giới hạn ~50 nến/request — lặp lùi theo `to` cho tới khi đủ cửa sổ hoặc hết dữ liệu. */
@@ -2475,12 +2549,12 @@ function app() {
       }
     },
 
-    /** Biểu đồ intraday VN30: nến + vol + EMA + RSI + MACD (cùng lớp vẽ tab Phái sinh). */
+    /** Biểu đồ intraday VN30: nến + vol + EMA + RSI + MACD trong 1 chart instance duy nhất.
+     *  RSI và MACD dùng priceScaleId riêng với scaleMargins để chiếm vùng dọc tách biệt —
+     *  toàn bộ scroll/zoom đồng bộ hoàn toàn vì chỉ có 1 timeScale. */
     renderDerivIntradayPanel() {
       const barData = this.derivBars;
       const mainEl = this.$refs.derivChartMain;
-      const rsiEl = this.$refs.derivRsi;
-      const macdEl = this.$refs.derivMacd;
       if (!mainEl || !barData?.length) {
         this.destroyDerivCharts();
         return;
@@ -2488,8 +2562,38 @@ function app() {
 
       this.destroyDerivCharts();
 
-      const mainH = Math.max(280, Math.round(mainEl.clientHeight) || 420);
+      const showRsi = this.derivShowRsi;
+      const showMacd = this.derivShowMacd;
       const dark = this.darkMode;
+
+      // ─── Tính vùng dọc (scaleMargins) cho từng pane ──────────────────────
+      // Layout từ dưới lên: MACD → RSI → Nến (+ Volume overlay)
+      const ZONE = 0.18;  // chiều cao mỗi indicator pane (18% chart)
+      const GAP  = 0.015; // khoảng cách giữa các pane
+      let used = 0.01;    // margin dưới cùng
+
+      let macdMargins = null;
+      if (showMacd) {
+        macdMargins = { top: 1 - ZONE - used, bottom: used };
+        used += ZONE + GAP;
+      }
+      let rsiMargins = null;
+      if (showRsi) {
+        rsiMargins = { top: 1 - ZONE - used, bottom: used };
+        used += ZONE + GAP;
+      }
+      // Nến chiếm phần còn lại (trừ used từ dưới + 2% từ trên)
+      const candleMargins = { top: 0.02, bottom: used };
+      // Volume overlay: bottom 14% của vùng nến
+      const volTop = Math.max(candleMargins.top + 0.20, 1 - used - 0.14);
+      const volMargins = { top: volTop, bottom: used };
+
+      // ─── Tính viewport: nến cuối tại 2/3 từ trái ────────────────────────
+      const visibleBars = Math.min(120, Math.max(60, Math.round(barData.length * 0.55)));
+      const rightBars   = Math.round(visibleBars / 3); // 1/3 khoảng trống bên phải
+
+      // ─── Khởi tạo chart ───────────────────────────────────────────────────
+      const mainH = Math.max(380, Math.round(mainEl.clientHeight) || 520);
       const baseLayout = {
         background: { color: dark ? '#09090b' : '#ffffff' },
         textColor: dark ? '#71717a' : '#64748b',
@@ -2500,7 +2604,6 @@ function app() {
         vertLines: { color: dark ? '#27272a' : '#f1f5f9' },
         horzLines: { color: dark ? '#27272a' : '#f1f5f9' },
       };
-      /** Trục thời gian + crosshair theo giờ VN (API trả Unix UTC). */
       const dr = this.derivResolution;
       const derivTimeLabel = (time) => {
         if (typeof time !== 'number') return '';
@@ -2519,12 +2622,8 @@ function app() {
         secondsVisible: false,
         fixLeftEdge: false,
         fixRightEdge: false,
-        rightOffset: 0,
         tickMarkFormatter: (time) => derivTimeLabel(time),
       };
-      const barSp = 6;
-      const minBarSp = 2;
-      const syncTs = { ...baseTS, barSpacing: barSp, minBarSpacing: minBarSp };
 
       const n = (x) => {
         const v = typeof x === 'number' ? x : Number(x);
@@ -2538,17 +2637,20 @@ function app() {
         grid: baseGrid,
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
         rightPriceScale: {
-          borderColor: '#e5e7eb',
-          scaleMargins: { top: 0.08, bottom: 0.22 },
+          borderColor: dark ? '#3f3f46' : '#e5e7eb',
+          scaleMargins: candleMargins,
           minimumWidth: 64,
         },
-        timeScale: syncTs,
+        timeScale: { ...baseTS, barSpacing: 6, minBarSpacing: 2, rightOffset: rightBars },
+        handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true },
+        handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true, axisDoubleClickReset: true },
         localization: {
           priceFormatter: (p) => n(p).toFixed(2),
           timeFormatter: (time) => derivTimeLabel(time),
         },
       });
 
+      // ─── Nến ──────────────────────────────────────────────────────────────
       const candleSeries = chart.addCandlestickSeries({
         upColor: '#26a69a',
         downColor: '#ef5350',
@@ -2566,13 +2668,12 @@ function app() {
         })),
       );
 
+      // ─── Volume ───────────────────────────────────────────────────────────
       const volSeries = chart.addHistogramSeries({
         priceFormat: { type: 'volume' },
         priceScaleId: 'vol',
       });
-      volSeries
-        .priceScale()
-        .applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      volSeries.priceScale().applyOptions({ scaleMargins: volMargins });
       volSeries.setData(
         barData.map((b) => ({
           time: n(b.time),
@@ -2581,6 +2682,7 @@ function app() {
         })),
       );
 
+      // ─── EMA ──────────────────────────────────────────────────────────────
       const closes = barData.map((b) => n(b.close) / 1000);
       const emaFn = (vals, p) => {
         const k = 2 / (p + 1);
@@ -2590,8 +2692,6 @@ function app() {
           return +e.toFixed(3);
         });
       };
-      const ema20 = emaFn(closes, 20);
-      const ema50 = emaFn(closes, 50);
       const addEma = (values, warmup, color, title) => {
         const s = chart.addLineSeries({
           color,
@@ -2608,16 +2708,12 @@ function app() {
         );
       };
       if (this.chartShowEma) {
-        addEma(ema20, 19, '#3b82f6', 'EMA20');
-        addEma(ema50, 49, '#f97316', 'EMA50');
+        addEma(emaFn(closes, 20), 19, '#3b82f6', 'EMA20');
+        addEma(emaFn(closes, 50), 49, '#f97316', 'EMA50');
       }
 
-      /** BB + đánh dấu nén (BW &lt; 8%) — chỉ 5m/15m; tín hiệu DB vẫn là nến ngày. */
-      if (
-        this.derivShowBb &&
-        (dr === '5' || dr === '15') &&
-        barData.length >= 20
-      ) {
+      // ─── BB + Nén ─────────────────────────────────────────────────────────
+      if (this.derivShowBb && (dr === '5' || dr === '15') && barData.length >= 20) {
         const bb = this.calcBollingerIntraday(closes);
         const lineBb = (vals, color, title) => {
           const s = chart.addLineSeries({
@@ -2658,126 +2754,55 @@ function app() {
             inSq = false;
           }
         }
-        if (sqMarkers.length) {
-          candleSeries.setMarkers(sqMarkers);
+        if (sqMarkers.length) candleSeries.setMarkers(sqMarkers);
+      }
+
+      // ─── Hỗ trợ / Kháng cự ───────────────────────────────────────────────
+      if (barData.length >= 20) {
+        const recent20 = barData.slice(-20);
+        const supK = +(Math.min(...recent20.map((b) => n(b.low))) / 1000).toFixed(2);
+        const resK = +(Math.max(...recent20.map((b) => n(b.high))) / 1000).toFixed(2);
+        if (this.chartShowSR && supK > 0 && resK > 0) {
+          const dash = LightweightCharts.LineStyle.Dashed;
+          candleSeries.createPriceLine({ price: supK, color: dark ? '#4ade80' : '#16a34a', lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'Hỗ trợ' });
+          candleSeries.createPriceLine({ price: resK, color: dark ? '#f87171' : '#dc2626', lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'Kháng cự' });
         }
       }
 
-      let supK = null;
-      let resK = null;
-      if (barData.length >= 20) {
-        const recent20 = barData.slice(-20);
-        supK = +(Math.min(...recent20.map((b) => n(b.low))) / 1000).toFixed(2);
-        resK = +(Math.max(...recent20.map((b) => n(b.high))) / 1000).toFixed(2);
-      }
-      if (
-        this.chartShowSR &&
-        supK != null &&
-        resK != null &&
-        supK > 0 &&
-        resK > 0
-      ) {
-        const dash = LightweightCharts.LineStyle.Dashed;
-        const supCol = dark ? '#4ade80' : '#16a34a';
-        const resCol = dark ? '#f87171' : '#dc2626';
-        candleSeries.createPriceLine({
-          price: supK,
-          color: supCol,
-          lineWidth: 1,
-          lineStyle: dash,
-          axisLabelVisible: true,
-          title: 'Hỗ trợ',
-        });
-        candleSeries.createPriceLine({
-          price: resK,
-          color: resCol,
-          lineWidth: 1,
-          lineStyle: dash,
-          axisLabelVisible: true,
-          title: 'Kháng cự',
-        });
-      }
-
+      // ─── TP/SL từ derivAnalysis ───────────────────────────────────────────
       const da = this.derivAnalysis;
       if (da && !da.short && typeof da.lastClose === 'number') {
         const dash = LightweightCharts.LineStyle.Dashed;
-        const dot = LightweightCharts.LineStyle.Dotted;
-        const yl = dark ? '#facc15' : '#ca8a04';
-        candleSeries.createPriceLine({
-          price: da.lastClose,
-          color: yl,
-          lineWidth: 2,
-          lineStyle: LightweightCharts.LineStyle.Solid,
-          axisLabelVisible: true,
-          title: 'Giá cuối',
-        });
+        const dot  = LightweightCharts.LineStyle.Dotted;
+        candleSeries.createPriceLine({ price: da.lastClose, color: dark ? '#facc15' : '#ca8a04', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: true, title: 'Giá cuối' });
         if (da.bias === 'long' && da.sl != null && da.tp != null) {
-          candleSeries.createPriceLine({
-            price: da.sl,
-            color: dark ? '#22c55e' : '#15803d',
-            lineWidth: 1,
-            lineStyle: dash,
-            axisLabelVisible: true,
-            title: 'SL',
-          });
-          candleSeries.createPriceLine({
-            price: da.tp,
-            color: dark ? '#86efac' : '#16a34a',
-            lineWidth: 1,
-            lineStyle: dot,
-            axisLabelVisible: true,
-            title: 'TP',
-          });
+          candleSeries.createPriceLine({ price: da.sl, color: dark ? '#22c55e' : '#15803d', lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'SL' });
+          candleSeries.createPriceLine({ price: da.tp, color: dark ? '#86efac' : '#16a34a', lineWidth: 1, lineStyle: dot,  axisLabelVisible: true, title: 'TP' });
         } else if (da.bias === 'short' && da.sl != null && da.tp != null) {
-          candleSeries.createPriceLine({
-            price: da.sl,
-            color: dark ? '#f87171' : '#b91c1c',
-            lineWidth: 1,
-            lineStyle: dash,
-            axisLabelVisible: true,
-            title: 'SL',
-          });
-          candleSeries.createPriceLine({
-            price: da.tp,
-            color: dark ? '#fca5a5' : '#dc2626',
-            lineWidth: 1,
-            lineStyle: dot,
-            axisLabelVisible: true,
-            title: 'TP',
-          });
+          candleSeries.createPriceLine({ price: da.sl, color: dark ? '#f87171' : '#b91c1c', lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'SL' });
+          candleSeries.createPriceLine({ price: da.tp, color: dark ? '#fca5a5' : '#dc2626', lineWidth: 1, lineStyle: dot,  axisLabelVisible: true, title: 'TP' });
         }
       }
 
-      const rsiValues = this.calcRSI(closes, 14);
-      let rsiChart = null;
-      const rsiPaneH = rsiEl
-        ? Math.max(96, Math.round(rsiEl.clientHeight) || 120)
-        : 96;
-      const macdPaneH = macdEl
-        ? Math.max(96, Math.round(macdEl.clientHeight) || 120)
-        : 96;
-      if (rsiEl) {
-        rsiChart = LightweightCharts.createChart(rsiEl, {
-          width: rsiEl.clientWidth,
-          height: rsiPaneH,
-          layout: baseLayout,
-          grid: baseGrid,
-          crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-          rightPriceScale: {
-            borderColor: '#e5e7eb',
-            minimumWidth: 64,
-            autoScale: false,
-          },
-          timeScale: syncTs,
-          localization: { timeFormatter: (time) => derivTimeLabel(time) },
-        });
-        rsiChart.priceScale('right').applyOptions({ minimum: 0, maximum: 100 });
-        const rsiSeries = rsiChart.addLineSeries({
+      // ─── RSI (14) ─────────────────────────────────────────────────────────
+      if (showRsi) {
+        const rsiValues = this.calcRSI(closes, 14);
+        const rsiSeries = chart.addLineSeries({
+          priceScaleId: 'rsi',
           color: '#8b5cf6',
           lineWidth: 2,
           priceLineVisible: false,
           lastValueVisible: true,
           title: 'RSI',
+          autoscaleInfoProvider: () => ({
+            priceRange: { minValue: 0, maxValue: 100 },
+            margins: { above: 8, below: 8 },
+          }),
+        });
+        chart.priceScale('rsi').applyOptions({
+          scaleMargins: rsiMargins,
+          minimumWidth: 36,
+          borderVisible: false,
         });
         rsiSeries.setData(
           barData.map((b, i) => {
@@ -2786,54 +2811,32 @@ function app() {
             return { time: n(b.time), value: v };
           }),
         );
-        const lineStyle = LightweightCharts.LineStyle.Dashed;
-        rsiSeries.createPriceLine({
-          price: 70,
-          color: '#ef4444',
-          lineWidth: 1,
-          lineStyle,
-          axisLabelVisible: false,
-          title: '',
-        });
-        rsiSeries.createPriceLine({
-          price: 30,
-          color: '#10b981',
-          lineWidth: 1,
-          lineStyle,
-          axisLabelVisible: false,
-          title: '',
-        });
+        const dashed = LightweightCharts.LineStyle.Dashed;
+        rsiSeries.createPriceLine({ price: 70, color: '#ef4444', lineWidth: 1, lineStyle: dashed, axisLabelVisible: true, title: '' });
+        rsiSeries.createPriceLine({ price: 30, color: '#10b981', lineWidth: 1, lineStyle: dashed, axisLabelVisible: true, title: '' });
       }
 
-      const macdData = this.calcMACDFromIntradayBars(closes, barData);
-      let macdChart = null;
-      if (macdEl) {
-        macdChart = LightweightCharts.createChart(macdEl, {
-          width: macdEl.clientWidth,
-          height: macdPaneH,
-          layout: baseLayout,
-          grid: baseGrid,
-          crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-          rightPriceScale: { borderColor: '#e5e7eb', minimumWidth: 64 },
-          timeScale: syncTs,
-          localization: { timeFormatter: (time) => derivTimeLabel(time) },
-        });
-        const histSeries = macdChart.addHistogramSeries({
-          priceScaleId: 'right',
+      // ─── MACD (12, 26, 9) ─────────────────────────────────────────────────
+      if (showMacd) {
+        const macdData = this.calcMACDFromIntradayBars(closes, barData);
+        const histSeries = chart.addHistogramSeries({
+          priceScaleId: 'macd',
           lastValueVisible: false,
+        });
+        chart.priceScale('macd').applyOptions({
+          scaleMargins: macdMargins,
+          minimumWidth: 36,
+          borderVisible: false,
         });
         histSeries.setData(
           macdData.map((d) => {
             if (d.hist == null || Number.isNaN(d.hist)) return { time: d.time };
             const h = d.hist;
-            return {
-              time: d.time,
-              value: h,
-              color: h >= 0 ? '#26a69a88' : '#ef535088',
-            };
+            return { time: d.time, value: h, color: h >= 0 ? '#26a69a88' : '#ef535088' };
           }),
         );
-        const macdLine = macdChart.addLineSeries({
+        const macdLine = chart.addLineSeries({
+          priceScaleId: 'macd',
           color: '#3b82f6',
           lineWidth: 1.5,
           priceLineVisible: false,
@@ -2842,12 +2845,11 @@ function app() {
         });
         macdLine.setData(
           macdData.map((d) =>
-            d.macd != null && !Number.isNaN(d.macd)
-              ? { time: d.time, value: d.macd }
-              : { time: d.time },
+            d.macd != null && !Number.isNaN(d.macd) ? { time: d.time, value: d.macd } : { time: d.time },
           ),
         );
-        const sigLine = macdChart.addLineSeries({
+        const sigLine = chart.addLineSeries({
+          priceScaleId: 'macd',
           color: '#f97316',
           lineWidth: 1.5,
           priceLineVisible: false,
@@ -2856,43 +2858,39 @@ function app() {
         });
         sigLine.setData(
           macdData.map((d) =>
-            d.signal != null && !Number.isNaN(d.signal)
-              ? { time: d.time, value: d.signal }
-              : { time: d.time },
+            d.signal != null && !Number.isNaN(d.signal) ? { time: d.time, value: d.signal } : { time: d.time },
           ),
         );
-        histSeries.createPriceLine({
-          price: 0,
-          color: '#94a3b8',
-          lineWidth: 1,
-          lineStyle: LightweightCharts.LineStyle.Dotted,
-          axisLabelVisible: false,
-        });
+        histSeries.createPriceLine({ price: 0, color: '#94a3b8', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
       }
 
+      // ─── Viewport + runtime ───────────────────────────────────────────────
       const dRestore = this._derivScrollRestore;
       if (dRestore) this._derivScrollRestore = null;
-      const derivRt = {
-        ro: null,
-        roTimer: null,
-        panTimer: null,
-        postTimer: null,
+      const derivRt = { ro: null, roTimer: null, panTimer: null, postTimer: null };
+      // Lưu series refs để patchDerivLastBar() update incremental (không rebuild chart)
+      this.derivCharts = {
+        main: chart,
+        candle: candleSeries,
+        vol: volSeries,
+        rsi: showRsi ? rsiSeries : null,
+        macdHist: showMacd ? histSeries : null,
+        macdLine: showMacd ? macdLine : null,
+        macdSignal: showMacd ? sigLine : null,
+        closes,
       };
-      this.derivCharts = { main: chart, rsi: rsiChart, macd: macdChart };
       this._derivChartRuntime = derivRt;
       const isDerivAlive = () => this.derivCharts?.main === chart;
+
+      // rightOffset đã được set khi tạo chart — chỉ cần setVisibleLogicalRange
       const applyDerivDefaultViewport = () => {
-        const nBars = barData.length;
-        if (!nBars) return;
-        const last = nBars - 1;
-        // Nến hiện tại nằm khoảng 2/3 chart: rightPad ~= 1/3 total span.
-        const coreBars = Math.min(140, Math.max(70, Math.round(nBars * 0.42)));
-        const rightPad = Math.max(24, Math.round(coreBars * 0.5));
-        const totalSpan = coreBars + rightPad;
-        const to = last + rightPad;
-        const from = to - totalSpan;
+        const lastIdx = barData.length - 1;
+        if (lastIdx < 0) return;
+        const from = lastIdx - (visibleBars - rightBars);
+        const to   = lastIdx + rightBars;
         chart.timeScale().setVisibleLogicalRange({ from, to });
       };
+
       if (dRestore && dRestore.added > 0) {
         chart.timeScale().setVisibleLogicalRange({
           from: dRestore.from + dRestore.added,
@@ -2901,90 +2899,35 @@ function app() {
       } else {
         applyDerivDefaultViewport();
       }
+
+      // Gọi lại sau khi LWC hoàn tất layout để đảm bảo viewport đúng
       derivRt.postTimer = setTimeout(() => {
         if (!isDerivAlive()) return;
-        const range = chart.timeScale().getVisibleLogicalRange();
-        const rightOffset = range
-          ? Math.max(20, Math.round((range.to - range.from) * 0.24))
-          : 24;
-        [chart, rsiChart, macdChart].forEach((c) => {
-          if (c)
-            try {
-              c.timeScale().applyOptions({ rightOffset });
-            } catch {}
-        });
-        if (!dRestore) {
-          try {
-            applyDerivDefaultViewport();
-          } catch {}
-        }
-        const synced = chart.timeScale().getVisibleLogicalRange();
-        if (synced && rsiChart)
-          try {
-            rsiChart.timeScale().setVisibleLogicalRange(synced);
-          } catch {}
-        if (synced && macdChart)
-          try {
-            macdChart.timeScale().setVisibleLogicalRange(synced);
-          } catch {}
-      }, 50);
-
-      let syncing = false;
-      const syncAll = (source, others) => {
-        source.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-          if (!isDerivAlive() || syncing || !range) return;
-          syncing = true;
-          others.forEach((c) => {
-            if (c)
-              try {
-                c.timeScale().setVisibleLogicalRange(range);
-              } catch {}
-          });
-          syncing = false;
-        });
-      };
-      const sub = [rsiChart, macdChart];
-      syncAll(chart, sub);
-      if (rsiChart) syncAll(rsiChart, [chart, macdChart]);
-      if (macdChart) syncAll(macdChart, [chart, rsiChart]);
+        if (!dRestore) try { applyDerivDefaultViewport(); } catch {}
+      }, 60);
 
       chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        if (!isDerivAlive()) return;
-        if (!range || !barData?.length) return;
+        if (!isDerivAlive() || !range || !barData?.length) return;
         if (this.derivOlderLoading || !this.derivHasMoreOlder) return;
-        const barCount = barData.length;
         const span = range.to - range.from;
-        if (span >= barCount * 0.92) return;
-        if (range.from > 14) return;
+        if (span >= barData.length * 0.92 || range.from > 14) return;
         clearTimeout(derivRt.panTimer);
-        derivRt.panTimer = setTimeout(
-          () => this.maybeLoadOlderDerivBars(),
-          500,
-        );
+        derivRt.panTimer = setTimeout(() => this.maybeLoadOlderDerivBars(), 500);
       });
+
+      // Chặn scroll trang khi wheel trên chart (chart tự xử lý zoom/pan)
+      const onWheel = (e) => e.stopPropagation();
+      mainEl.addEventListener('wheel', onWheel, { passive: false });
+      derivRt.onWheel = onWheel;
 
       const ro = new ResizeObserver(() => {
         clearTimeout(derivRt.roTimer);
         derivRt.roTimer = setTimeout(() => {
           if (!isDerivAlive()) return;
-          const nh = Math.max(280, Math.round(mainEl.clientHeight) || 420);
-          const rh = rsiEl
-            ? Math.max(96, Math.round(rsiEl.clientHeight) || 120)
-            : 0;
-          const mh = macdEl
-            ? Math.max(96, Math.round(macdEl.clientHeight) || 120)
-            : 0;
-          chart.applyOptions({ width: mainEl.clientWidth, height: nh });
-          if (rsiChart)
-            rsiChart.applyOptions({
-              width: rsiEl?.clientWidth ?? 0,
-              height: rh,
-            });
-          if (macdChart)
-            macdChart.applyOptions({
-              width: macdEl?.clientWidth ?? 0,
-              height: mh,
-            });
+          chart.applyOptions({
+            width: mainEl.clientWidth,
+            height: Math.max(380, Math.round(mainEl.clientHeight) || 520),
+          });
         }, 120);
       });
       ro.observe(mainEl);

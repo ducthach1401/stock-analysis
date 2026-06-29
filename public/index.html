@@ -2161,24 +2161,8 @@
                 </div>
                 <div
                   x-ref="derivChartMain"
-                  class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700 min-h-[400px]"
-                  style="height: clamp(440px, min(72vh, 820px), 820px)"
-                ></div>
-                <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">
-                  RSI (14)
-                </div>
-                <div
-                  x-ref="derivRsi"
                   class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700"
-                  style="height: 128px"
-                ></div>
-                <div class="text-[10px] font-semibold text-gray-500 px-1 pt-1">
-                  MACD (12, 26, 9)
-                </div>
-                <div
-                  x-ref="derivMacd"
-                  class="w-full rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700"
-                  style="height: 128px"
+                  style="height: clamp(480px, min(82vh, 900px), 900px)"
                 ></div>
               </div>
             </div>
@@ -2188,8 +2172,7 @@
             class="text-xs text-gray-400 dark:text-zinc-500 border-t pt-3"
             style="border-color: var(--border)"
           >
-            Trục giá: <b>điểm</b> chỉ số VN30. EMA / BB–nén (5m·15m) / hỗ
-            trợ–kháng cự: checkbox bên dưới (áp khi làm mới chart).
+            Trục giá: <b>điểm</b> chỉ số VN30. Các lớp vẽ và chỉ số bên dưới áp khi làm mới chart.
           </p>
           <div
             class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs pl-0.5"
@@ -2236,6 +2219,31 @@
                 class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
               />
               <span>Hỗ trợ / KC</span>
+            </label>
+            <span class="font-medium text-gray-500 dark:text-gray-400 shrink-0 pl-2 border-l border-gray-200 dark:border-zinc-700"
+              >Chỉ số:</span
+            >
+            <label
+              class="inline-flex items-center gap-1.5 cursor-pointer select-none"
+            >
+              <input
+                type="checkbox"
+                x-model="derivShowRsi"
+                @change="persistChartOverlays()"
+                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span>RSI</span>
+            </label>
+            <label
+              class="inline-flex items-center gap-1.5 cursor-pointer select-none"
+            >
+              <input
+                type="checkbox"
+                x-model="derivShowMacd"
+                @change="persistChartOverlays()"
+                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span>MACD</span>
             </label>
           </div>
         </div>

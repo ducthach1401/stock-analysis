@@ -45,7 +45,6 @@ const RISK_ATR_MULT = 1.2;
 const REWARD_ATR_MULT = 2;
 const MIN_ATR_POINTS = 1.5; // Không trade khi thị trường quá ít biến động
 const NO_TRADE_AFTER_HHMM = 1415; // 14:15 VN — quá gần đóng cửa
-const MAX_DAILY_LOSSES = 2; // Dừng sau 2 lần lỗ/ngày
 const CHECKS_REQUIRED = 4; // Cần 4/5 điều kiện (đã bỏ EMA50 — backtest 6T cho thấy hại nhẹ)
 const RSI_MAX_LONG = 75; // Không đu LONG khi đã quá mua (data V1: LONG ở RSI 74-81 toàn lỗ)
 const RSI_MIN_SHORT = 25; // Không đu SHORT khi đã quá bán
@@ -465,14 +464,6 @@ export class DerivativesService {
       );
     }
 
-    // Gate 3: Dừng giao dịch sau MAX_DAILY_LOSSES lần lỗ trong ngày
-    const lossesToday = await this.todayLossCount(tradingDate);
-    if (lossesToday >= MAX_DAILY_LOSSES) {
-      return noTrade(
-        `Dừng giao dịch — đã ${lossesToday} lần lỗ hôm nay (giới hạn ${MAX_DAILY_LOSSES}).`,
-      );
-    }
-
     // 5 điều kiện định hướng — mutually exclusive giữa LONG và SHORT.
     // (EMA50 đã bỏ: backtest 6T cho thấy bóp phe SHORT nhiều hơn lợi cho LONG → net hại.)
     const longChecks = [
@@ -624,17 +615,6 @@ export class DerivativesService {
       10,
     );
     return hhmm >= NO_TRADE_AFTER_HHMM;
-  }
-
-  private todayLossCount(tradingDate: string): Promise<number> {
-    return this.decisionRepo.count({
-      where: {
-        symbol: 'VN30',
-        tradingDate,
-        status: DerivativeDecisionStatus.CLOSED,
-        outcome: DerivativeDecisionOutcome.LOSS,
-      },
-    });
   }
 
   private indicators(bars: IntradayIndexBarDto[]): IndicatorSnapshot {
