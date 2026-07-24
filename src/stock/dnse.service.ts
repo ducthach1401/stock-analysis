@@ -177,14 +177,78 @@ export class DnseService {
     const res = (resolution || '5').trim();
     const u = res.toUpperCase();
     const apiRes = u === '1D' ? '1D' : u === '1H' || u === '60' ? '1H' : res;
+    const native = await this.fetchDerivativeOhlcRaw(sym, apiRes, from, to);
+    // Endpoint 5m của Entrade publish trễ hơn 1m ~1 nến (nến 5m chỉ xuất hiện sau khi bucket đóng +
+    // delay xử lý). Với khung 5m, bù đuôi bằng nến 1m gộp về 5m — CHỈ bucket đã ĐÓNG (an toàn cho
+    // decision: không bao giờ act trên nến đang hình thành) → chart & bot bớt trễ ~5-8 phút.
+    if (u === '5') {
+      const tail = await this.freshFiveMinTailFrom1m(sym, to);
+      if (tail.length) return this.mergeBarsByTime(native, tail);
+    }
+    return native;
+  }
+
+  private async fetchDerivativeOhlcRaw(
+    symbol: string,
+    resolution: string,
+    from: Date,
+    to: Date,
+  ): Promise<IntradayIndexBarDto[]> {
     const fromTs = Math.floor(from.getTime() / 1000);
     const toTs = Math.floor(to.getTime() / 1000);
     const { data } = await axios.get<DnseOhlcResponse>(DNSE_CHART_DERIVATIVE, {
-      params: { symbol: sym, resolution: apiRes, from: fromTs, to: toTs },
+      params: { symbol, resolution, from: fromTs, to: toTs },
       headers: { 'User-Agent': 'Mozilla/5.0 Chrome/124.0' },
       timeout: 60000,
     });
-    return this.mapToIntradayBars(sym, data);
+    return this.mapToIntradayBars(symbol, data);
+  }
+
+  /**
+   * Gộp nến 1m gần nhất (~45 phút) thành nến 5m, chỉ giữ bucket ĐÃ ĐÓNG (start+300s ≤ now).
+   * Dùng bù cho độ trễ publish của endpoint 5m. Lỗi mạng → trả rỗng (fallback về native).
+   */
+  private async freshFiveMinTailFrom1m(
+    symbol: string,
+    to: Date,
+  ): Promise<IntradayIndexBarDto[]> {
+    try {
+      const from = new Date(to.getTime() - 45 * 60 * 1000);
+      const oneMin = await this.fetchDerivativeOhlcRaw(symbol, '1', from, to);
+      if (!oneMin.length) return [];
+      const nowSec = Math.floor(Date.now() / 1000);
+      const buckets = new Map<number, IntradayIndexBarDto>();
+      for (const b of oneMin.sort((a, c) => a.time - c.time)) {
+        const start = Math.floor(b.time / 300) * 300;
+        const cur = buckets.get(start);
+        if (!cur) {
+          buckets.set(start, { ...b, time: start });
+        } else {
+          cur.high = Math.max(cur.high, b.high);
+          cur.low = Math.min(cur.low, b.low);
+          cur.close = b.close;
+          cur.volume = (cur.volume ?? 0) + (b.volume ?? 0);
+        }
+      }
+      // Chỉ bucket đã đóng hẳn — bỏ nến 5m đang hình thành.
+      return [...buckets.values()].filter((b) => b.time + 300 <= nowSec);
+    } catch (e) {
+      this.logger.debug(
+        `${symbol}: bù đuôi 1m→5m lỗi, dùng native — ${(e as Error).message}`,
+      );
+      return [];
+    }
+  }
+
+  /** Union theo `time`; khi trùng bucket, ưu tiên `primary` (native — giá đóng chính thức). */
+  private mergeBarsByTime(
+    primary: IntradayIndexBarDto[],
+    extra: IntradayIndexBarDto[],
+  ): IntradayIndexBarDto[] {
+    const byTime = new Map<number, IntradayIndexBarDto>();
+    for (const b of extra) byTime.set(b.time, b);
+    for (const b of primary) byTime.set(b.time, b); // native ghi đè extra khi trùng
+    return [...byTime.values()].sort((a, b) => a.time - b.time);
   }
 
   /** Gộp 4 nến 1H liên tiếp (theo thứ tự thời gian) → một nến 4H. */

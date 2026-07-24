@@ -1810,6 +1810,28 @@
                   </button>
                   <button
                     type="button"
+                    @click="syncDerivChartHard()"
+                    :disabled="derivHardSyncLoading"
+                    class="btn-secondary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
+                    title="Xoá cache nến local (kể cả cache index VN30 cũ) và tải lại toàn bộ chart VN30F1M từ mạng"
+                  >
+                    <svg
+                      :class="derivHardSyncLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 13a7 7 0 11-3.9-6.3M19 5v4h-4"
+                      />
+                    </svg>
+                    Đồng bộ VN30F1M
+                  </button>
+                  <button
+                    type="button"
                     x-show="isAdmin"
                     @click="runDerivManualScan()"
                     :disabled="derivDecisionScanLoading"

@@ -124,6 +124,7 @@ function app() {
     derivHasMoreOlder: true,
     derivOlderLoading: false,
     derivSyncMonthLoading: false,
+    derivHardSyncLoading: false,
     _derivScrollRestore: null,
     _derivChartRuntime: null,
     /** Trong phiên: tự làm mới chart + tín hiệu định kỳ khi đang mở tab Phái sinh */
@@ -3291,6 +3292,32 @@ function app() {
         this.showToast('Không quét được phái sinh VN30', 'error');
       } finally {
         this.derivDecisionScanLoading = false;
+      }
+    },
+
+    /**
+     * Đồng bộ CỨNG chart VN30F1M: xoá cache nến local (mọi khung, kể cả cache index cũ) rồi tải lại
+     * hoàn toàn từ mạng (bypass cache backend). Dùng khi chart hiển thị sai/cũ do lẫn dữ liệu index cũ.
+     */
+    async syncDerivChartHard() {
+      if (this.derivHardSyncLoading) return;
+      this.derivHardSyncLoading = true;
+      try {
+        for (const r of ['5', '15', '1H']) {
+          localStorage.removeItem(`derivIntradayCache:VN30F1M:${r}`);
+          localStorage.removeItem(`derivIntradayCache:VN30:${r}`); // dọn cache index cũ nếu còn
+        }
+        this.derivBars = [];
+        this.derivBarsResolution = null;
+        await Promise.all([
+          this.loadDerivativeDecisions({ silent: true, forceNetwork: true }),
+          this.loadDerivIntraday({ reset: true, forceNetwork: true }),
+        ]);
+        this.showToast('Đã đồng bộ lại chart VN30F1M', 'success');
+      } catch (e) {
+        this.showToast('Không đồng bộ được chart VN30F1M', 'error');
+      } finally {
+        this.derivHardSyncLoading = false;
       }
     },
 

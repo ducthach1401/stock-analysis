@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { BacktestSeries, Trade, buildSeries } from './vn30-backtest-core';
 import {
   isVnFuturesSessionOpen,
@@ -56,8 +56,11 @@ const ALGORITHM = 'VN30_EMA_VWAP_RSI_ATR_5M_V4';
 // Lý do: basis index↔futures dao động tới ~±8đ/ngày (lớn hơn cả TP/SL ~5.6/3.4đ) → chỉ báo và P/L
 // phải tính trên chính hợp đồng giao dịch. Endpoint Entrade `/ohlcs/derivative`, không cần auth.
 const PRICE_SYMBOL = 'VN30F1M';
-// Nhãn `symbol` lưu DB cho quyết định — tách baseline futures khỏi dữ liệu index cũ (dưới 'VN30').
+// Nhãn `symbol` lưu DB cho quyết định MỚI — tách baseline futures khỏi dữ liệu index cũ (dưới 'VN30').
 const DECISION_SYMBOL = 'VN30F1M';
+// Danh sách symbol cho DANH SÁCH LỊCH SỬ (hiển thị): gồm cả baseline index cũ (V1/V3 dưới 'VN30')
+// lẫn futures mới ('VN30F1M') để không mất lịch sử. Các query VẬN HÀNH (mở/đóng/dup) vẫn chỉ dùng DECISION_SYMBOL.
+const HISTORY_SYMBOLS = ['VN30', DECISION_SYMBOL];
 const LOOKBACK_BARS = 120;
 const SETTLE_AFTER_BARS = 12;
 const MIN_BARS = 60;
@@ -352,7 +355,7 @@ export class DerivativesService {
     const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 200);
     const fetchTake = Math.min(1200, Math.max(300, safeLimit * 10));
     const rows = await this.decisionRepo.find({
-      where: { symbol: DECISION_SYMBOL },
+      where: { symbol: In(HISTORY_SYMBOLS) },
       order: { decidedAt: 'DESC' },
       take: fetchTake,
     });
