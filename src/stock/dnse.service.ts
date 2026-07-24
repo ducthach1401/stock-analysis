@@ -161,11 +161,17 @@ export class DnseService {
    * Nến HĐTL phái sinh VN30F1M / VN30F2M từ endpoint `derivative` (giá & volume của chính hợp đồng,
    * khác chỉ số VN30 — basis dao động tới ~±8đ/ngày). Resolution: `5`, `15`, `1H`, `1D` như index.
    */
+  /**
+   * `includeForming`: CHỈ dùng cho hiển thị chart (UX chuẩn: thấy nến cuối chạy sống). Quyết định
+   * giao dịch (`derivatives.service.ts`) KHÔNG được truyền true — luôn giữ mặc định false để không
+   * bao giờ tính EMA/RSI/ATR/breakout trên một nến chưa đóng (tránh tín hiệu giả/lookahead).
+   */
   async fetchIntradayDerivativeOhlc(
     symbol: string,
     resolution: string,
     from: Date,
     to: Date,
+    includeForming = false,
   ): Promise<IntradayIndexBarDto[]> {
     const sym = symbol.toUpperCase();
     if (!isDerivativeTicker(sym)) {
@@ -179,11 +185,20 @@ export class DnseService {
     const apiRes = u === '1D' ? '1D' : u === '1H' || u === '60' ? '1H' : res;
     const native = await this.fetchDerivativeOhlcRaw(sym, apiRes, from, to);
     // Endpoint 5m của Entrade publish trễ hơn 1m ~1 nến (nến 5m chỉ xuất hiện sau khi bucket đóng +
-    // delay xử lý). Với khung 5m, bù đuôi bằng nến 1m gộp về 5m — CHỈ bucket đã ĐÓNG (an toàn cho
-    // decision: không bao giờ act trên nến đang hình thành) → chart & bot bớt trễ ~5-8 phút.
+    // delay xử lý). Với khung 5m, bù đuôi bằng nến 1m gộp về 5m → chart & bot bớt trễ ~5-8 phút.
     if (u === '5') {
-      const tail = await this.freshFiveMinTailFrom1m(sym, to);
-      if (tail.length) return this.mergeBarsByTime(native, tail);
+      const { closedTail, forming } = await this.fiveMinFromOneMin(
+        sym,
+        to,
+        includeForming,
+      );
+      let merged = closedTail.length
+        ? this.mergeBarsByTime(native, closedTail)
+        : native;
+      // Nến đang hình thành APPEND SAU CÙNG, không qua mergeBarsByTime (không được lẫn với dữ liệu
+      // đã đóng) — chỉ chart mới nhận được nó.
+      if (forming) merged = [...merged, forming];
+      return merged;
     }
     return native;
   }
@@ -205,17 +220,25 @@ export class DnseService {
   }
 
   /**
-   * Gộp nến 1m gần nhất (~45 phút) thành nến 5m, chỉ giữ bucket ĐÃ ĐÓNG (start+300s ≤ now).
-   * Dùng bù cho độ trễ publish của endpoint 5m. Lỗi mạng → trả rỗng (fallback về native).
+   * Gộp nến 1m gần nhất (~45 phút) thành nến 5m — MỘT lần fetch 1m, tách 2 kết quả:
+   * - `closedTail`: bucket ĐÃ ĐÓNG (start+300s ≤ now) — dùng bù độ trễ publish của endpoint 5m,
+   *   an toàn cho cả decision lẫn chart.
+   * - `forming`: bucket đang chạy (nếu `includeForming`, có ≥60s dữ liệu) — CHỈ để chart hiển thị
+   *   nến sống, KHÔNG bao giờ lẫn vào closedTail/decision.
+   * Lỗi mạng → trả rỗng cả 2 (fallback về native).
    */
-  private async freshFiveMinTailFrom1m(
+  private async fiveMinFromOneMin(
     symbol: string,
     to: Date,
-  ): Promise<IntradayIndexBarDto[]> {
+    includeForming: boolean,
+  ): Promise<{
+    closedTail: IntradayIndexBarDto[];
+    forming: IntradayIndexBarDto | null;
+  }> {
     try {
       const from = new Date(to.getTime() - 45 * 60 * 1000);
       const oneMin = await this.fetchDerivativeOhlcRaw(symbol, '1', from, to);
-      if (!oneMin.length) return [];
+      if (!oneMin.length) return { closedTail: [], forming: null };
       const nowSec = Math.floor(Date.now() / 1000);
       const buckets = new Map<number, IntradayIndexBarDto>();
       for (const b of oneMin.sort((a, c) => a.time - c.time)) {
@@ -230,13 +253,23 @@ export class DnseService {
           cur.volume = (cur.volume ?? 0) + (b.volume ?? 0);
         }
       }
-      // Chỉ bucket đã đóng hẳn — bỏ nến 5m đang hình thành.
-      return [...buckets.values()].filter((b) => b.time + 300 <= nowSec);
+      const closedTail = [...buckets.values()].filter(
+        (b) => b.time + 300 <= nowSec,
+      );
+      let forming: IntradayIndexBarDto | null = null;
+      // Chỉ tính forming khi `to` gần "hiện tại" thật (không áp cho các trang phân trang lịch sử cũ).
+      if (includeForming && Date.now() - to.getTime() < 5 * 60 * 1000) {
+        const curStart = Math.floor(nowSec / 300) * 300;
+        const cur = buckets.get(curStart);
+        // Cần ≥60s dữ liệu mới hiển thị — tránh nến gần như rỗng ngay khi bucket vừa mở.
+        if (cur && nowSec - curStart >= 60) forming = cur;
+      }
+      return { closedTail, forming };
     } catch (e) {
       this.logger.debug(
         `${symbol}: bù đuôi 1m→5m lỗi, dùng native — ${(e as Error).message}`,
       );
-      return [];
+      return { closedTail: [], forming: null };
     }
   }
 

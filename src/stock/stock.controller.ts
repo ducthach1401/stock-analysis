@@ -62,9 +62,11 @@ export class StockController {
   }
 
   /**
-   * GET /stocks/VN30F1M/intraday-derivative?resolution=5|15|1H|1D&from=&to=
+   * GET /stocks/VN30F1M/intraday-derivative?resolution=5|15|1H|1D&from=&to=&forming=1
    * Nến HĐTL phái sinh (Entrade `/ohlcs/derivative`) — giá & volume của chính hợp đồng,
    * khác chỉ số VN30 (xem `PRICE_SYMBOL` trong derivatives.service.ts).
+   * `forming=1`: kèm nến 5m ĐANG HÌNH THÀNH (chỉ dùng cho chart hiển thị — xem ghi chú an toàn
+   * trong `DnseService.fetchIntradayDerivativeOhlc`, không dùng cho quyết định giao dịch).
    */
   @Get(':ticker/intraday-derivative')
   getIntradayDerivative(
@@ -73,14 +75,17 @@ export class StockController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('nocache') noCache?: string,
+    @Query('forming') forming?: string,
   ) {
     const bypassCache = noCache === '1' || noCache === 'true';
+    const includeForming = forming === '1' || forming === 'true';
     return this.stockService.fetchIntradayDerivativeOhlc(
       ticker,
       resolution,
       from,
       to,
       bypassCache,
+      includeForming,
     );
   }
 

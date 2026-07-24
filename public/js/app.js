@@ -624,8 +624,8 @@ function app() {
     /** Chu kỳ làm mới trong phiên: 5m/15m nhanh; 1H nhẹ hơn. */
     derivativesPollIntervalMs() {
       const r = this.derivResolution;
-      if (r === '5' || r === '15') return 25 * 1000;
-      if (r === '1H') return 90 * 1000;
+      if (r === '5' || r === '15') return 10 * 1000;
+      if (r === '1H') return 45 * 1000;
       return 15 * 60 * 1000;
     },
 
@@ -2356,6 +2356,11 @@ function app() {
       const forceNetwork = opts.forceNetwork === true;
       const fast = opts.fast === true;
       const noCacheParam = forceNetwork ? '&nocache=1' : '';
+      // Chốt khung tại thời điểm gọi — fetch full-load 5m có thể mất nhiều giây (phân trang 31 ngày).
+      // Nếu người dùng đổi khung (setDerivResolution) trong lúc đang chờ, kết quả trễ này phải bị BỎ QUA,
+      // không được ghi đè derivBars/derivBarsResolution bằng dữ liệu sai khung (race condition cũ).
+      const requestedResolution = this.derivResolution;
+      const isStale = () => this.derivResolution !== requestedResolution;
       if (!silent) this.derivLoading = true;
       try {
         this._derivScrollRestore = null;
@@ -2385,11 +2390,12 @@ function app() {
           const toFast = new Date();
           const res = `resolution=${encodeURIComponent(this.derivResolution)}`;
           const fastUrl = this.withNoCache(
-            `/stocks/VN30F1M/intraday-derivative?${res}&from=${encodeURIComponent(fromFast.toISOString())}&to=${encodeURIComponent(toFast.toISOString())}${noCacheParam}`,
+            `/stocks/VN30F1M/intraday-derivative?${res}&from=${encodeURIComponent(fromFast.toISOString())}&to=${encodeURIComponent(toFast.toISOString())}&forming=1${noCacheParam}`,
           );
           const rawFast = await fetch(fastUrl, { cache: 'no-store' })
             .then((r) => r.json())
             .catch(() => []);
+          if (isStale()) return; // Người dùng đã đổi khung khác trong lúc chờ — bỏ kết quả trễ này.
           const arrFast = Array.isArray(rawFast) ? rawFast : [];
           if (arrFast.length) {
             const byTime = new Map(
@@ -2424,9 +2430,10 @@ function app() {
         let reqTo = to;
         let guard = 0;
         while (guard++ < 200) {
+          if (isStale()) return; // Đổi khung giữa chừng — dừng ngay, không phí thêm request.
           const prevSize = byTime.size;
           const url = this.withNoCache(
-            `/stocks/VN30F1M/intraday-derivative?${res}&from=${encodeURIComponent(targetFrom.toISOString())}&to=${encodeURIComponent(reqTo.toISOString())}${noCacheParam}`,
+            `/stocks/VN30F1M/intraday-derivative?${res}&from=${encodeURIComponent(targetFrom.toISOString())}&to=${encodeURIComponent(reqTo.toISOString())}&forming=1${noCacheParam}`,
           );
           const raw = await fetch(url, { cache: 'no-store' })
             .then((r) => r.json())
@@ -2447,6 +2454,7 @@ function app() {
           reqTo = new Date(batchMin * 1000 - 1000);
           if (reqTo.getTime() < targetFrom.getTime()) break;
         }
+        if (isStale()) return; // Đổi khung xong xuôi trước khi vòng lặp kết thúc — bỏ kết quả trễ.
         const fetchedBars = [...byTime.values()].sort(
           (a, b) => Number(a.time) - Number(b.time),
         );
@@ -2476,7 +2484,8 @@ function app() {
           requestAnimationFrame(() => this.renderDerivIntradayPanel());
         }
       } finally {
-        if (!silent) this.derivLoading = false;
+        // Không tắt spinner nếu call này đã stale — call mới (khung hiện tại) có thể vẫn đang chạy.
+        if (!silent && !isStale()) this.derivLoading = false;
       }
     },
 
@@ -2776,7 +2785,6 @@ function app() {
       if (da && !da.short && typeof da.lastClose === 'number') {
         const dash = LightweightCharts.LineStyle.Dashed;
         const dot  = LightweightCharts.LineStyle.Dotted;
-        candleSeries.createPriceLine({ price: da.lastClose, color: dark ? '#facc15' : '#ca8a04', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: true, title: 'Giá cuối' });
         if (da.bias === 'long' && da.sl != null && da.tp != null) {
           candleSeries.createPriceLine({ price: da.sl, color: dark ? '#22c55e' : '#15803d', lineWidth: 1, lineStyle: dash, axisLabelVisible: true, title: 'SL' });
           candleSeries.createPriceLine({ price: da.tp, color: dark ? '#86efac' : '#16a34a', lineWidth: 1, lineStyle: dot,  axisLabelVisible: true, title: 'TP' });

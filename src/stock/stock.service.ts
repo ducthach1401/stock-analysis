@@ -311,6 +311,10 @@ export class StockService implements OnModuleDestroy {
   /**
    * Nến HĐTL phái sinh VN30F1M / VN30F2M (giá & volume của chính hợp đồng, không phải chỉ số VN30).
    * Cùng cơ chế cache như intraday index; validate ticker phái sinh trước khi gọi DNSE.
+   *
+   * `includeForming`: CHỈ dùng cho route chart (`StockController`). Lời gọi nội bộ từ
+   * `DerivativesService.fetchRecentFiveMinuteBars` KHÔNG được truyền true — decision-making phải
+   * luôn dựa trên nến đã đóng (xem ghi chú an toàn trong `DnseService.fetchIntradayDerivativeOhlc`).
    */
   async fetchIntradayDerivativeOhlc(
     ticker: string,
@@ -318,6 +322,7 @@ export class StockService implements OnModuleDestroy {
     from?: string,
     to?: string,
     noCache = false,
+    includeForming = false,
   ): Promise<IntradayIndexBarDto[]> {
     const upper = ticker.toUpperCase();
     if (!isDerivativeTicker(upper)) {
@@ -338,7 +343,11 @@ export class StockService implements OnModuleDestroy {
     const fromD = from
       ? new Date(from)
       : new Date(toD.getTime() - defaultDays * 24 * 60 * 60 * 1000);
-    const cacheKey = this.intradayCacheKey(upper, res, fromD, toD);
+    // Namespace cache riêng khi includeForming — nến sống đổi liên tục, không được lẫn với cache
+    // "chỉ đóng" (TTL 90s vẫn đủ ngắn để không thấy dữ liệu forming cũ trôi nổi lâu).
+    const cacheKey =
+      this.intradayCacheKey(upper, res, fromD, toD) +
+      (includeForming ? ':forming' : '');
     if (!noCache) {
       const cached = await this.readIntradayCache(cacheKey);
       if (cached) return cached;
@@ -348,6 +357,7 @@ export class StockService implements OnModuleDestroy {
       res,
       fromD,
       toD,
+      includeForming,
     );
     if (!noCache) {
       await this.writeIntradayCache(cacheKey, fresh, toD);
