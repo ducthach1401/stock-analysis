@@ -1577,7 +1577,8 @@
               <p
                 class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl"
               >
-                Dùng dữ liệu chỉ số <b>VN30</b> để quét
+                Dùng dữ liệu HĐTL <b>VN30F1M</b> (không phải chỉ số VN30 —
+                basis 2 bên dao động tới ~±8đ/ngày) để quét
                 <b>LONG/SHORT/NO_TRADE</b>
                 mỗi 5 phút trong phiên. Kéo trái để nạp thêm lịch sử nến; quyết
                 định được lưu để review P/L.
@@ -1748,7 +1749,7 @@
                   <h3
                     class="text-lg font-bold text-gray-900 dark:text-zinc-100"
                   >
-                    VN30 Intraday Desk
+                    VN30F1M Intraday Desk
                   </h3>
                   <p
                     class="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-2xl"
@@ -1813,7 +1814,7 @@
                     @click="runDerivManualScan()"
                     :disabled="derivDecisionScanLoading"
                     class="btn-primary text-xs inline-flex items-center gap-1.5 deriv-action-btn"
-                    title="Quét VN30 5m ngay và gửi Telegram nếu có thay đổi quyết định"
+                    title="Quét VN30F1M 5m ngay và gửi Telegram nếu có thay đổi quyết định"
                   >
                     <svg
                       :class="derivDecisionScanLoading ? 'spin w-4 h-4' : 'w-4 h-4'"
@@ -1859,7 +1860,7 @@
                 x-show="derivLoading"
                 class="text-sm text-indigo-600 dark:text-indigo-400 py-8 text-center"
               >
-                Đang tải nến VN30…
+                Đang tải nến VN30F1M…
               </div>
               <div
                 x-show="!derivLoading && !derivBars.length"
@@ -1909,7 +1910,7 @@
                           class="font-semibold mb-2 flex flex-wrap items-center justify-between gap-2"
                           :class="derivAnalysis.bias === 'long' ? 'text-emerald-800 dark:text-emerald-300' : (derivAnalysis.bias === 'short' ? 'text-rose-800 dark:text-rose-300' : 'text-gray-700 dark:text-zinc-300')"
                         >
-                          <span>Quyết định server (VN30 5m):</span>
+                          <span>Quyết định server (VN30F1M 5m):</span>
                           <span
                             class="font-mono px-2.5 py-1 rounded-full text-sm border"
                             :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/20' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/20' : 'bg-gray-500/15')"
@@ -2172,7 +2173,7 @@
             class="text-xs text-gray-400 dark:text-zinc-500 border-t pt-3"
             style="border-color: var(--border)"
           >
-            Trục giá: <b>điểm</b> chỉ số VN30. Các lớp vẽ và chỉ số bên dưới áp khi làm mới chart.
+            Trục giá: <b>điểm</b> HĐTL VN30F1M (không phải chỉ số VN30). Các lớp vẽ và chỉ số bên dưới áp khi làm mới chart.
           </p>
           <div
             class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs pl-0.5"

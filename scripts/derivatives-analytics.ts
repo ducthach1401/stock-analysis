@@ -174,7 +174,9 @@ async function main(): Promise<void> {
     const repo = ds.getRepository(DerivativeDecision);
     const qb = repo
       .createQueryBuilder('d')
-      .where('d.symbol = :symbol', { symbol: 'VN30' })
+      // 'VN30' = baseline cũ trên chỉ số (V1–V3 lịch sử); 'VN30F1M' = baseline futures mới (V4+).
+      // Tách theo version thuật toán ở phần summarize nên vẫn phân biệt được instrument.
+      .where('d.symbol IN (:...symbols)', { symbols: ['VN30', 'VN30F1M'] })
       .andWhere('d.status = :status', {
         status: DerivativeDecisionStatus.CLOSED,
       })

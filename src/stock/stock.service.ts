@@ -14,7 +14,11 @@ import { TelegramNotifyPolicyService } from '../telegram/telegram-notify-policy.
 import { TelegramService } from '../telegram/telegram.service';
 import { IntradayIndexBarDto } from './dto/intraday-bar.dto';
 import { StockPriceResponseDto } from './dto/stock-query.dto';
-import { DNSE_EARLIEST_FROM, DnseService } from './dnse.service';
+import {
+  DNSE_EARLIEST_FROM,
+  DnseService,
+  isDerivativeTicker,
+} from './dnse.service';
 import { StockPrice } from './entities/stock-price.entity';
 
 /** Ngày lịch chồng lên nến cũ nhất khi sync tiếp (bắt gap + chỉnh nhẹ). */
@@ -293,6 +297,53 @@ export class StockService implements OnModuleDestroy {
       if (cached) return cached;
     }
     const fresh = await this.dnseService.fetchIntradayIndexOhlc(
+      upper,
+      res,
+      fromD,
+      toD,
+    );
+    if (!noCache) {
+      await this.writeIntradayCache(cacheKey, fresh, toD);
+    }
+    return fresh;
+  }
+
+  /**
+   * Nến HĐTL phái sinh VN30F1M / VN30F2M (giá & volume của chính hợp đồng, không phải chỉ số VN30).
+   * Cùng cơ chế cache như intraday index; validate ticker phái sinh trước khi gọi DNSE.
+   */
+  async fetchIntradayDerivativeOhlc(
+    ticker: string,
+    resolution?: string,
+    from?: string,
+    to?: string,
+    noCache = false,
+  ): Promise<IntradayIndexBarDto[]> {
+    const upper = ticker.toUpperCase();
+    if (!isDerivativeTicker(upper)) {
+      throw new BadRequestException(
+        'intraday-derivative chỉ hỗ trợ VN30F1M hoặc VN30F2M',
+      );
+    }
+    const raw = (resolution || '5').trim();
+    const resU = raw.toUpperCase();
+    const res = StockService.INDEX_CHART_RESOLUTIONS.has(resU) ? resU : '5';
+
+    const toD = to ? new Date(to) : new Date();
+    let defaultDays = 31;
+    if (res === '1H') defaultDays = 45;
+    else if (res === '4H') defaultDays = 120;
+    else if (res === '1D') defaultDays = 800;
+
+    const fromD = from
+      ? new Date(from)
+      : new Date(toD.getTime() - defaultDays * 24 * 60 * 60 * 1000);
+    const cacheKey = this.intradayCacheKey(upper, res, fromD, toD);
+    if (!noCache) {
+      const cached = await this.readIntradayCache(cacheKey);
+      if (cached) return cached;
+    }
+    const fresh = await this.dnseService.fetchIntradayDerivativeOhlc(
       upper,
       res,
       fromD,

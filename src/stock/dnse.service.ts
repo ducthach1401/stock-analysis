@@ -9,6 +9,16 @@ const DNSE_CHART_STOCK =
   'https://services.entrade.com.vn/chart-api/v2/ohlcs/stock';
 const DNSE_CHART_INDEX =
   'https://services.entrade.com.vn/chart-api/v2/ohlcs/index';
+// HĐTL phái sinh — chỉ nhận ký hiệu liên tục VN30F1M (tháng gần) / VN30F2M (tháng kế),
+// KHÔNG nhận mã kỳ hạn cụ thể (VN30F2508 → invalid symbol). Không cần auth.
+const DNSE_CHART_DERIVATIVE =
+  'https://services.entrade.com.vn/chart-api/v2/ohlcs/derivative';
+
+/** Nhận diện ký hiệu HĐTL phái sinh liên tục mà Entrade hỗ trợ. */
+const DERIVATIVE_TICKER_RE = /^VN30F(1M|2M)$/;
+export function isDerivativeTicker(ticker: string): boolean {
+  return DERIVATIVE_TICKER_RE.test(ticker.toUpperCase());
+}
 
 /** Mốc sớm an toàn trước mọi IPO hợp lệ trên sàn VN (DNSE chỉ có dữ liệu từ khi mã niêm yết). */
 export const DNSE_EARLIEST_FROM = new Date('2000-01-01T00:00:00.000Z');
@@ -145,6 +155,36 @@ export class DnseService {
       timeout: 60000,
     });
     return this.mapToIntradayBars(symbol, data);
+  }
+
+  /**
+   * Nến HĐTL phái sinh VN30F1M / VN30F2M từ endpoint `derivative` (giá & volume của chính hợp đồng,
+   * khác chỉ số VN30 — basis dao động tới ~±8đ/ngày). Resolution: `5`, `15`, `1H`, `1D` như index.
+   */
+  async fetchIntradayDerivativeOhlc(
+    symbol: string,
+    resolution: string,
+    from: Date,
+    to: Date,
+  ): Promise<IntradayIndexBarDto[]> {
+    const sym = symbol.toUpperCase();
+    if (!isDerivativeTicker(sym)) {
+      this.logger.warn(
+        `${sym}: fetchIntradayDerivativeOhlc chỉ cho VN30F1M/VN30F2M`,
+      );
+      return [];
+    }
+    const res = (resolution || '5').trim();
+    const u = res.toUpperCase();
+    const apiRes = u === '1D' ? '1D' : u === '1H' || u === '60' ? '1H' : res;
+    const fromTs = Math.floor(from.getTime() / 1000);
+    const toTs = Math.floor(to.getTime() / 1000);
+    const { data } = await axios.get<DnseOhlcResponse>(DNSE_CHART_DERIVATIVE, {
+      params: { symbol: sym, resolution: apiRes, from: fromTs, to: toTs },
+      headers: { 'User-Agent': 'Mozilla/5.0 Chrome/124.0' },
+      timeout: 60000,
+    });
+    return this.mapToIntradayBars(sym, data);
   }
 
   /** Gộp 4 nến 1H liên tiếp (theo thứ tự thời gian) → một nến 4H. */

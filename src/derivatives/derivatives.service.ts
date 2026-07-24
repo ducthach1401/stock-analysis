@@ -18,7 +18,10 @@ import {
   DerivativeDecisionOutcome,
   DerivativeDecisionStatus,
 } from './entities/derivative-decision.entity';
-import { nearestVn30FuturesContract } from './vn30-contracts.util';
+import {
+  isVn30FuturesRollWindow,
+  nearestVn30FuturesContract,
+} from './vn30-contracts.util';
 
 /**
  * Phiên bản thuật toán — LƯU vào cột `algorithm` của bảng `derivative_decisions`.
@@ -34,18 +37,43 @@ import { nearestVn30FuturesContract } from './vn30-contracts.util';
  *  - V3: trần RSI mềm (LONG 50–75 / SHORT 25–50), SL dời hòa vốn khi lãi 1R, trailing stop khi lãi >2R,
  *        outcome phân loại theo P/L thực (hòa vốn = trung tính). BỎ lọc EMA50 → còn 5 điều kiện (≥4/5):
  *        backtest 6 tháng (yarn backtest:vn30) cho thấy EMA50 bóp SHORT nhiều hơn lợi cho LONG, net hại
- *        (~−29đ/438 lệnh); trailing đóng góp lớn nhất (+122đ), trần RSI dương nhẹ (+46đ). (đang chạy)
+ *        (~−29đ/438 lệnh); trailing đóng góp lớn nhất (+122đ), trần RSI dương nhẹ (+46đ).
+ *  - V4: NGƯỠNG VÀO BẤT ĐỐI XỨNG — LONG cần đủ 5/5, SHORT giữ 4/5. Data live V3 (DB prod, 130 lệnh
+ *        2026-05→07): LONG 4/5 = 33 lệnh NET −18.3đ (mua đỉnh trong choppy), LONG 5/5 = 9 lệnh NET +15.5đ;
+ *        SHORT ăn dày nhất ở 4/5 (+138đ). Đồng thời hiệu chỉnh `confidence` trung thực: data cho thấy
+ *        score gần như KHÔNG tương quan win-rate (score 5 không hơn score 4) → bỏ gán 95% gây hiểu nhầm.
+ *        CHƯA làm (chờ backtest qua giai đoạn thị trường TĂNG + hạ tầng khung lớn): bộ lọc regime, trừ phí
+ *        giao dịch. Lưu ý: edge hiện tại đo trong 1 downtrend nên có thể là short-beta, chưa phải alpha bền.
+ *  - V4 (2026-07-24, sau khi đổi nguồn giá sang HĐTL VN30F1M — KHÔNG bump version): thêm 3 cải thiện vào lệnh
+ *        đặc thù futures: (a) GATE cửa sổ roll — không mở lệnh ngày đáo hạn (T5 tuần 3) + ngày kế, vì gap
+ *        giữa 2 hợp đồng làm méo EMA/ATR/RSI/break trong lookback 120 nến; (b) breakout phải có VOLUME xác nhận
+ *        (`volumeRatio20 ≥ 1.2`) — data VN30F1M cho thấy ~22% break là "mỏng" (<1.2) và dễ cụt đầu, volume
+ *        futures nay là volume hợp đồng thật (khác index); (c) re-tune `MIN_ATR_POINTS` 1.5→2.5 vì ATR futures
+ *        cao hơn (median 3.63 vs index 2.82) khiến ngưỡng cũ lọc 0% — 2.5 lọc ~15.6% nến trầm lắng nhất. (đang chạy)
  */
-const ALGORITHM = 'VN30_EMA_VWAP_RSI_ATR_5M_V3';
+const ALGORITHM = 'VN30_EMA_VWAP_RSI_ATR_5M_V4';
+// Nguồn GIÁ cho tín hiệu & P/L: HĐTL VN30 tháng gần (VN30F1M), KHÔNG dùng chỉ số VN30 nữa.
+// Lý do: basis index↔futures dao động tới ~±8đ/ngày (lớn hơn cả TP/SL ~5.6/3.4đ) → chỉ báo và P/L
+// phải tính trên chính hợp đồng giao dịch. Endpoint Entrade `/ohlcs/derivative`, không cần auth.
+const PRICE_SYMBOL = 'VN30F1M';
+// Nhãn `symbol` lưu DB cho quyết định — tách baseline futures khỏi dữ liệu index cũ (dưới 'VN30').
+const DECISION_SYMBOL = 'VN30F1M';
 const LOOKBACK_BARS = 120;
 const SETTLE_AFTER_BARS = 12;
 const MIN_BARS = 60;
 const ATR_PERIOD = 14;
 const RISK_ATR_MULT = 1.2;
 const REWARD_ATR_MULT = 2;
-const MIN_ATR_POINTS = 1.5; // Không trade khi thị trường quá ít biến động
+// V4: 2.5 (từ 1.5) — ATR futures VN30F1M cao hơn index (median 3.63 vs 2.82) nên 1.5 lọc 0% (gate chết);
+// 2.5 lọc ~15.6% nến trầm lắng nhất, khôi phục đúng mục đích "tránh thị trường ít biến động".
+const MIN_ATR_POINTS = 2.5;
+// V4: breakout chỉ tính khi volume ≥ 1.2× trung bình 20 nến — data VN30F1M: ~22% break "mỏng" (<1.2) hay cụt đầu.
+const VOL_BREAKOUT_MIN = 1.2;
 const NO_TRADE_AFTER_HHMM = 1415; // 14:15 VN — quá gần đóng cửa
-const CHECKS_REQUIRED = 4; // Cần 4/5 điều kiện (đã bỏ EMA50 — backtest 6T cho thấy hại nhẹ)
+// V4: ngưỡng vào bất đối xứng. LONG dễ mua đỉnh trong thị trường choppy nên siết đủ 5/5;
+// SHORT là nhóm ăn dày nhất và tốt nhất ở 4/5 nên giữ nguyên (xem changelog V4 + `yarn analytics:derivatives`).
+const LONG_CHECKS_REQUIRED = 5;
+const SHORT_CHECKS_REQUIRED = 4;
 const RSI_MAX_LONG = 75; // Không đu LONG khi đã quá mua (data V1: LONG ở RSI 74-81 toàn lỗ)
 const RSI_MIN_SHORT = 25; // Không đu SHORT khi đã quá bán
 const BREAKEVEN_TRIGGER_R = 1; // Lãi đạt 1R → dời SL về hòa vốn
@@ -148,7 +176,7 @@ export class DerivativesService {
   }> {
     if (this.running) {
       const latest = await this.decisionRepo.findOne({
-        where: { symbol: 'VN30' },
+        where: { symbol: DECISION_SYMBOL },
         order: { decidedAt: 'DESC' },
       });
       return { decision: latest ?? null, bars: 0, skipped: 'ALREADY_RUNNING' };
@@ -206,11 +234,15 @@ export class DerivativesService {
       );
       const shouldNotify = await this.shouldNotify(saved, opts.forceNotify);
       if (shouldNotify) {
-        const sent = await this.notifyDecision(
-          saved,
-          opts.source ?? 'manual',
-          runAt,
-        );
+        // Mở vị thế LONG/SHORT → tin "Mở lệnh" chuyên biệt; các trường hợp khác giữ tin quyết định chung.
+        const isNewOpenPosition =
+          saved.status === DerivativeDecisionStatus.OPEN &&
+          (saved.action === DerivativeDecisionAction.LONG ||
+            saved.action === DerivativeDecisionAction.SHORT);
+        const notifySource = opts.source ?? 'manual';
+        const sent = isNewOpenPosition
+          ? await this.notifyOpenedDecision(saved, notifySource, runAt)
+          : await this.notifyDecision(saved, notifySource, runAt);
         if (sent) {
           saved.notified = true;
           await this.decisionRepo.save(saved);
@@ -230,7 +262,7 @@ export class DerivativesService {
 
   private async closeAllOpenAtEndOfSession(): Promise<void> {
     const open = await this.decisionRepo.find({
-      where: { symbol: 'VN30', status: DerivativeDecisionStatus.OPEN },
+      where: { symbol: DECISION_SYMBOL, status: DerivativeDecisionStatus.OPEN },
       order: { decidedAt: 'ASC' },
     });
     if (!open.length) return;
@@ -285,7 +317,7 @@ export class DerivativesService {
 
   async latestDecision(): Promise<DerivativeDecision | null> {
     const decision = await this.decisionRepo.findOne({
-      where: { symbol: 'VN30' },
+      where: { symbol: DECISION_SYMBOL },
       order: { decidedAt: 'DESC' },
     });
     if (!decision) return null;
@@ -295,14 +327,14 @@ export class DerivativesService {
 
   private latestOpenDecision(): Promise<DerivativeDecision | null> {
     return this.decisionRepo.findOne({
-      where: { symbol: 'VN30', status: DerivativeDecisionStatus.OPEN },
+      where: { symbol: DECISION_SYMBOL, status: DerivativeDecisionStatus.OPEN },
       order: { decidedAt: 'DESC' },
     });
   }
 
   private latestPersistedDecision(): Promise<DerivativeDecision | null> {
     return this.decisionRepo.findOne({
-      where: { symbol: 'VN30' },
+      where: { symbol: DECISION_SYMBOL },
       order: { decidedAt: 'DESC' },
     });
   }
@@ -320,7 +352,7 @@ export class DerivativesService {
     const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 200);
     const fetchTake = Math.min(1200, Math.max(300, safeLimit * 10));
     const rows = await this.decisionRepo.find({
-      where: { symbol: 'VN30' },
+      where: { symbol: DECISION_SYMBOL },
       order: { decidedAt: 'DESC' },
       take: fetchTake,
     });
@@ -341,8 +373,8 @@ export class DerivativesService {
   private async fetchRecentFiveMinuteBars(): Promise<IntradayIndexBarDto[]> {
     const to = new Date();
     const from = new Date(to.getTime() - 10 * 24 * 60 * 60 * 1000);
-    const bars = await this.stockService.fetchIntradayIndexOhlc(
-      'VN30',
+    const bars = await this.stockService.fetchIntradayDerivativeOhlc(
+      PRICE_SYMBOL,
       '5',
       from.toISOString(),
       to.toISOString(),
@@ -464,6 +496,14 @@ export class DerivativesService {
       );
     }
 
+    // Gate 3: Cửa sổ roll HĐTL (ngày đáo hạn T5 tuần 3 + ngày kế) — gap giữa 2 hợp đồng
+    // làm méo EMA/ATR/RSI/mức break trong lookback 120 nến → tín hiệu không tin cậy.
+    if (isVn30FuturesRollWindow(tradingDate)) {
+      return noTrade(
+        'Không vào lệnh: cửa sổ roll HĐTL (đáo hạn/ngày kế) — chỉ báo bị méo bởi gap chuyển hợp đồng.',
+      );
+    }
+
     // 5 điều kiện định hướng — mutually exclusive giữa LONG và SHORT.
     // (EMA50 đã bỏ: backtest 6T cho thấy bóp phe SHORT nhiều hơn lợi cho LONG → net hại.)
     const longChecks = [
@@ -473,7 +513,8 @@ export class DerivativesService {
       snapshot.rsi14 != null &&
         snapshot.rsi14 >= 50 &&
         snapshot.rsi14 <= RSI_MAX_LONG, // 4. RSI bullish nhưng chưa quá mua (50–75)
-      snapshot.close > snapshot.prevHigh12, // 5. Break đỉnh 60 phút gần nhất
+      snapshot.close > snapshot.prevHigh12 &&
+        snapshot.volumeRatio20 >= VOL_BREAKOUT_MIN, // 5. Break đỉnh 60' + volume xác nhận
     ];
     const shortChecks = [
       snapshot.close < snapshot.vwap,
@@ -482,7 +523,8 @@ export class DerivativesService {
       snapshot.rsi14 != null &&
         snapshot.rsi14 <= 50 &&
         snapshot.rsi14 >= RSI_MIN_SHORT, // RSI bearish nhưng chưa quá bán (25–50)
-      snapshot.close < snapshot.prevLow12,
+      snapshot.close < snapshot.prevLow12 &&
+        snapshot.volumeRatio20 >= VOL_BREAKOUT_MIN, // Break đáy 60' + volume xác nhận
     ];
 
     const longScore = longChecks.filter(Boolean).length;
@@ -491,13 +533,13 @@ export class DerivativesService {
     let action = DerivativeDecisionAction.NO_TRADE;
     let score = longScore - shortScore;
 
-    if (longScore >= CHECKS_REQUIRED && longScore > shortScore) {
+    if (longScore >= LONG_CHECKS_REQUIRED && longScore > shortScore) {
       action = DerivativeDecisionAction.LONG;
       score = longScore;
       notes.unshift(
         `LONG: ${longScore}/5 điều kiện tăng thỏa mãn (EMA trend, VWAP, RSI, breakout).`,
       );
-    } else if (shortScore >= CHECKS_REQUIRED && shortScore > longScore) {
+    } else if (shortScore >= SHORT_CHECKS_REQUIRED && shortScore > longScore) {
       action = DerivativeDecisionAction.SHORT;
       score = shortScore;
       notes.unshift(
@@ -505,7 +547,7 @@ export class DerivativesService {
       );
     } else {
       notes.unshift(
-        `NO_TRADE: LONG ${longScore}/5, SHORT ${shortScore}/5 — chưa đạt ngưỡng ${CHECKS_REQUIRED}/5.`,
+        `NO_TRADE: LONG ${longScore}/5 (cần ${LONG_CHECKS_REQUIRED}), SHORT ${shortScore}/5 (cần ${SHORT_CHECKS_REQUIRED}).`,
       );
     }
 
@@ -522,15 +564,19 @@ export class DerivativesService {
         : action === DerivativeDecisionAction.SHORT
           ? this.round2(entry - REWARD_ATR_MULT * snapshot.atr14)
           : null;
+    // V4: score gần như KHÔNG tương quan win-rate thực (data live: score 5 không hơn score 4)
+    // → confidence khiêm tốn, phản ánh đúng win-rate quan sát (~50–58%), không gán 95% gây hiểu nhầm.
+    const requiredForAction =
+      action === DerivativeDecisionAction.LONG
+        ? LONG_CHECKS_REQUIRED
+        : SHORT_CHECKS_REQUIRED;
     const confidence =
       action === DerivativeDecisionAction.NO_TRADE
-        ? Math.min(55, 20 + Math.abs(longScore - shortScore) * 9)
-        : score === 5
-          ? 95
-          : Math.min(90, 50 + score * 9);
+        ? Math.min(50, 20 + Math.abs(longScore - shortScore) * 8)
+        : Math.min(72, 55 + (score - requiredForAction) * 8);
 
     return {
-      symbol: 'VN30',
+      symbol: DECISION_SYMBOL,
       contractCode,
       decidedAt,
       tradingDate,
@@ -577,7 +623,7 @@ export class DerivativesService {
   ): Omit<DerivativeDecision, 'id' | 'createdAt' | 'updatedAt'> {
     const price = latest ? this.price(latest.close) : null;
     return {
-      symbol: 'VN30',
+      symbol: DECISION_SYMBOL,
       contractCode,
       decidedAt,
       tradingDate,
@@ -663,7 +709,7 @@ export class DerivativesService {
     if (!bars.length) return [];
     const open = await this.decisionRepo.find({
       where: {
-        symbol: 'VN30',
+        symbol: DECISION_SYMBOL,
         status: DerivativeDecisionStatus.OPEN,
       },
       order: { decidedAt: 'ASC' },
@@ -853,7 +899,7 @@ export class DerivativesService {
   ): Promise<DerivativeDecision | null> {
     return this.decisionRepo
       .createQueryBuilder('d')
-      .where('d.symbol = :symbol', { symbol: 'VN30' })
+      .where('d.symbol = :symbol', { symbol: DECISION_SYMBOL })
       .andWhere('d.action = :action', { action })
       .andWhere('d.status = :status', { status: DerivativeDecisionStatus.OPEN })
       .andWhere('d.notified = :notified', { notified: true })
@@ -865,7 +911,7 @@ export class DerivativesService {
   private previousDecisionBefore(at: Date): Promise<DerivativeDecision | null> {
     return this.decisionRepo
       .createQueryBuilder('d')
-      .where('d.symbol = :symbol', { symbol: 'VN30' })
+      .where('d.symbol = :symbol', { symbol: DECISION_SYMBOL })
       .andWhere('d.decidedAt < :at', { at })
       .orderBy('d.decidedAt', 'DESC')
       .getOne();
@@ -907,6 +953,43 @@ export class DerivativesService {
         `${actionIcon} <b>Quyết định</b>: <b>${actionLabel}</b>  |  🎚️ <b>Confidence</b>: <b>${decision.confidence}%</b>  |  🧮 <b>Score</b>: <b>${decision.score}</b>` +
         linePrice +
         pnl +
+        `\n🧠 <b>Lý do</b>: ${this.escapeHtml(decision.reason)}`,
+    });
+  }
+
+  private async notifyOpenedDecision(
+    decision: DerivativeDecision,
+    source: string,
+    runAt?: Date,
+  ): Promise<boolean> {
+    if (
+      this.config.get<string>('DERIVATIVES_TELEGRAM_NOTIFY', 'true') === 'false'
+    ) {
+      return false;
+    }
+    if (
+      decision.action !== DerivativeDecisionAction.LONG &&
+      decision.action !== DerivativeDecisionAction.SHORT
+    ) {
+      return false;
+    }
+    const eventAt =
+      runAt && !Number.isNaN(runAt.getTime()) ? runAt : decision.decidedAt;
+    const time = this.formatVnTime(eventAt);
+    const actionIcon =
+      decision.action === DerivativeDecisionAction.LONG ? '🟢' : '🔴';
+    const actionLabel =
+      decision.action === DerivativeDecisionAction.LONG ? 'LONG' : 'SHORT';
+    return this.telegramService.sendMessage({
+      parseMode: 'HTML',
+      text:
+        `📗 <b>Phái sinh VN30 5m - Mở lệnh</b> <i>(${source})</i>\n` +
+        `${actionIcon} <b>Vị thế</b>: <b>${actionLabel}</b>  |  🎚️ <b>Confidence</b>: <b>${decision.confidence}%</b>  |  🧮 <b>Score</b>: <b>${decision.score}</b>\n` +
+        `🕒 <b>Thời điểm</b>: <b>${time}</b>\n` +
+        `🎯 <b>Entry</b>: <code>${decision.entryPrice ?? '-'}</code>  |  🛡️ <b>SL</b>: <code>${decision.stopLoss ?? '-'}</code>  |  🏁 <b>TP</b>: <code>${decision.takeProfit ?? '-'}</code>` +
+        (decision.riskReward != null
+          ? `  |  ⚖️ <b>R:R</b>: <code>${decision.riskReward}</code>`
+          : '') +
         `\n🧠 <b>Lý do</b>: ${this.escapeHtml(decision.reason)}`,
     });
   }
@@ -956,12 +1039,12 @@ export class DerivativesService {
     tradingDate: string,
   ): Promise<DailyDerivativeSummary | null> {
     const dayRows = await this.decisionRepo.find({
-      where: { symbol: 'VN30', tradingDate },
+      where: { symbol: DECISION_SYMBOL, tradingDate },
       order: { decidedAt: 'ASC' },
       take: 1500,
     });
     const currentOpenRows = await this.decisionRepo.find({
-      where: { symbol: 'VN30', status: DerivativeDecisionStatus.OPEN },
+      where: { symbol: DECISION_SYMBOL, status: DerivativeDecisionStatus.OPEN },
       order: { decidedAt: 'ASC' },
       take: 300,
     });
@@ -1237,7 +1320,7 @@ export class DerivativesService {
   async buildLiveSeries(from: string, to: string): Promise<BacktestSeries | null> {
     const rows = await this.decisionRepo
       .createQueryBuilder('d')
-      .where('d.symbol = :symbol', { symbol: 'VN30' })
+      .where('d.symbol = :symbol', { symbol: DECISION_SYMBOL })
       .andWhere('d.status = :status', { status: DerivativeDecisionStatus.CLOSED })
       .andWhere('d.action IN (:...actions)', { actions: [DerivativeDecisionAction.LONG, DerivativeDecisionAction.SHORT] })
       .andWhere('d.outcome IN (:...outcomes)', {

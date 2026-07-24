@@ -23,9 +23,9 @@ export class DerivativesController {
     const contracts = listUpcomingVn30FuturesContracts(10);
     const nearest = nearestVn30FuturesContract();
     return {
-      priceTicker: 'VN30',
+      priceTicker: 'VN30F1M',
       priceSourceNote:
-        'Nến và tín hiệu dùng chỉ số VN30 (Entrade). Hợp đồng gần nhất chỉ để tham chiếu kỳ đáo hạn; không phải giá từng mã HĐTL.',
+        'Nến và tín hiệu dùng HĐTL VN30F1M (Entrade /ohlcs/derivative) — giá & volume của chính hợp đồng tháng gần, không phải chỉ số VN30. `nearest` chỉ để tham chiếu kỳ đáo hạn.',
       nearest,
       contracts,
     };

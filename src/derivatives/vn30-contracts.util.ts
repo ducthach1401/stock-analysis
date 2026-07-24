@@ -83,3 +83,26 @@ export function nearestVn30FuturesContract(
   );
   return list[0] ?? null;
 }
+
+/**
+ * True khi `ymd` nằm trong "cửa sổ roll" của VN30F1M: chính ngày đáo hạn (T5 tuần 3 —
+ * hợp đồng cũ hội tụ về spot, dễ nhiễu khi settle) HOẶC ngày lịch kế tiếp (T6 — F1M đã nhảy
+ * sang tháng mới nên chuỗi nến 120-bar còn chứa gap giá giữa 2 hợp đồng, làm méo EMA/ATR/RSI/break).
+ * Dùng để chặn mở lệnh mới trong cửa sổ này (xem gate trong derivatives.service.ts).
+ */
+export function isVn30FuturesRollWindow(
+  ymd: string = vnCalendarTodayYmd(),
+): boolean {
+  const [y, m] = ymd.split('-').map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return false;
+  const expiry = thirdThursdayOfMonthYmd(y, m);
+  if (!expiry) return false;
+  if (ymd === expiry) return true;
+  // Ngày lịch kế tiếp sau đáo hạn (thường là T6) — gap roll vẫn còn trong cửa sổ lookback.
+  const next = new Date(`${expiry}T12:00:00+07:00`);
+  next.setDate(next.getDate() + 1);
+  const yy = next.getFullYear();
+  const mm = String(next.getMonth() + 1).padStart(2, '0');
+  const dd = String(next.getDate()).padStart(2, '0');
+  return ymd === `${yy}-${mm}-${dd}`;
+}

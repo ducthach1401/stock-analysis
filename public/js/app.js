@@ -105,11 +105,11 @@ function app() {
     /** { vni: { main, rsi, macd }, vn30: { ... } } */
     marketCharts: {},
     _marketChartRuntime: { vni: null, vn30: null },
-    /** Phái sinh VN30 — nến chỉ số intraday (5m / 15m), tham chiếu vào lệnh */
+    /** Phái sinh VN30 — nến HĐTL VN30F1M intraday (5m / 15m), tham chiếu vào lệnh */
     derivBars: [],
     /** Khớp `derivBars` với lần tải (đổi khung → tải lại). */
     derivBarsResolution: null,
-    /** 5 | 15 | 1H — API /stocks/VN30/intraday-index */
+    /** 5 | 15 | 1H — API /stocks/VN30F1M/intraday-derivative (HĐTL, không phải chỉ số) */
     derivResolution: '5',
     derivLoading: false,
     derivAnalysis: null,
@@ -2218,7 +2218,8 @@ function app() {
     },
 
     derivCacheKey() {
-      return `derivIntradayCache:VN30:${this.derivResolution}`;
+      // Namespace đổi sang VN30F1M (HĐTL) — tránh lẫn cache cũ theo giá chỉ số VN30.
+      return `derivIntradayCache:VN30F1M:${this.derivResolution}`;
     },
 
     backtestCacheKey() {
@@ -2383,7 +2384,7 @@ function app() {
           const toFast = new Date();
           const res = `resolution=${encodeURIComponent(this.derivResolution)}`;
           const fastUrl = this.withNoCache(
-            `/stocks/VN30/intraday-index?${res}&from=${encodeURIComponent(fromFast.toISOString())}&to=${encodeURIComponent(toFast.toISOString())}${noCacheParam}`,
+            `/stocks/VN30F1M/intraday-derivative?${res}&from=${encodeURIComponent(fromFast.toISOString())}&to=${encodeURIComponent(toFast.toISOString())}${noCacheParam}`,
           );
           const rawFast = await fetch(fastUrl, { cache: 'no-store' })
             .then((r) => r.json())
@@ -2424,7 +2425,7 @@ function app() {
         while (guard++ < 200) {
           const prevSize = byTime.size;
           const url = this.withNoCache(
-            `/stocks/VN30/intraday-index?${res}&from=${encodeURIComponent(targetFrom.toISOString())}&to=${encodeURIComponent(reqTo.toISOString())}${noCacheParam}`,
+            `/stocks/VN30F1M/intraday-derivative?${res}&from=${encodeURIComponent(targetFrom.toISOString())}&to=${encodeURIComponent(reqTo.toISOString())}${noCacheParam}`,
           );
           const raw = await fetch(url, { cache: 'no-store' })
             .then((r) => r.json())
@@ -2507,7 +2508,7 @@ function app() {
       try {
         const res = `resolution=${encodeURIComponent(this.derivResolution)}`;
         const raw = await fetch(
-          `/stocks/VN30/intraday-index?${res}&from=${encodeURIComponent(fromD.toISOString())}&to=${encodeURIComponent(toD.toISOString())}`,
+          `/stocks/VN30F1M/intraday-derivative?${res}&from=${encodeURIComponent(fromD.toISOString())}&to=${encodeURIComponent(toD.toISOString())}`,
         )
           .then((r) => r.json())
           .catch(() => []);

@@ -61,6 +61,29 @@ export class StockController {
     );
   }
 
+  /**
+   * GET /stocks/VN30F1M/intraday-derivative?resolution=5|15|1H|1D&from=&to=
+   * Nến HĐTL phái sinh (Entrade `/ohlcs/derivative`) — giá & volume của chính hợp đồng,
+   * khác chỉ số VN30 (xem `PRICE_SYMBOL` trong derivatives.service.ts).
+   */
+  @Get(':ticker/intraday-derivative')
+  getIntradayDerivative(
+    @Param('ticker') ticker: string,
+    @Query('resolution') resolution?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('nocache') noCache?: string,
+  ) {
+    const bypassCache = noCache === '1' || noCache === 'true';
+    return this.stockService.fetchIntradayDerivativeOhlc(
+      ticker,
+      resolution,
+      from,
+      to,
+      bypassCache,
+    );
+  }
+
   // GET /stocks/:ticker/stored?from=&to=&limit=500&before=YYYY-MM-DD
   // limit: chỉ lấy N bản ghi mới nhất (DESC). before: tradingDate < before (tải trang cũ hơn).
   @Get(':ticker/stored')
