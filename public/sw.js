@@ -1,5 +1,5 @@
 /* global self, caches, fetch */
-const VERSION = 'stock-analysis-sw-v41';
+const VERSION = 'stock-analysis-sw-v42';
 const PRECACHE = [
   '/index.html',
   '/css/app.css',

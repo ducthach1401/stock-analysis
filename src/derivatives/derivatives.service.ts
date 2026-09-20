@@ -49,9 +49,25 @@ import {
  *        giữa 2 hợp đồng làm méo EMA/ATR/RSI/break trong lookback 120 nến; (b) breakout phải có VOLUME xác nhận
  *        (`volumeRatio20 ≥ 1.2`) — data VN30F1M cho thấy ~22% break là "mỏng" (<1.2) và dễ cụt đầu, volume
  *        futures nay là volume hợp đồng thật (khác index); (c) re-tune `MIN_ATR_POINTS` 1.5→2.5 vì ATR futures
- *        cao hơn (median 3.63 vs index 2.82) khiến ngưỡng cũ lọc 0% — 2.5 lọc ~15.6% nến trầm lắng nhất. (đang chạy)
+ *        cao hơn (median 3.63 vs index 2.82) khiến ngưỡng cũ lọc 0% — 2.5 lọc ~15.6% nến trầm lắng nhất.
+ *  - V5 (2026-09-20): số liệu live V4 trên F1M (141 lệnh, 24/7→16/9): NET +26.45đ, PF 1.09, SHORT −16.18đ; nếu trừ
+ *        chi phí ước lượng ~0.4đ/lệnh (phí + trượt giá) thì gần hòa vốn. Mô phỏng lại trên nến 5m F1M thật
+ *        (4/3→16/9, 484 lệnh; tái hiện live V4 trong ~5% số lệnh và phân bố lý do thoát) cho thấy:
+ *        (a) SHORT chỉ thỏa 4/5 vì THIẾU "break+volume" là ~2/3 số lệnh SHORT nhưng kỳ vọng ≈ 0 (+0.16/+0.11 đ/lệnh
+ *        trước chi phí, ở 2 giai đoạn), còn SHORT đủ 5/5 tốt hơn rõ và ổn định (+1.25/+0.73) → SHORT_CHECKS_REQUIRED 4→5;
+ *        (b) TP 2 ATR (1.67R) nằm dưới ngưỡng trailing (2R) nên nhánh "trailing" là mã chết, chỉ còn dời hòa vốn → TP
+ *        2→3 ATR (2.5R) để trailing hoạt động thật; (c) thoát theo thời gian 12→24 nến (12 nến cắt lệnh đang chạy).
+ *        Kết quả sau chi phí 0.4đ (P1 4/3→23/7 | P2 24/7→16/9): V4 −58.1đ/350 lệnh | +12.7đ/134 lệnh →
+ *        V5 +61.0đ/138 lệnh | +67.8đ/61 lệnh; tổng V4 −45.4đ/484 lệnh → V5 +128.7đ/199 lệnh, drawdown 201→45.
+ *        Toàn vùng lân cận tham số (TP 2.5–3.5 ATR × thoát 18–36 nến × trailing 0.5–1R) đều dương ở cả 2 giai đoạn.
+ *        LƯU Ý: (1) mẫu nhỏ (~200 lệnh/6.5 tháng), đã thử ~50 biến thể, mô phỏng hơi lạc quan so với live
+ *        (~+0.3đ/lệnh); (2) edge còn phụ thuộc regime: P1 (giảm) SHORT +91/LONG −30, P2 (tăng) LONG +66/SHORT ≈ 0.
+ *        → theo dõi live V5 (`yarn analytics:derivatives --algo=V5`) trước khi tin. Đã thử nhưng KHÔNG bền giữa 2
+ *        giai đoạn nên bỏ: lọc giờ (10–11h), độ dốc EMA, dừng sau N lỗ/ngày, đổi ATR gate, lọc EMA50 cho LONG, và
+ *        regime theo nến ngày (vd. LONG chỉ khi đóng cửa hôm qua > SMA10 ngày: giảm drawdown ~35% nhưng P2 kém đi).
+ *        (đang chạy)
  */
-const ALGORITHM = 'VN30_EMA_VWAP_RSI_ATR_5M_V4';
+const ALGORITHM = 'VN30_EMA_VWAP_RSI_ATR_5M_V5';
 // Nguồn GIÁ cho tín hiệu & P/L: HĐTL VN30 tháng gần (VN30F1M), KHÔNG dùng chỉ số VN30 nữa.
 // Lý do: basis index↔futures dao động tới ~±8đ/ngày (lớn hơn cả TP/SL ~5.6/3.4đ) → chỉ báo và P/L
 // phải tính trên chính hợp đồng giao dịch. Endpoint Entrade `/ohlcs/derivative`, không cần auth.
@@ -62,25 +78,26 @@ const DECISION_SYMBOL = 'VN30F1M';
 // lẫn futures mới ('VN30F1M') để không mất lịch sử. Các query VẬN HÀNH (mở/đóng/dup) vẫn chỉ dùng DECISION_SYMBOL.
 const HISTORY_SYMBOLS = ['VN30', DECISION_SYMBOL];
 const LOOKBACK_BARS = 120;
-const SETTLE_AFTER_BARS = 12;
+const SETTLE_AFTER_BARS = 24; // V5: 12→24 nến (2 giờ) — thoát sớm cắt lệnh đang chạy
 const MIN_BARS = 60;
 const ATR_PERIOD = 14;
 const RISK_ATR_MULT = 1.2;
-const REWARD_ATR_MULT = 2;
+// V5: 2→3 ATR (2.5R). Với 2 ATR (1.67R) TP luôn tới trước ngưỡng trailing 2R nên trailing là mã chết.
+const REWARD_ATR_MULT = 3;
 // V4: 2.5 (từ 1.5) — ATR futures VN30F1M cao hơn index (median 3.63 vs 2.82) nên 1.5 lọc 0% (gate chết);
 // 2.5 lọc ~15.6% nến trầm lắng nhất, khôi phục đúng mục đích "tránh thị trường ít biến động".
 const MIN_ATR_POINTS = 2.5;
 // V4: breakout chỉ tính khi volume ≥ 1.2× trung bình 20 nến — data VN30F1M: ~22% break "mỏng" (<1.2) hay cụt đầu.
 const VOL_BREAKOUT_MIN = 1.2;
 const NO_TRADE_AFTER_HHMM = 1415; // 14:15 VN — quá gần đóng cửa
-// V4: ngưỡng vào bất đối xứng. LONG dễ mua đỉnh trong thị trường choppy nên siết đủ 5/5;
-// SHORT là nhóm ăn dày nhất và tốt nhất ở 4/5 nên giữ nguyên (xem changelog V4 + `yarn analytics:derivatives`).
+// V4: LONG đủ 5/5 (dễ mua đỉnh trong thị trường choppy). V5: SHORT cũng đủ 5/5 — SHORT 4/5 thiếu "break+volume"
+// chiếm ~3/4 số lệnh SHORT nhưng kỳ vọng ≈ 0 (xem changelog V5).
 const LONG_CHECKS_REQUIRED = 5;
-const SHORT_CHECKS_REQUIRED = 4;
+const SHORT_CHECKS_REQUIRED = 5;
 const RSI_MAX_LONG = 75; // Không đu LONG khi đã quá mua (data V1: LONG ở RSI 74-81 toàn lỗ)
 const RSI_MIN_SHORT = 25; // Không đu SHORT khi đã quá bán
 const BREAKEVEN_TRIGGER_R = 1; // Lãi đạt 1R → dời SL về hòa vốn
-const TRAIL_AFTER_R = 1; // Lãi vượt 2R → trailing stop cách đỉnh/đáy 1R
+const TRAIL_AFTER_R = 1; // Lãi ≥2R (<TP 2.5R từ V5) → trailing stop cách đỉnh/đáy 1R
 
 type IndicatorSnapshot = {
   close: number;

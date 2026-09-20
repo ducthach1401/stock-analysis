@@ -8,7 +8,7 @@ import { isVnFuturesSessionOpen } from '../common/vn-trading-days';
 export const MIN_BARS = 60;
 export const ATR_PERIOD = 14;
 export const RISK_ATR_MULT = 1.2;
-export const REWARD_ATR_MULT = 2;
+export const REWARD_ATR_MULT = 3; // V5: khớp derivatives.service (2.5R, để trailing hoạt động)
 export const MIN_ATR_POINTS = 1.5;
 export const NO_TRADE_AFTER_HHMM = 1415;
 export const MAX_DAILY_LOSSES = 2;
@@ -18,7 +18,7 @@ export const RSI_MIN_LONG_TIGHT = 58;
 export const RSI_MAX_LONG_TIGHT = 72;
 export const BREAKEVEN_TRIGGER_R = 1;
 export const TRAIL_AFTER_R = 1;
-export const SETTLE_AFTER_BARS = 12;
+export const SETTLE_AFTER_BARS = 24; // V5: khớp derivatives.service
 export const LOOKBACK_BARS = 120;
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ export function decide(s: Snap, f: BacktestFlags): 'LONG' | 'SHORT' | null {
   }
   const longNeed =
     f.long === 'tight' ? longChecks.length : longChecks.length - 1;
-  const shortNeed = shortChecks.length - 1;
+  const shortNeed = shortChecks.length; // V5: SHORT cũng đủ tất cả điều kiện (khớp live)
   const ls = f.long !== 'off' ? longChecks.filter(Boolean).length : 0;
   const ss = (f.short ?? 'normal') !== 'off' ? shortChecks.filter(Boolean).length : 0;
   if (ls >= longNeed && ls > ss) return 'LONG';

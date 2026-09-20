@@ -1932,7 +1932,9 @@
                           class="font-semibold mb-2 flex flex-wrap items-center justify-between gap-2"
                           :class="derivAnalysis.bias === 'long' ? 'text-emerald-800 dark:text-emerald-300' : (derivAnalysis.bias === 'short' ? 'text-rose-800 dark:text-rose-300' : 'text-gray-700 dark:text-zinc-300')"
                         >
-                          <span>Quyết định server (VN30F1M 5m):</span>
+                          <span
+                            x-text="'Quyết định server (VN30F1M 5m)' + (derivAlgoVersion() ? ' ' + derivAlgoVersion() : '') + ':'"
+                          >Quyết định server (VN30F1M 5m):</span>
                           <span
                             class="font-mono px-2.5 py-1 rounded-full text-sm border"
                             :class="derivAnalysis.bias === 'long' ? 'bg-emerald-500/20' : (derivAnalysis.bias === 'short' ? 'bg-rose-500/20' : 'bg-gray-500/15')"

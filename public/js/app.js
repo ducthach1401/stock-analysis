@@ -3105,6 +3105,12 @@ function app() {
       }).format(d);
     },
 
+    /** 'VN30_EMA_VWAP_RSI_ATR_5M_V5' → 'v5' (phiên bản thuật toán của quyết định đang hiển thị). */
+    derivAlgoVersion() {
+      const m = /_V(\d+)$/i.exec(String(this.derivDecisionLatest?.algorithm || ''));
+      return m ? `v${m[1]}` : '';
+    },
+
     derivDecisionMonthKey(v) {
       const day = this.derivDecisionDateKey(v);
       return day ? day.slice(0, 7) : '';
