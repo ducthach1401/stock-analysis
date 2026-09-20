@@ -206,6 +206,10 @@ export class DerivativesService {
       const activeOpenDecision = await this.latestOpenDecision();
       if (activeOpenDecision) {
         await this.touchDecisionScan(activeOpenDecision.id);
+        await this.retryOpenNotification(
+          activeOpenDecision,
+          opts.source ?? 'manual',
+        );
         const latest = bars[bars.length - 1];
         const latestPrice = latest
           ? this.round2(this.price(latest.close))
@@ -249,6 +253,10 @@ export class DerivativesService {
         if (sent) {
           saved.notified = true;
           await this.decisionRepo.save(saved);
+        } else {
+          this.logger.warn(
+            `Phái sinh VN30: gửi Telegram thất bại cho ${saved.action} #${saved.id}${isNewOpenPosition ? ' (sẽ thử lại ở lần quét sau)' : ''}`,
+          );
         }
       }
       this.logger.log(
@@ -871,53 +879,61 @@ export class DerivativesService {
       decision.action === DerivativeDecisionAction.NO_TRADE &&
       !notifyNoTrade
     ) {
-      const previous = await this.previousDecisionBefore(decision.decidedAt);
+      const previous = await this.previousDecisionBefore(decision);
       return (
         previous?.status === DerivativeDecisionStatus.OPEN &&
         (previous.action === DerivativeDecisionAction.LONG ||
           previous.action === DerivativeDecisionAction.SHORT)
       );
     }
+    // Mọi lệnh LONG/SHORT mới mở đều phải báo. scanVn30 chỉ tạo quyết định mới khi không còn
+    // lệnh OPEN nào nên không cần chống trùng cùng phía.
     if (
       decision.action === DerivativeDecisionAction.LONG ||
       decision.action === DerivativeDecisionAction.SHORT
     ) {
-      const sameSideOpenNotified = await this.findOpenNotifiedDecision(
-        decision.action,
-        decision.decidedAt,
-      );
-      if (sameSideOpenNotified) return false;
+      return true;
     }
-    const previous = await this.previousDecisionBefore(decision.decidedAt);
-    if (!previous) return decision.action !== DerivativeDecisionAction.NO_TRADE;
-    if (previous.action !== decision.action) return true;
-    if (decision.action === DerivativeDecisionAction.NO_TRADE) return false;
-    // Nếu lệnh trước cùng hướng nhưng đã đóng, đây là một trade cycle mới và cần báo lại.
-    return previous.status === DerivativeDecisionStatus.CLOSED;
+    // NO_TRADE (chỉ tới đây khi bật DERIVATIVES_TELEGRAM_NOTIFY_NO_TRADE): báo khi vừa đổi trạng thái.
+    const previous = await this.previousDecisionBefore(decision);
+    return previous != null && previous.action !== decision.action;
   }
 
-  private findOpenNotifiedDecision(
-    action: DerivativeDecisionAction.LONG | DerivativeDecisionAction.SHORT,
-    at: Date,
+  // So theo id (tăng dần) chứ không theo decidedAt: cột `datetime` làm tròn mili-giây nên
+  // chính bản ghi vừa lưu có thể có decidedAt < runAt và bị nhận nhầm là "quyết định trước".
+  private previousDecisionBefore(
+    decision: DerivativeDecision,
   ): Promise<DerivativeDecision | null> {
     return this.decisionRepo
       .createQueryBuilder('d')
       .where('d.symbol = :symbol', { symbol: DECISION_SYMBOL })
-      .andWhere('d.action = :action', { action })
-      .andWhere('d.status = :status', { status: DerivativeDecisionStatus.OPEN })
-      .andWhere('d.notified = :notified', { notified: true })
-      .andWhere('d.decidedAt < :at', { at })
-      .orderBy('d.decidedAt', 'DESC')
+      .andWhere('d.id < :id', { id: decision.id })
+      .orderBy('d.id', 'DESC')
       .getOne();
   }
 
-  private previousDecisionBefore(at: Date): Promise<DerivativeDecision | null> {
-    return this.decisionRepo
-      .createQueryBuilder('d')
-      .where('d.symbol = :symbol', { symbol: DECISION_SYMBOL })
-      .andWhere('d.decidedAt < :at', { at })
-      .orderBy('d.decidedAt', 'DESC')
-      .getOne();
+  // Tin "Mở lệnh" gửi lỗi (Telegram 429/mạng...) thì thử lại ở các lần quét sau khi lệnh còn OPEN,
+  // trong 15 phút đầu — quá lâu thì giá vào đã cũ, không còn ý nghĩa để báo.
+  private async retryOpenNotification(
+    decision: DerivativeDecision,
+    source: string,
+  ): Promise<void> {
+    if (decision.notified) return;
+    if (
+      decision.action !== DerivativeDecisionAction.LONG &&
+      decision.action !== DerivativeDecisionAction.SHORT
+    ) {
+      return;
+    }
+    const RETRY_WINDOW_MS = 15 * 60 * 1000;
+    if (Date.now() - decision.decidedAt.getTime() > RETRY_WINDOW_MS) return;
+    const sent = await this.notifyOpenedDecision(decision, source);
+    if (sent) {
+      await this.decisionRepo.update(decision.id, { notified: true });
+      this.logger.log(
+        `Phái sinh VN30: đã gửi lại tin mở lệnh ${decision.action} #${decision.id}`,
+      );
+    }
   }
 
   private async notifyDecision(
