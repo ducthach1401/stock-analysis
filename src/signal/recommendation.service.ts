@@ -18,6 +18,7 @@ import { buildPatternAnalysis } from './chart-patterns';
 import { SignalService } from './signal.service';
 import {
   evaluateMinervini,
+  MINERVINI_MAX_BUY_ZONE_PCT,
   MINERVINI_STOP_PCT,
   minerviniReasonText,
   minerviniTargetPctFromEnv,
@@ -671,7 +672,7 @@ function applyBullishBuyPriceStrategy(
       ...pt,
       suggestedPullbackPrice: Math.round(breakLevel),
       suggestedPullbackMode: 'wait_retest_break',
-      suggestedPullbackNote: `Setup Minervini đang theo dõi. Chờ đóng cửa vượt pivot (~${fmtK(breakLevel)}đ) với volume ≥1,4x MA50 và giá không vượt quá 5% trên pivot.`,
+      suggestedPullbackNote: `Setup Minervini đang theo dõi. Chờ đóng cửa vượt pivot (~${fmtK(breakLevel)}đ) với volume ≥1,4x MA50 và giá không vượt quá ${MINERVINI_MAX_BUY_ZONE_PCT * 100}% trên pivot.`,
     };
   }
 

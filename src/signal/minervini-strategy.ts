@@ -53,8 +53,8 @@ export interface MinerviniEvaluation {
 export const MINERVINI_STOP_PCT = 0.07;
 export const MINERVINI_MIN_TARGET_PCT = 0.2;
 export const MINERVINI_DEFAULT_TARGET_PCT = 0.25;
-export const MINERVINI_MAX_BUY_ZONE_PCT = 0.05;
-export const MINERVINI_MAX_MA50_EXTENSION_PCT = 0.15;
+export const MINERVINI_MAX_BUY_ZONE_PCT = 0.08;
+export const MINERVINI_MAX_MA50_EXTENSION_PCT = 0.25;
 export const MINERVINI_PROFIT_LOCK_PCT = 0.2;
 
 function sma(
@@ -259,7 +259,10 @@ export function evaluateMinervini(
     reasons.push(`Break pivot ${Math.round(pivot).toLocaleString('vi-VN')}đ`);
   if (volumeOk && volumeRatio != null)
     reasons.push(`Volume ${volumeRatio.toFixed(1)}x MA50`);
-  if (buyZoneOk) reasons.push('Giá trong buy zone <=5% trên pivot');
+  if (buyZoneOk)
+    reasons.push(
+      `Giá trong buy zone <=${MINERVINI_MAX_BUY_ZONE_PCT * 100}% trên pivot`,
+    );
   if (extended) reasons.push('Giá quá xa MA50');
 
   const stopLoss = Math.round(close * (1 - MINERVINI_STOP_PCT));

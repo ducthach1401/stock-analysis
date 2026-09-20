@@ -10,7 +10,10 @@ import { toChartTradingDateString } from '../common/chart-trading-date';
 import { StockPrice } from '../stock/entities/stock-price.entity';
 import { FormingSetupHint, TickerFormingSetups } from './dto/forming-setup.dto';
 import { Signal, SignalDirection, SignalType } from './entities/signal.entity';
-import { evaluateMinervini } from './minervini-strategy';
+import {
+  evaluateMinervini,
+  MINERVINI_MAX_BUY_ZONE_PCT,
+} from './minervini-strategy';
 
 // Trọng số tín hiệu cho scanner summary (đồng bộ với RecommendationService)
 const SUMMARY_WEIGHTS: Partial<Record<SignalType, number>> = {
@@ -1385,7 +1388,7 @@ export class SignalService {
         type: SignalType.MINERVINI_BUY_ZONE,
         direction: SignalDirection.BULLISH,
         value: e.pivot,
-        description: 'Strict Minervini: giá nằm trong buy zone <=5% trên pivot',
+        description: `Strict Minervini: giá nằm trong buy zone <=${MINERVINI_MAX_BUY_ZONE_PCT * 100}% trên pivot`,
       });
     }
 

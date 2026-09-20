@@ -10,6 +10,7 @@ function strictSetupBars(options?: {
   breakout?: boolean;
   volumeConfirm?: boolean;
   extended?: boolean;
+  closeOverPivot?: number;
 }): MinerviniBar[] {
   const breakout = options?.breakout ?? true;
   const volumeConfirm = options?.volumeConfirm ?? true;
@@ -42,11 +43,13 @@ function strictSetupBars(options?: {
   }
 
   const pivot = Math.max(...bars.slice(-30).map((b) => b.high));
-  const close = extended
-    ? pivot * 1.18
-    : breakout
-      ? pivot * 1.025
-      : pivot * 0.99;
+  const close = options?.closeOverPivot
+    ? pivot * options.closeOverPivot
+    : extended
+      ? pivot * 1.3
+      : breakout
+        ? pivot * 1.025
+        : pivot * 0.99;
   bars.push({
     open: close * 0.985,
     high: close * 1.005,
@@ -98,6 +101,21 @@ describe('evaluateMinervini', () => {
 
     expect(e.recommendation).toBe(Recommendation.HOLD);
     expect(e.extended).toBe(true);
+  });
+
+  it('accepts a breakout up to 8% above the pivot as buy zone', () => {
+    const e = evaluateMinervini(strictSetupBars({ closeOverPivot: 1.07 }));
+
+    expect(e.buyZoneOk).toBe(true);
+    expect(e.extended).toBe(false);
+    expect(e.recommendation).toBe(Recommendation.STRONG_BUY);
+  });
+
+  it('rejects a breakout more than 8% above the pivot', () => {
+    const e = evaluateMinervini(strictSetupBars({ closeOverPivot: 1.1 }));
+
+    expect(e.buyZoneOk).toBe(false);
+    expect(e.recommendation).not.toBe(Recommendation.STRONG_BUY);
   });
 
   it('uses 7% stop and target env with a 20% floor', () => {
