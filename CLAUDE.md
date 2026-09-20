@@ -210,6 +210,11 @@ nhóm `TELEGRAM_NOTIFY_*` (profile, cờ từng loại, daily cap), `TELEGRAM_BU
 8. `.env.example` ghi `TELEGRAM_BUY_NOTIFY_MODE` mặc định `safe`, nhưng code (`parseTelegramBuyNotifyMode`) mặc định `all`.
 9. Test gần như không có: sửa logic chiến lược nên thêm spec cạnh `minervini-strategy.spec.ts`.
 
+**Đã sửa 2026-09-20 — `signals.value` tràn cột (`Out of range value for column 'value'`)**: mọi giá lưu ×1000 kể cả chỉ số (VNINDEX ~1,9 triệu),
+nhưng cột từng là `decimal(10,4)` (tối đa 999.999,9999). `analyze` (TypeORM `save`, strict mode) văng lỗi khi mã VNINDEX/VN30 ghi tín hiệu có `value` là giá (EMA, close, pivot...);
+`analyzeAllHistory` dùng `INSERT IGNORE` nên **âm thầm cắt** thành `999999.9999`. Đã đổi thành `decimal(20,4)`.
+Production cần `ALTER TABLE signals MODIFY value DECIMAL(20,4) NULL;` (hoặc `DB_SYNCHRONIZE=true`). Dòng cũ của VNINDEX/VN30 vẫn mang giá trị bị cắt `999999.9999` cho tới khi xoá và phân tích lại.
+
 ### Lỗi logic phát hiện khi đọc thuật toán (chưa sửa — hỏi người dùng trước khi sửa)
 
 **Đã kiểm chứng bằng chạy thư viện / đọc code:**

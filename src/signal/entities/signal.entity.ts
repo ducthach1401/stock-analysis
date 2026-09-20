@@ -94,7 +94,8 @@ export class Signal {
   @Column({ type: 'enum', enum: SignalDirection })
   direction: SignalDirection;
 
-  @Column({ type: 'decimal', precision: 10, scale: 4, nullable: true })
+  // Giá lưu ×1000 (VNINDEX ~1.9 triệu) nên cột phải rộng; 20 chữ số cho dư địa
+  @Column({ type: 'decimal', precision: 20, scale: 4, nullable: true })
   value: number | null; // Giá trị chỉ báo (vd: RSI=28.5)
 
   @Column({ type: 'text', nullable: true })
